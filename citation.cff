@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Arhami"
+  given-names: "Omid"
+  orcid: # Add your ORCID
+- family-names: "Rohani"
+  given-names: "Pejman"
+title: "topolow: ..."
+version: 0.1.0
+doi: pending
+date-released: 2025
+url: "https://github.com/omid-arhami/topolow"
+preferred-citation:
+  type: article
+  authors:
+  - family-names: "Arhami"
+    given-names: "Omid"
+  - family-names: "Rohani"
+    given-names: "Pejman"
+  title: "..."
+  year: 2025

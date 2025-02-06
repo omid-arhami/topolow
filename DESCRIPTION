@@ -1,0 +1,53 @@
+Package: topolow
+Title: Antigenic Mapping Using TopoLow Algorithm
+Version: 0.1.0
+Authors@R: 
+    person("Omid", "Arhami", , "omid.arhami@uga.edu", role = c("aut", "cre"))
+Description: An implementation of the TopoLow algorithm for antigenic cartography 
+    mapping and analysis. The package provides tools for:
+    * Optimizing point configurations in high-dimensional spaces
+    * Handling missing and thresholded measurements
+    * Processing antigenic assay data
+    * Visualizing antigenic maps
+    * Cross-validation and error analysis
+    * Network structure analysis
+    The algorithm uses a physics-inspired approach combining spring forces and 
+    repulsive interactions to find optimal point configurations.
+    Methods are described in Arhami and Rohani (2025) <doi:pending>.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports:
+    ggplot2 (>= 3.4.0),
+    dplyr (>= 1.1.0),
+    data.table (>= 1.14.0),
+    reshape2,
+    stats,
+    utils,
+    plotly (>= 4.10.0),
+    rgl (>= 1.0.0),
+    Racmacs (>= 1.1.2),
+    parallel (>= 4.1.0),
+    coda (>= 0.19-4),
+    MASS,
+    grDevices,
+    vegan,
+    igraph,
+    lhs,
+    umap,
+    gridExtra,
+    scales,
+    colorspace
+Suggests:
+    covr,
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+URL: https://github.com/omid-arhami/topolow
+BugReports: https://github.com/omid-arhami/topolow/issues
+LazyData: true
+Depends: 
+    R (>= 4.1.0)
