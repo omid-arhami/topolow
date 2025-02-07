@@ -17,8 +17,8 @@ if (!require("devtools")) install.packages("devtools")
 devtools::install_github("omid-arhami/topolow")
 ```
 
-### From Source
-Alternatively, you can install from source:
+### From Release versions
+Alternatively, you can install using the single source file:
 
 1. Download the latest release
 2. For Windows binary: Install the .zip file
@@ -48,6 +48,7 @@ result <- topolow_full(dist_mat, ndim=2, max_iter=100,
                       k0=1.0, k_decay=0.01, cqq=0.01)
 
 # Visualize results
+
 plot(result)
 ```
 
