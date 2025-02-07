@@ -1,0 +1,426 @@
+---
+title: "Parameter Fitting with Synthetic Datasets - All Variants"
+author: "Omid Arhami"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Parameter Fitting with Synthetic Datasets - All Variants}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 6,
+  warning = TRUE,
+ message = TRUE,    # Show messages
+  error = TRUE      # Continue on error
+)
+```
+
+## Introduction
+
+This vignette demonstrates parameter fitting for synthetic datasets across different:
+* Dimensionalities (2D, 5D, 10D)
+* Missing data patterns (S, M, L levels)
+* Noise types (random noise 1 & 2, biased noise)
+* Data completeness (complete, labelled)
+
+We'll analyze how optimal parameters vary with these factors.
+
+## Required Packages
+
+```{r}
+library(topolow)
+library(ggplot2)
+library(dplyr)
+#library(data.table)
+library(gridExtra)
+```
+
+## Generate Synthetic Datasets
+
+First, let's create synthetic datasets with different dimensionalities:
+
+```{r}
+# Generate datasets in 2, 5, and 10 dimensions
+results <- generate_synthetic_datasets(
+  n_dims_list = c(2, 5, 10),
+  seeds = c(123450, 903450, 13450),
+  n_points = 80,
+  output_dir = "synthetic_data"
+)
+
+# Print dataset properties
+print(results$metadata)
+
+# List available matrix variants for each dimension
+matrix_variants <- names(results$matrices[[1]])[c(3,4,6,7,8,10,11,12,14)]
+print("Available matrix variants:")
+print(matrix_variants)
+```
+
+## Parameter Optimization Setup
+
+Define consistent parameter ranges and optimization settings:
+
+```{r}
+# Define parameter ranges
+param_ranges <- list(
+  N_min = 2,          # Minimum dimensions 
+  N_max = 30,         # Maximum dimensions
+  k0_min = 1,         # Minimum spring constant
+  k0_max = 30,        # Maximum spring constant 
+  k_decay_min = 1e-4, # Minimum decay rate
+  k_decay_max = 0.05, # Maximum decay rate
+  cqq_min = 1e-4,    # Minimum repulsion constant
+  cqq_max = 0.05     # Maximum repulsion constant
+)
+
+# Setup optimization parameters
+opt_params <- list(
+  max_iter = 1000,    # Maximum optimization iterations
+  num_samples = 80,   # Number of LHS samples
+  folds = 20,         # Number of CV folds
+  num_cores = max(1, parallel::detectCores() - 1),
+  use_slurm = FALSE
+)
+```
+
+## Initial Parameter Search
+
+We'll run some optimization trials for each dimension and matrix variant to build an initial estimate of likelihood in the parameter space:
+
+```{r eval=FALSE}
+# Run optimization for each dimensionality and matrix variant
+for(i in seq_along(results$matrices)) { #
+  dim_data <- results$matrices[[i]]
+  ndim <- results$metadata$dimension[i]
+  
+  for(matrix_type in matrix_variants) { #
+    # Get current matrix
+    distance_matrix <- dim_data[[matrix_type]]
+    
+    # Create scenario name incorporating dimension and matrix type
+    scenario_name <- sprintf("synthetic_AMC3_dim%d_%s", ndim, matrix_type)
+    
+    message(sprintf("\nOptimizing for %d dimensions, matrix type: %s", 
+                   ndim, matrix_type))
+    
+    # Run optimization
+    opt_result <- run_parameter_optimization(
+      distance_matrix = distance_matrix,
+      max_iter = opt_params$max_iter,
+      relative_epsilon = 1e-4,
+      convergence_counter = 5,
+      scenario_name = scenario_name,
+      N_min = param_ranges$N_min, 
+      N_max = param_ranges$N_max,
+      k0_min = param_ranges$k0_min,
+      k0_max = param_ranges$k0_max, 
+      cqq_min = param_ranges$cqq_min,
+      cqq_max = param_ranges$cqq_max,
+      k_decay_min = param_ranges$k_decay_min,
+      k_decay_max = param_ranges$k_decay_max,
+      num_samples = opt_params$num_samples,
+      folds = opt_params$folds,
+      num_cores = opt_params$num_cores,
+      write_files = TRUE,
+      use_slurm = opt_params$use_slurm,
+      cider = FALSE,
+      verbose = TRUE
+    )
+  }
+}
+```
+
+## Aggregate Results 
+
+After SLURM jobs complete, aggregate results for each dimension and matrix type:
+
+```{r eval=FALSE}
+# Initialize results storage
+all_results <- list()
+
+# Aggregate results for each dimension and matrix type
+for(ndim in results$metadata$dimension) { 
+  dim_results <- list()
+  
+  for(matrix_type in matrix_variants) { #
+    scenario_name <- sprintf("synthetic_AMC3_dim%d_%s", ndim, matrix_type)
+    print(scenario_name)
+    # Aggregate optimization results
+    dim_results[[matrix_type]] <- aggregate_parameter_optimization_results(
+      scenario_name = scenario_name,
+      write_files = TRUE
+    )
+  }
+  
+  all_results[[as.character(ndim)]] <- dim_results
+}
+```
+
+## Adaptive Monte Carlo Sampling
+
+Perform adaptive sampling for each case:
+
+```{r eval=FALSE}
+# Setup adaptive sampling parameters
+amc_params <- list(
+  num_samples = 50,  # Total samples to collect
+  n_iter = 1,          # Number of consecutive iterations per job
+  batch_size = 1,      # Samples per iteration
+  max_iter = 1000,     # Maximum optimization iterations
+  relative_epsilon = 1e-4
+)
+
+# Run adaptive sampling for each dimension and matrix type
+for(ndim in results$metadata$dimension) { 
+  dim_data <- results$matrices[[which(results$metadata$dimension == ndim)]]
+  
+  for(matrix_type in matrix_variants) { # 
+    # Get scenario names
+    base_scenario <- sprintf("synthetic_AMC3_dim%d_%s", ndim, matrix_type)
+    amc_scenario <- base_scenario #sprintf("%s_amc", base_scenario)
+    
+    # Get result file path
+    result_file <- file.path("hyperparam_results", 
+                            sprintf("%s_hyperparam_results.csv", base_scenario))
+    log_transform_parameters(result_file)
+    
+    # Get corresponding distance matrix
+    distance_matrix <- dim_data[[matrix_type]]
+    
+    message(sprintf("\nRunning adaptive sampling for %d dimensions, matrix type: %s", 
+                   ndim, matrix_type))
+    
+    # Run adaptive sampling
+    run_adaptive_sampling(
+      initial_samples_file = result_file,
+      distance_matrix = distance_matrix,
+      max_iter = amc_params$max_iter,
+      scenario_name = amc_scenario,
+      num_samples = amc_params$num_samples,
+      n_iter = amc_params$n_iter,
+      batch_size = amc_params$batch_size,
+      relative_epsilon = amc_params$relative_epsilon,
+      folds = opt_params$folds,
+      num_cores = min(opt_params$num_cores, amc_params$batch_size * opt_params$folds + 1),
+      use_slurm = opt_params$use_slurm,
+      cider = FALSE,
+      verbose = TRUE
+    )
+  }
+}
+```
+
+## Analyze fitted parameters Across Dimensions and Matrix Types
+
+After all jobs complete, analyze parameter variations:
+
+```{r}
+# Initialize results collection
+final_results <- data.frame()
+
+# Collect results for each dimension and matrix type
+for(ndim in results$metadata$dimension) {
+  for(matrix_type in matrix_variants) {
+    # Read AMC results
+    amc_files <- c(
+                   file.path("hyperparam_results",
+                         sprintf("synthetic_AMC3_dim%d_%s_hyperparam_results.csv", 
+                                ndim, matrix_type))
+                   )
+    # Combine chain results
+    amc_results <- do.call(rbind, lapply(amc_files, read.csv))
+    amc_results <- amc_results %>%
+      filter(is.finite(NLL) & is.finite(Holdout_MAE)) %>%
+      na.omit()
+    amc_results <- amc_results[amc_results$log_N >= log(2),]
+    
+    amc_results <- as.data.frame(lapply(amc_results, clean_data, k = 4))
+    amc_results <- na.omit(amc_results)
+    
+    # Find best parameters (minimum NLL)
+    best_params <- amc_results[which.min(amc_results$Holdout_MAE),]
+    best_params$true_dim <- ndim
+    best_params$matrix_type <- matrix_type
+    best_params$N <- round(exp(best_params$log_N))
+    
+    final_results <- rbind(final_results, best_params)
+  }
+}
+
+write.csv(final_results, "final_parameters_80points.csv")
+
+# Create visualization of parameter trends
+param_names <- c("N", "log_k0", "log_k_decay", "log_cqq")
+
+# Function to create parameter trend plot
+create_trend_plot <- function(data, param) {
+  ggplot(data, aes(x = true_dim, y = get(param), color = matrix_type)) +
+    geom_point() +
+    geom_line() +
+    labs(title = sprintf("Optimal %s vs Dimensionalities", param),
+         x = "Dimensionality",
+         y = param) +
+    theme_minimal()
+    #theme(legend.position = "bottom")
+}
+
+# Create plots for each parameter
+plot_list <- lapply(param_names, function(param) {
+  create_trend_plot(final_results, param)
+})
+
+# Arrange plots
+gridExtra::grid.arrange(grobs = plot_list, ncol = 2)
+```
+
+## Impact Analysis of Missing Data and Noise
+
+Analyze how different types of missing data and noise affect optimal parameters:
+
+```{r}
+# Analyze parameter sensitivity to missing data
+missing_analysis <- final_results %>%
+  filter(grepl("missing", matrix_type)) %>%
+  group_by(true_dim, matrix_type) %>%
+  summarise(across(all_of(param_names), list(
+    mean = mean,
+    sd = sd
+  )))
+
+# Analyze parameter sensitivity to noise
+noise_analysis <- final_results %>%
+  filter(grepl("noise", matrix_type)) %>%
+  group_by(true_dim, matrix_type) %>%
+  summarise(across(all_of(param_names), list(
+    mean = mean,
+    sd = sd
+  )))
+
+# Create visualization of parameter sensitivity
+create_sensitivity_plot <- function(data, param) {
+  ggplot(data, aes(x = matrix_type, y = get(paste0(param, "_mean")),
+                   color = factor(true_dim))) +
+    geom_point() +
+    geom_errorbar(aes(ymin = get(paste0(param, "_mean")) - get(paste0(param, "_sd")),
+                      ymax = get(paste0(param, "_mean")) + get(paste0(param, "_sd")))) +
+    labs(title = sprintf("%s Sensitivity", param),
+         x = "Matrix Type",
+         y = param) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+# Create sensitivity plots
+missing_plots <- lapply(param_names, function(param) {
+  create_sensitivity_plot(missing_analysis, param)
+})
+
+noise_plots <- lapply(param_names, function(param) {
+  create_sensitivity_plot(noise_analysis, param)
+})
+
+# Arrange plots
+gridExtra::grid.arrange(grobs = missing_plots, ncol = 2,
+                       top = "Parameter Sensitivity to Missing Data")
+gridExtra::grid.arrange(grobs = noise_plots, ncol = 2,
+                       top = "Parameter Sensitivity to Noise")
+```
+
+## Convergence Analysis
+
+Check convergence for each case:
+
+```{r}
+analyze_convergence <- function(ndim, matrix_type, mutual_size=30) {
+  # Create the two specific file patterns we want to match
+  file_patterns <- c(
+    sprintf("synthetic_AMC3_dim%d_%s_hyperparam_results.csv", ndim, matrix_type)
+  )
+
+  # Get full paths for both files
+  chain_files <- file.path("hyperparam_results", file_patterns)
+
+  # Verify files exist
+  if (!all(file.exists(chain_files))) {
+    missing_files <- chain_files[!file.exists(chain_files)]
+    warning("Missing chain files: ", paste(missing_files, collapse = ", "))
+    chain_files <- chain_files[file.exists(chain_files)]
+    if (length(chain_files) == 0) {
+      stop("No chain files found for dimension ", ndim, " and matrix type ", matrix_type)
+    }
+  }
+
+  # Calculate diagnostics
+  diag <- calculate_diagnostics(chain_files, mutual_size = mutual_size)
+
+  # Create diagnostic plots
+  plot_file <- sprintf("synthetic_dim%d_%s_diagnostics.png", ndim, matrix_type)
+  p <- create_diagnostic_plots(chain_files, mutual_size = mutual_size,
+                             output_file = plot_file)
+
+  return(list(diagnostics = diag, plot = p))
+}
+
+# Analyze convergence for each case
+convergence_results <- list()
+for(ndim in results$metadata$dimension) {
+  dim_results <- list()
+  for(matrix_type in matrix_variants) {
+    dim_results[[matrix_type]] <- analyze_convergence(ndim, matrix_type, mutual_size=20)
+  }
+  #convergence_results[[as.character(ndim)]] <- dim_results
+}
+
+# Print summary of convergence results
+for(ndim in names(convergence_results)) {
+  cat(sprintf("\nConvergence Summary for %s dimensions:\n", ndim))
+  for(matrix_type in names(convergence_results[[ndim]])) {
+    cat(sprintf("\nMatrix type: %s\n", matrix_type))
+    print(convergence_results[[ndim]][[matrix_type]]$diagnostics)
+  }
+}
+```
+
+## Summary
+
+This analysis reveals:
+
+1. Impact of Dimensionality:
+   - How optimal parameter values scale with dimension
+   - Stability of parameter estimation across dimensions
+
+2. Effect of Missing Data:
+   - Parameter sensitivity to different levels of missingness
+   - How missingness patterns affect optimal values
+
+3. Impact of Noise:
+   - Parameter robustness to different noise types
+   - Systematic differences between noise variants
+
+4. Convergence Properties:
+   - Convergence behavior across conditions
+   - Stability of parameter estimates
+
+Key Findings:
+- [Add specific findings after running analysis]
+
+Recommendations for Production Use:
+- Use dimension-specific parameter ranges
+- Adjust parameters based on expected noise level
+- Consider missingness patterns when selecting parameters
+- Validate results with cross-validation
+- Run multiple independent chains
+- Use convergence diagnostics to ensure reliable results
+
+## Session Info
+
+```{r}
+sessionInfo()
+```

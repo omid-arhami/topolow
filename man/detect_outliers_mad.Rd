@@ -37,7 +37,7 @@ The function:
 \item Returns both outlier mask and summary statistics
 }
 
-MAD scaling constant 1.4826 is calculated as 1/\Phi^(-1)(3/4), where \Phi is the
+MAD scaling constant 1.4826 is calculated as 1/Phi^(-1)(3/4), where Phi is the
 standard normal CDF. This makes MAD consistent with standard deviation for
 normal distributions.
 }

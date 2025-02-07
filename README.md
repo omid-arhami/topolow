@@ -65,6 +65,25 @@ vignette(package = "topolow")
 # Read specific vignette
 vignette("parameter-fitting", package = "topolow")
 ```
+## Reproduction Studies
+
+Additional vignettes with detailed computational studies are available in the `reproduction_examples/` directory:
+
+- `parameter-fitting-h3n2.Rmd`
+- `synthetic-parameter-fitting.Rmd`
+- `synthetic_data_algorithm_comparison.Rmd`
+
+To run these studies:
+
+```r
+# Clone the repository
+git clone https://github.com/omid-arhami/topolow.git
+
+# Run specific reproduction study
+rmarkdown::render("reproduction_examples/synthetic_data_algorithm_comparison.Rmd")
+```
+
+Note: These studies may take several hours to complete and require significant computational resources.
 
 ## Features
 

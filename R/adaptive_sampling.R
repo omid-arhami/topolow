@@ -332,7 +332,7 @@ run_parameter_optimization <- function(distance_matrix,
   # Save matrix_list if using SLURM
   if(use_slurm) {
     # Save matrix_list
-    matrix_list_file <- file.path(slurm_dir,
+    matrix_list_file <- file.path(run_topolow_dir,
                                   paste0(scenario_name, "_matrix_list.rds")
     )
     saveRDS(matrix_list, matrix_list_file)

@@ -1132,7 +1132,7 @@ prune_distance_network_topn <- function(data, virus_col, antibody_col, year_col,
 #' 3. Identifies points > k MADs from median as outliers 
 #' 4. Returns both outlier mask and summary statistics
 #'
-#' MAD scaling constant 1.4826 is calculated as 1/\Phi^(-1)(3/4), where \Phi is the 
+#' MAD scaling constant 1.4826 is calculated as 1/Phi^(-1)(3/4), where Phi is the 
 #' standard normal CDF. This makes MAD consistent with standard deviation for
 #' normal distributions.
 #'
