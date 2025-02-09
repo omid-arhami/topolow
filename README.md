@@ -1,4 +1,4 @@
-# topolow: Antigenic Cartography Using Topological Optimization
+# Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assay results
 
 ## Overview
 
