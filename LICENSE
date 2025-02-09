@@ -1,21 +1,26 @@
-MIT License
+Pre-Publication Academic License (PPAL)  
+Version 1.0  
 
-Copyright (c) 2025 Omid Arhami
+Copyright (C) [2025] [Omid Arhami]  
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+## 1. License Grant  
+Permission is hereby granted, free of charge, to any academic researcher (the "User") to use this software (the "Software") for non-commercial, academic research purposes **only**.  
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+## 2. Restrictions  
+Until the associated peer-reviewed article is published:  
+- The User **may not** modify, distribute, sublicense, or publicly share the Software or any derivative works.  
+- The User **may not** claim ownership, publish, or submit this Software to third-party repositories, journals, or software archives.  
+- The Software **must not** be used for commercial purposes.  
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+## 3. Citation Requirement (Upon Publication)  
+Once the associated article is published, the User **must** cite the following reference in any work or publication that uses the Software:  
+
+[Arhami and Rohani, 2025]  
+
+A `CITATION.cff` file will be provided upon publication.  
+
+## 4. Transition to Open-Source License  
+After the article is published, this Software **will be re-licensed** under [A FUTURE LICENSE, e.g., Apache 2.0 or BSD-3-Clause]. Users will then be permitted to redistribute and modify the Software under the terms of that license.  
+
+## 5. Disclaimer  
+This Software is provided "as is," without warranty of any kind, express or implied. The author(s) and affiliated institutions bear no liability for any damages arising from the use of this Software.  
