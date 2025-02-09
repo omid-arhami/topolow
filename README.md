@@ -122,13 +122,18 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is protected by a pre-publication license.
+
+* Researchers can use the software for academic purposes.
+* Redistribution, modification, and commercial use are prohibited before publication.
+
+The license will transition upon publication - see the LICENSE file for details.
 
 ## Citation
 
 If you use this package, please cite:
 
-Arhami and Rohani 2025 [doi:to be added]
+Arhami and Rohani, 2025 [doi:to be added]
 
 ## Contact
 
