@@ -54,18 +54,13 @@ plot(result)
 
 ## Documentation
 
-For detailed documentation:
+For detailed documentation of functions in Topolow package:
 
 ```r
-# View package documentation
-?topolow
-
-# List available vignettes
-vignette(package = "topolow")
-
-# Read specific vignette
-vignette("parameter-fitting", package = "topolow")
+# View documentation
+?function_name
 ```
+
 ## Reproduction Studies
 
 Additional vignettes with detailed computational studies are available in the `reproduction_examples/` directory:
@@ -86,7 +81,7 @@ git clone https://github.com/omid-arhami/topolow.git
 rmarkdown::render("reproduction_examples/synthetic_data_algorithm_comparison.Rmd")
 ```
 
-Note: These studies may take several hours to complete and require significant computational resources.
+Note: These studies may take several hours to complete and require significant computational resources. Therefore, results of time-intensive sections are provided and explained at the beginning of each Rmd file.
 
 ## Features
 
