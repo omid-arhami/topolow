@@ -29,8 +29,8 @@ clean_params <- clean_data(params)
 # Clean multiple parameter columns
 param_table <- data.frame(
   k0 = runif(100),
-  k_decay = runif(100),
-  cqq = runif(100)
+  cooling_rate = runif(100),
+  c_repulsion = runif(100)
 )
 clean_table <- as.data.frame(lapply(param_table, clean_data))
 

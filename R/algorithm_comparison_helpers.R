@@ -44,8 +44,8 @@ run_topolow_slurm <- function(truth_matrix, input_matrix, best_params,
     as.character(best_params$N),
     as.character(opt_params$max_topolow_iter),
     as.character(best_params$k0),
-    as.character(best_params$k_decay),
-    as.character(best_params$cqq),
+    as.character(best_params$cooling_rate),
+    as.character(best_params$c_repulsion),
     scenario_name,
     as.character(fold),
     normalizePath(results_dir)  # Pass results directory to SLURM job
@@ -111,8 +111,8 @@ run_topolow_local <- function(truth_matrix, input_matrix, best_params, opt_param
     ndim = best_params$N,
     max_iter = opt_params$max_topolow_iter,
     k0 = best_params$k0,
-    k_decay = best_params$k_decay,
-    cqq = best_params$cqq,
+    cooling_rate = best_params$cooling_rate,
+    c_repulsion = best_params$c_repulsion,
     write_positions_to_csv = FALSE,
     verbose = FALSE
   )

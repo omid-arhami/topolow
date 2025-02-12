@@ -9,8 +9,8 @@ topolow_Smith_obj(
   ndim,
   max_iter,
   k0,
-  k_decay,
-  cqq,
+  cooling_rate,
+  c_repulsion,
   relative_epsilon = 1e-04,
   convergence_counter = 10,
   initial_positions = NULL,
@@ -31,9 +31,9 @@ measurements.}
 
 \item{k0}{Numeric. Initial spring constant controlling spring forces.}
 
-\item{k_decay}{Numeric. Rate of spring constant decay per iteration (0 < k_decay < 1).}
+\item{cooling_rate}{Numeric. Rate of spring constant decay per iteration (0 < cooling_rate < 1).}
 
-\item{cqq}{Numeric. Repulsion constant controlling repulsive forces.}
+\item{c_repulsion}{Numeric. Repulsion constant controlling repulsive forces.}
 
 \item{relative_epsilon}{Numeric. Convergence threshold for relative change in error.
 Default is 1e-4.}
@@ -86,9 +86,9 @@ Valid parameter ranges and constraints:
 \item ndim: Positive integer, typically 2-20. Higher dimensions increase computational cost
 \item k0: Initial spring constant, positive numeric > 0. Typical range: 0.1-30
 Controls initial force strength
-\item k_decay: Spring decay rate, numeric between 0 and 1. Typical range: 0.0001-0.1
+\item cooling_rate: Spring decay rate, numeric between 0 and 1. Typical range: 0.0001-0.1
 Controls how quickly spring forces weaken
-\item cqq: Repulsion constant, positive numeric > 0. Typical range: 0.00001-0.2
+\item c_repulsion: Repulsion constant, positive numeric > 0. Typical range: 0.00001-0.2
 Controls repulsive force strength
 \item relative_epsilon: Positive numeric, typically 1e-6 to 1e-2
 Smaller values require more iterations but give higher precision
@@ -104,7 +104,7 @@ dist_mat <- matrix(c(0, ">2", 3, ">2", 0, 4, 3, 4, 0), nrow=3)
 
 # Run Smith variant
 result <- topolow_Smith_obj(dist_mat, ndim=2, max_iter=1000, 
-                           k0=1.0, k_decay=0.001, cqq=0.1)
+                           k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
                            
 }
 \references{

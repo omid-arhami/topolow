@@ -110,9 +110,9 @@ process_distance_matrix <- function(reported_distance, distance) {
 #' * ndim: Positive integer, typically 2-20.
 #' * k0: Initial spring constant, positive numeric > 0. Typical range: 0.1-30
 #'      Controls initial force strength
-#' * k_decay: Spring decay rate, numeric between 0 and 1. Typical range: 0.0001-0.1
+#' * cooling_rate: Spring decay rate, numeric between 0 and 1. Typical range: 0.0001-0.1
 #'          Controls how quickly spring forces weaken
-#' * cqq: Repulsion constant, positive numeric > 0. Typical range: 0.00001-0.1
+#' * c_repulsion: Repulsion constant, positive numeric > 0. Typical range: 0.00001-0.1
 #'      Controls strength of repulsive forces
 #' * relative_epsilon: Positive numeric, typically 1e-9 to 1e-3
 #'                    Smaller values require more iterations but give higher precision
@@ -125,8 +125,8 @@ process_distance_matrix <- function(reported_distance, distance) {
 #' @param ndim Integer. Number of dimensions for the embedding space.
 #' @param max_iter Integer. Maximum number of optimization iterations.
 #' @param k0 Numeric. Initial spring constant controlling spring forces.
-#' @param k_decay Numeric. Rate of spring constant decay per iteration (0 < k_decay < 1).
-#' @param cqq Numeric. Repulsion constant controlling repulsive forces.
+#' @param cooling_rate Numeric. Rate of spring constant decay per iteration (0 < cooling_rate < 1).
+#' @param c_repulsion Numeric. Repulsion constant controlling repulsive forces.
 #' @param relative_epsilon Numeric. Convergence threshold for relative change in error.
 #'        Default is 1e-4.
 #' @param convergence_counter Integer. Number of iterations below threshold before declaring
@@ -160,7 +160,7 @@ process_distance_matrix <- function(reported_distance, distance) {
 #' 
 #' # Run TopoLow in 2D
 #' result <- topolow_full(dist_mat, ndim=2, max_iter=1000, 
-#'                       k0=1.0, k_decay=0.001, cqq=0.1)
+#'                       k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
 #'                       
 #' # Plot results
 #' plot(result$positions)
@@ -170,8 +170,8 @@ topolow_full <- function(distance_matrix,
                          ndim, 
                          max_iter, 
                          k0, 
-                         k_decay, 
-                         cqq, 
+                         cooling_rate, 
+                         c_repulsion, 
                          relative_epsilon = 1e-4,
                          convergence_counter = 5,
                          initial_positions = NULL,
@@ -198,11 +198,11 @@ topolow_full <- function(distance_matrix,
   if (k0 > 30) {
     warning("High k0 value (> 30) may lead to instability")
   }
-  if (!is.numeric(k_decay) || k_decay <= 0 || k_decay >= 1) {
-    stop("k_decay must be between 0 and 1")
+  if (!is.numeric(cooling_rate) || cooling_rate <= 0 || cooling_rate >= 1) {
+    stop("cooling_rate must be between 0 and 1")
   }
-  if (!is.numeric(cqq) || cqq <= 0) {
-    stop("cqq must be a positive number")
+  if (!is.numeric(c_repulsion) || c_repulsion <= 0) {
+    stop("c_repulsion must be a positive number")
   }
   if (!is.numeric(relative_epsilon) || relative_epsilon <= 0) {
     stop("relative_epsilon must be a positive number")
@@ -301,13 +301,13 @@ topolow_full <- function(distance_matrix,
           positions[j,] <- positions[j,] + adjustment_factor/(4*node_degrees_1[j]+k)
         } else {
           # Repulsive force for >threshold measurements
-          force <- cqq/(2*distance_01^2)*(delta/distance_01)
+          force <- c_repulsion/(2*distance_01^2)*(delta/distance_01)
           positions[i,] <- positions[i,] - force/node_degrees_1[i]
           positions[j,] <- positions[j,] + force/node_degrees_1[j]
         }
       } else {
         # Repulsive force for missing measurements
-        force <- cqq/(2*distance_01^2)*(delta/distance_01)
+        force <- c_repulsion/(2*distance_01^2)*(delta/distance_01)
         positions[i,] <- positions[i,] - force/node_degrees_1[i]
         positions[j,] <- positions[j,] + force/node_degrees_1[j]
       }
@@ -382,11 +382,11 @@ topolow_full <- function(distance_matrix,
         if (verbose) {
           cat(paste(
             "! Skipping convergence check for this iteration.",
-            "Please check model parameters k, decay, and cqq.\n"
+            "Please check model parameters k, decay, and c_repulsion.\n"
           ))
           cat(sprintf(
-            "dim=%d, k0=%.4f, decay=%.4f, cqq=%.4f, MAE=%.4f, convergence_error=%.4f\n",
-            ndim, k0, k_decay, cqq, mae, convergence_error
+            "dim=%d, k0=%.4f, decay=%.4f, c_repulsion=%.4f, MAE=%.4f, convergence_error=%.4f\n",
+            ndim, k0, cooling_rate, c_repulsion, mae, convergence_error
           ))
         }
       } else {
@@ -403,14 +403,14 @@ topolow_full <- function(distance_matrix,
     }
     
     # Update spring constant
-    k <- k * (1 - k_decay)
+    k <- k * (1 - cooling_rate)
   }
   
   # Save positions if requested
   if(write_positions_to_csv) {
     csv_filename <- sprintf(
-      "Positions_dim_%d_k0_%.4f_decay_%.4f_cqq_%.4f.csv",
-      ndim, k0, k_decay, cqq
+      "Positions_dim_%d_k0_%.4f_decay_%.4f_c_repulsion_%.4f.csv",
+      ndim, k0, cooling_rate, c_repulsion
     )
     utils::write.csv(positions, file = csv_filename, row.names = TRUE)
   }
@@ -434,8 +434,8 @@ topolow_full <- function(distance_matrix,
       parameters = list(
         ndim = ndim,
         k0 = k0,
-        k_decay = k_decay,
-        cqq = cqq
+        cooling_rate = cooling_rate,
+        c_repulsion = c_repulsion
       ),
       convergence = list(
         achieved = convergence_counter <= 0,
@@ -459,7 +459,7 @@ topolow_full <- function(distance_matrix,
 #' 
 #' @examples
 #' dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
-#' result <- topolow_full(dist_mat, ndim=2, max_iter=100, k0=1.0, k_decay=0.001, cqq=0.1)
+#' result <- topolow_full(dist_mat, ndim=2, max_iter=100, k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
 #' print(result)
 #' 
 #' @export
@@ -484,7 +484,7 @@ print.topolow <- function(x, ...) {
 #' 
 #' @examples
 #' dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
-#' result <- topolow_full(dist_mat, ndim=2, max_iter=100, k0=1.0, k_decay=0.001, cqq=0.1)
+#' result <- topolow_full(dist_mat, ndim=2, max_iter=100, k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
 #' summary(result)
 #' 
 #' @export
@@ -492,8 +492,8 @@ summary.topolow <- function(object, ...) {
   print(object)
   cat("\nParameters:\n")
   cat(sprintf("k0: %.4f\n", object$parameters$k0))
-  cat(sprintf("k_decay: %.4f\n", object$parameters$k_decay))
-  cat(sprintf("cqq: %.4f\n", object$parameters$cqq))
+  cat(sprintf("cooling_rate: %.4f\n", object$parameters$cooling_rate))
+  cat(sprintf("c_repulsion: %.4f\n", object$parameters$c_repulsion))
   
   # Add convergence trace summary
   trace <- object$trace_convergence_error_df
@@ -542,9 +542,9 @@ gmultiple <- function(x) {
 #' * ndim: Positive integer, typically 2-20. Higher dimensions increase computational cost
 #' * k0: Initial spring constant, positive numeric > 0. Typical range: 0.1-30
 #'      Controls initial force strength
-#' * k_decay: Spring decay rate, numeric between 0 and 1. Typical range: 0.0001-0.1
+#' * cooling_rate: Spring decay rate, numeric between 0 and 1. Typical range: 0.0001-0.1
 #'          Controls how quickly spring forces weaken
-#' * cqq: Repulsion constant, positive numeric > 0. Typical range: 0.00001-0.2
+#' * c_repulsion: Repulsion constant, positive numeric > 0. Typical range: 0.00001-0.2
 #'      Controls repulsive force strength
 #' * relative_epsilon: Positive numeric, typically 1e-6 to 1e-2
 #'                    Smaller values require more iterations but give higher precision
@@ -575,15 +575,15 @@ gmultiple <- function(x) {
 #' 
 #' # Run Smith variant
 #' result <- topolow_Smith_obj(dist_mat, ndim=2, max_iter=1000, 
-#'                            k0=1.0, k_decay=0.001, cqq=0.1)
+#'                            k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
 #'                            
 #' @export
 topolow_Smith_obj <- function(distance_matrix, 
                               ndim, 
                               max_iter, 
                               k0, 
-                              k_decay, 
-                              cqq, 
+                              cooling_rate, 
+                              c_repulsion, 
                               relative_epsilon = 1e-4,
                               convergence_counter = 10,
                               initial_positions = NULL,
@@ -675,7 +675,7 @@ topolow_Smith_obj <- function(distance_matrix,
           positions[j,] <- positions[j,] + adjustment_factor/(4*node_degrees_1[j]+k)
         } else {
           # Repulsive force for missing measurements
-          force <- cqq/(2*distance_01^2)*(delta/distance_01)
+          force <- c_repulsion/(2*distance_01^2)*(delta/distance_01)
           positions[i,] <- positions[i,] - force/node_degrees_1[i]
           positions[j,] <- positions[j,] + force/node_degrees_1[j]
         }
@@ -741,8 +741,8 @@ topolow_Smith_obj <- function(distance_matrix,
         if (verbose) {
           cat("! Skipping convergence check for this iteration.\n")
           cat(sprintf(
-            "dim=%d, k0=%.4f, decay=%.4f, cqq=%.4f, MAE=%.4f, convergence_error=%.4f\n",
-            ndim, k0, k_decay, cqq, mae, convergence_error
+            "dim=%d, k0=%.4f, decay=%.4f, c_repulsion=%.4f, MAE=%.4f, convergence_error=%.4f\n",
+            ndim, k0, cooling_rate, c_repulsion, mae, convergence_error
           ))
         }
       } else {
@@ -759,14 +759,14 @@ topolow_Smith_obj <- function(distance_matrix,
     }
     
     # Update spring constant
-    k <- k * (1 - k_decay)
+    k <- k * (1 - cooling_rate)
   }
   
   # Save positions if requested
   if(write_positions_to_csv) {
     csv_filename <- sprintf(
-      "Positions_dim_%d_k0_%.4f_decay_%.4f_cqq_%.4f.csv",
-      ndim, k0, k_decay, cqq
+      "Positions_dim_%d_k0_%.4f_decay_%.4f_c_repulsion_%.4f.csv",
+      ndim, k0, cooling_rate, c_repulsion
     )
     utils::write.csv(positions, file = csv_filename, row.names = TRUE)
   }
@@ -790,8 +790,8 @@ topolow_Smith_obj <- function(distance_matrix,
       parameters = list(
         ndim = ndim,
         k0 = k0,
-        k_decay = k_decay,
-        cqq = cqq,
+        cooling_rate = cooling_rate,
+        c_repulsion = c_repulsion,
         ofs = ofs
       ),
       convergence = list(

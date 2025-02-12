@@ -24,10 +24,10 @@ output_dir <- as.character(args[10])
 folds <- as.integer(args[11]) 
 
 # Create output directories if they don't exist
-hyperparam_dir <- file.path(output_dir, "hyperparam_results")
-if (!dir.exists(hyperparam_dir)) {
-  dir.create(hyperparam_dir, recursive = TRUE, showWarnings = FALSE)
-}
+#param_dir <- file.path(output_dir, "model_parameters")
+#if (!dir.exists(param_dir)) {
+#  dir.create(param_dir, recursive = TRUE, showWarnings = FALSE)
+#}
 
 # Add debug output
 cat("Loading samples from:", samples_file, "\n")
@@ -50,7 +50,7 @@ if (!is.matrix(distance_matrix)) {
   stop("Invalid distance matrix format")
 }
 
-required_cols <- c("log_N", "log_k0", "log_k_decay", "log_cqq", "NLL")
+required_cols <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion", "NLL")
 if (!all(required_cols %in% names(current_samples))) {
   stop("Missing required columns in samples file: ",
        paste(setdiff(required_cols, names(current_samples)), collapse=", "))
@@ -67,5 +67,6 @@ adaptive_MC_sampling(
   folds = folds,
   num_cores = num_cores,
   scenario_name = scenario_name,
-  replace_csv = TRUE
+  output_dir = NULL, 
+  verbose = FALSE
 )

@@ -16,7 +16,7 @@ overwrites input file}
 Data frame with log-transformed parameters
 }
 \description{
-Reads samples from a CSV file and log transforms specific parameters (N, k0, k_decay, cqq)
+Reads samples from a CSV file and log transforms specific parameters (N, k0, cooling_rate, c_repulsion)
 if they exist in the data. Handles validation and error checking.
 }
 \examples{

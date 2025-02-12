@@ -24,14 +24,14 @@ test_that("topolow_full handles input validation correctly", {
   # Basic matrix validation
   expect_error(
     topolow_full(distance_matrix = "not a matrix", ndim = 2, max_iter = 10,
-                 k0 = 1.0, k_decay = 0.01, cqq = 0.01),
+                 k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01),
     "distance_matrix must be a matrix"
   )
   
   # Non-square matrix
   expect_error(
     topolow_full(distance_matrix = matrix(1:6, nrow=2), ndim = 2, max_iter = 10,
-                 k0 = 1.0, k_decay = 0.01, cqq = 0.01),
+                 k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01),
     "distance_matrix must be square"
   )
   
@@ -39,8 +39,8 @@ test_that("topolow_full handles input validation correctly", {
   params_to_test <- list(
     list(ndim = -1, msg = "ndim must be a positive integer"),
     list(k0 = -1, msg = "k0 must be a positive number"),
-    list(k_decay = 1.5, msg = "k_decay must be between 0 and 1"),
-    list(cqq = 0, msg = "cqq must be a positive number"),
+    list(cooling_rate = 1.5, msg = "cooling_rate must be between 0 and 1"),
+    list(c_repulsion = 0, msg = "c_repulsion must be a positive number"),
     list(relative_epsilon = -1, msg = "relative_epsilon must be a positive number"),
     list(convergence_counter = 0.5, msg = "convergence_counter must be a positive integer")
   )
@@ -50,7 +50,7 @@ test_that("topolow_full handles input validation correctly", {
     args <- list(
       distance_matrix = test_mat,
       ndim = 2, max_iter = 10,
-      k0 = 1.0, k_decay = 0.01, cqq = 0.01
+      k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01
     )
     args[[names(param)[1]]] <- param[[1]]
     expect_error(do.call(topolow_full, args), param$msg)
@@ -59,7 +59,7 @@ test_that("topolow_full handles input validation correctly", {
   # Test high k0 warning
   expect_warning(
     topolow_full(distance_matrix = test_mat, ndim = 2, max_iter = 10,
-                 k0 = 35, k_decay = 0.01, cqq = 0.01),
+                 k0 = 35, cooling_rate = 0.01, c_repulsion = 0.01),
     "High k0 value"
   )
 })
@@ -73,7 +73,7 @@ test_that("topolow_full handles initial positions correctly", {
   init_pos <- matrix(runif(n*ndim), nrow=n, ncol=ndim)
   rownames(init_pos) <- rownames(test_mat)
   result <- topolow_full(test_mat, ndim=ndim, max_iter=10,
-                        k0=1.0, k_decay=0.01, cqq=0.01,
+                        k0=1.0, cooling_rate=0.01, c_repulsion=0.01,
                         initial_positions=init_pos)
   expect_equal(dim(result$positions), c(n, ndim))
   
@@ -81,7 +81,7 @@ test_that("topolow_full handles initial positions correctly", {
   wrong_pos <- matrix(runif((n+1)*ndim), nrow=n+1, ncol=ndim)
   expect_error(
     topolow_full(test_mat, ndim=ndim, max_iter=10,
-                 k0=1.0, k_decay=0.01, cqq=0.01,
+                 k0=1.0, cooling_rate=0.01, c_repulsion=0.01,
                  initial_positions=wrong_pos),
     "initial_positions must have same number of rows"
   )
@@ -92,7 +92,7 @@ test_that("topolow_full convergence behavior works correctly", {
   
   # Test convergence tracking
   result <- topolow_full(test_mat, ndim=2, max_iter=10,
-                        k0=1.0, k_decay=0.01, cqq=0.01,
+                        k0=1.0, cooling_rate=0.01, c_repulsion=0.01,
                         relative_epsilon=1e-4, convergence_counter=5)
   
   expect_true(!is.null(result$convergence))
@@ -111,7 +111,7 @@ test_that("topolow_full force calculations preserve distance relationships", {
   colnames(test_mat) <- rownames(test_mat) <- c("A","B","C")
   
   result <- topolow_full(test_mat, ndim=2, max_iter=10,
-                        k0=1.0, k_decay=0.01, cqq=0.01)
+                        k0=1.0, cooling_rate=0.01, c_repulsion=0.01)
   
   # Get pairwise distances from result
   get_dist <- function(p1, p2) {
@@ -132,7 +132,7 @@ test_that("topolow_full handles missing values appropriately", {
   test_mat[1,2] <- test_mat[2,1] <- NA
   
   result <- topolow_full(test_mat, ndim=2, max_iter=10,
-                        k0=1.0, k_decay=0.01, cqq=0.01)
+                        k0=1.0, cooling_rate=0.01, c_repulsion=0.01)
   
   # Missing values should use repulsive forces
   expect_true(!is.na(result$est_distances[1,2]))
@@ -141,7 +141,7 @@ test_that("topolow_full handles missing values appropriately", {
 
 test_that("topolow_full returns correct object structure", {
   result <- topolow_full(create_test_matrix(), ndim=2, max_iter=10,
-                        k0=1.0, k_decay=0.01, cqq=0.01)
+                        k0=1.0, cooling_rate=0.01, c_repulsion=0.01)
   
   expected_elements <- c("positions", "est_distances", "mae", "r", "iter",
                         "trace_convergence_error_df", "parameters", "convergence")

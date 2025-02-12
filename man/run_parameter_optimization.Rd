@@ -14,10 +14,10 @@ run_parameter_optimization(
   N_max,
   k0_min,
   k0_max,
-  cqq_min,
-  cqq_max,
-  k_decay_min,
-  k_decay_max,
+  c_repulsion_min,
+  c_repulsion_max,
+  cooling_rate_min,
+  cooling_rate_max,
   num_samples,
   folds = 20,
   verbose = FALSE,
@@ -45,9 +45,9 @@ declaring convergence.}
 
 \item{k0_min, k0_max}{Numeric. Range for initial spring constant parameter.}
 
-\item{cqq_min, cqq_max}{Numeric. Range for repulsion constant parameter.}
+\item{c_repulsion_min, c_repulsion_max}{Numeric. Range for repulsion constant parameter.}
 
-\item{k_decay_min, k_decay_max}{Numeric. Range for spring decay parameter.}
+\item{cooling_rate_min, cooling_rate_max}{Numeric. Range for spring decay parameter.}
 
 \item{num_samples}{Integer. Number of LHS parameter samples to evaluate.}
 
@@ -71,13 +71,13 @@ Default: 1.}
 If write_files=FALSE, returns a data frame with columns:
 \item{N}{Number of dimensions used}
 \item{k0}{Initial spring constant}
-\item{k_decay}{Spring decay rate}
-\item{cqq}{Repulsion constant}
+\item{cooling_rate}{Spring decay rate}
+\item{c_repulsion}{Repulsion constant}
 \item{Holdout_MAE}{Mean absolute error on validation sets}
 \item{NLL}{Negative log likelihood}
 
 If write_files=TRUE, results are saved to CSV files in the format:
-"{scenario_name}_hyperparam_results.csv"
+"{scenario_name}_model_parameters.csv"
 }
 \description{
 Performs parameter optimization using Latin Hypercube Sampling (LHS) combined with
@@ -118,8 +118,8 @@ results <- run_parameter_optimization(
   scenario_name = "test_opt",
   N_min = 2, N_max = 10,
   k0_min = 1, k0_max = 30,
-  cqq_min = 0.00001, cqq_max = 0.2,
-  k_decay_min = 0.00001, k_decay_max = 0.2,
+  c_repulsion_min = 0.00001, c_repulsion_max = 0.2,
+  cooling_rate_min = 0.00001, cooling_rate_max = 0.2,
   num_samples = 20,
   num_cores = 4
 )

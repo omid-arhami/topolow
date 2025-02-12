@@ -38,8 +38,6 @@ adaptive_MC_sampling(
 \item{scenario_name}{Name for output files}
 
 \item{output_dir}{Directory for output files. If NULL, uses current directory}
-
-\item{replace_csv}{Whether to replace existing CSV}
 }
 \value{
 Data frame of samples with evaluated likelihoods

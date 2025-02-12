@@ -26,10 +26,9 @@ knitr::opts_chunk$set(
 This vignette demonstrates parameter fitting for synthetic datasets across different:
 * Dimensionalities (2D, 5D, 10D)
 * Missing data patterns (S, M, L levels)
-* Noise types (random noise 1 & 2, biased noise)
-* Data completeness (complete, labelled)
+* Noise types (random noise & biased noise)
 
-We'll analyze how optimal parameters vary with these factors.
+Here we create 80 points for a faster analysis, but in the paper results with 250 points are shown.
 
 ## Required Packages
 
@@ -74,16 +73,16 @@ param_ranges <- list(
   N_max = 30,         # Maximum dimensions
   k0_min = 1,         # Minimum spring constant
   k0_max = 30,        # Maximum spring constant 
-  k_decay_min = 1e-4, # Minimum decay rate
-  k_decay_max = 0.05, # Maximum decay rate
-  cqq_min = 1e-4,    # Minimum repulsion constant
-  cqq_max = 0.05     # Maximum repulsion constant
+  cooling_rate_min = 1e-4, # Minimum decay rate
+  cooling_rate_max = 0.05, # Maximum decay rate
+  c_repulsion_min = 1e-4,    # Minimum repulsion constant
+  c_repulsion_max = 0.05     # Maximum repulsion constant
 )
 
 # Setup optimization parameters
 opt_params <- list(
-  max_iter = 1000,    # Maximum optimization iterations
-  num_samples = 80,   # Number of LHS samples
+  max_iter = 2000,    # Maximum optimization iterations
+  num_samples = 2,   # Number of LHS samples
   folds = 20,         # Number of CV folds
   num_cores = max(1, parallel::detectCores() - 1),
   use_slurm = FALSE
@@ -121,10 +120,10 @@ for(i in seq_along(results$matrices)) { #
       N_max = param_ranges$N_max,
       k0_min = param_ranges$k0_min,
       k0_max = param_ranges$k0_max, 
-      cqq_min = param_ranges$cqq_min,
-      cqq_max = param_ranges$cqq_max,
-      k_decay_min = param_ranges$k_decay_min,
-      k_decay_max = param_ranges$k_decay_max,
+      c_repulsion_min = param_ranges$c_repulsion_min,
+      c_repulsion_max = param_ranges$c_repulsion_max,
+      cooling_rate_min = param_ranges$cooling_rate_min,
+      cooling_rate_max = param_ranges$cooling_rate_max,
       num_samples = opt_params$num_samples,
       folds = opt_params$folds,
       num_cores = opt_params$num_cores,
@@ -170,10 +169,10 @@ Perform adaptive sampling for each case:
 ```{r eval=FALSE}
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_samples = 50,  # Total samples to collect
+  num_samples = 2,  # Total samples to collect
   n_iter = 1,          # Number of consecutive iterations per job
   batch_size = 1,      # Samples per iteration
-  max_iter = 1000,     # Maximum optimization iterations
+  max_iter = 2000,     # Maximum optimization iterations
   relative_epsilon = 1e-4
 )
 
@@ -187,8 +186,8 @@ for(ndim in results$metadata$dimension) {
     amc_scenario <- base_scenario #sprintf("%s_amc", base_scenario)
     
     # Get result file path
-    result_file <- file.path("hyperparam_results", 
-                            sprintf("%s_hyperparam_results.csv", base_scenario))
+    result_file <- file.path("model_parameters", 
+                            sprintf("%s_model_parameters.csv", base_scenario))
     log_transform_parameters(result_file)
     
     # Get corresponding distance matrix
@@ -223,15 +222,15 @@ After all jobs complete, analyze parameter variations:
 
 ```{r}
 # Initialize results collection
-final_results <- data.frame()
+final_params <- data.frame()
 
 # Collect results for each dimension and matrix type
 for(ndim in results$metadata$dimension) {
   for(matrix_type in matrix_variants) {
     # Read AMC results
     amc_files <- c(
-                   file.path("hyperparam_results",
-                         sprintf("synthetic_AMC3_dim%d_%s_hyperparam_results.csv", 
+                   file.path("model_parameters",
+                         sprintf("synthetic_AMC3_dim%d_%s_model_parameters.csv", 
                                 ndim, matrix_type))
                    )
     # Combine chain results
@@ -250,102 +249,28 @@ for(ndim in results$metadata$dimension) {
     best_params$matrix_type <- matrix_type
     best_params$N <- round(exp(best_params$log_N))
     
-    final_results <- rbind(final_results, best_params)
+    final_params <- rbind(final_params, best_params)
   }
 }
 
-write.csv(final_results, "final_parameters_80points.csv")
-
-# Create visualization of parameter trends
-param_names <- c("N", "log_k0", "log_k_decay", "log_cqq")
-
-# Function to create parameter trend plot
-create_trend_plot <- function(data, param) {
-  ggplot(data, aes(x = true_dim, y = get(param), color = matrix_type)) +
-    geom_point() +
-    geom_line() +
-    labs(title = sprintf("Optimal %s vs Dimensionalities", param),
-         x = "Dimensionality",
-         y = param) +
-    theme_minimal()
-    #theme(legend.position = "bottom")
-}
-
-# Create plots for each parameter
-plot_list <- lapply(param_names, function(param) {
-  create_trend_plot(final_results, param)
-})
-
-# Arrange plots
-gridExtra::grid.arrange(grobs = plot_list, ncol = 2)
+write.csv(final_params, "optimal_parameters_80points.csv")
 ```
 
-## Impact Analysis of Missing Data and Noise
-
-Analyze how different types of missing data and noise affect optimal parameters:
-
-```{r}
-# Analyze parameter sensitivity to missing data
-missing_analysis <- final_results %>%
-  filter(grepl("missing", matrix_type)) %>%
-  group_by(true_dim, matrix_type) %>%
-  summarise(across(all_of(param_names), list(
-    mean = mean,
-    sd = sd
-  )))
-
-# Analyze parameter sensitivity to noise
-noise_analysis <- final_results %>%
-  filter(grepl("noise", matrix_type)) %>%
-  group_by(true_dim, matrix_type) %>%
-  summarise(across(all_of(param_names), list(
-    mean = mean,
-    sd = sd
-  )))
-
-# Create visualization of parameter sensitivity
-create_sensitivity_plot <- function(data, param) {
-  ggplot(data, aes(x = matrix_type, y = get(paste0(param, "_mean")),
-                   color = factor(true_dim))) +
-    geom_point() +
-    geom_errorbar(aes(ymin = get(paste0(param, "_mean")) - get(paste0(param, "_sd")),
-                      ymax = get(paste0(param, "_mean")) + get(paste0(param, "_sd")))) +
-    labs(title = sprintf("%s Sensitivity", param),
-         x = "Matrix Type",
-         y = param) +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
-}
-
-# Create sensitivity plots
-missing_plots <- lapply(param_names, function(param) {
-  create_sensitivity_plot(missing_analysis, param)
-})
-
-noise_plots <- lapply(param_names, function(param) {
-  create_sensitivity_plot(noise_analysis, param)
-})
-
-# Arrange plots
-gridExtra::grid.arrange(grobs = missing_plots, ncol = 2,
-                       top = "Parameter Sensitivity to Missing Data")
-gridExtra::grid.arrange(grobs = noise_plots, ncol = 2,
-                       top = "Parameter Sensitivity to Noise")
-```
 
 ## Convergence Analysis
 
 Check convergence for each case:
 
 ```{r}
-analyze_convergence <- function(ndim, matrix_type, mutual_size=30) {
+# A helper function:
+analyze_convergence <- function(ndim, matrix_type, mutual_size) {
   # Create the two specific file patterns we want to match
   file_patterns <- c(
-    sprintf("synthetic_AMC3_dim%d_%s_hyperparam_results.csv", ndim, matrix_type)
+    sprintf("synthetic_AMC3_dim%d_%s_model_parameters.csv", ndim, matrix_type)
   )
 
   # Get full paths for both files
-  chain_files <- file.path("hyperparam_results", file_patterns)
+  chain_files <- file.path("model_parameters", file_patterns)
 
   # Verify files exist
   if (!all(file.exists(chain_files))) {
@@ -368,14 +293,16 @@ analyze_convergence <- function(ndim, matrix_type, mutual_size=30) {
   return(list(diagnostics = diag, plot = p))
 }
 
+# Set the mutual_size, smaller then the minimum simulaations for each scenario:
+mutual_size <- 20
+
 # Analyze convergence for each case
 convergence_results <- list()
 for(ndim in results$metadata$dimension) {
   dim_results <- list()
   for(matrix_type in matrix_variants) {
-    dim_results[[matrix_type]] <- analyze_convergence(ndim, matrix_type, mutual_size=20)
+    dim_results[[matrix_type]] <- analyze_convergence(ndim, matrix_type, mutual_size=mutual_size)
   }
-  #convergence_results[[as.character(ndim)]] <- dim_results
 }
 
 # Print summary of convergence results
@@ -388,36 +315,6 @@ for(ndim in names(convergence_results)) {
 }
 ```
 
-## Summary
-
-This analysis reveals:
-
-1. Impact of Dimensionality:
-   - How optimal parameter values scale with dimension
-   - Stability of parameter estimation across dimensions
-
-2. Effect of Missing Data:
-   - Parameter sensitivity to different levels of missingness
-   - How missingness patterns affect optimal values
-
-3. Impact of Noise:
-   - Parameter robustness to different noise types
-   - Systematic differences between noise variants
-
-4. Convergence Properties:
-   - Convergence behavior across conditions
-   - Stability of parameter estimates
-
-Key Findings:
-- [Add specific findings after running analysis]
-
-Recommendations for Production Use:
-- Use dimension-specific parameter ranges
-- Adjust parameters based on expected noise level
-- Consider missingness patterns when selecting parameters
-- Validate results with cross-validation
-- Run multiple independent chains
-- Use convergence diagnostics to ensure reliable results
 
 ## Session Info
 

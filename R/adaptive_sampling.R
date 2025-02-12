@@ -53,8 +53,8 @@
 #' @param scenario_name Character. Name for output files and job identification.
 #' @param N_min,N_max Integer. Range for number of dimensions parameter.
 #' @param k0_min,k0_max Numeric. Range for initial spring constant parameter.
-#' @param cqq_min,cqq_max Numeric. Range for repulsion constant parameter.
-#' @param k_decay_min,k_decay_max Numeric. Range for spring decay parameter.
+#' @param c_repulsion_min,c_repulsion_max Numeric. Range for repulsion constant parameter.
+#' @param cooling_rate_min,cooling_rate_max Numeric. Range for spring decay parameter.
 #' @param num_samples Integer. Number of LHS parameter samples to evaluate.
 #' @param folds Integer. Number of cross-validation folds. Default: 10.
 #' @param verbose Logical. Whether to print progress messages. Default: FALSE.
@@ -69,13 +69,13 @@
 #' @return If write_files=FALSE, returns a data frame with columns:
 #'   \item{N}{Number of dimensions used}
 #'   \item{k0}{Initial spring constant}
-#'   \item{k_decay}{Spring decay rate}
-#'   \item{cqq}{Repulsion constant}
+#'   \item{cooling_rate}{Spring decay rate}
+#'   \item{c_repulsion}{Repulsion constant}
 #'   \item{Holdout_MAE}{Mean absolute error on validation sets}
 #'   \item{NLL}{Negative log likelihood}
 #'
 #' If write_files=TRUE, results are saved to CSV files in the format:
-#' "{scenario_name}_hyperparam_results.csv"
+#' "{scenario_name}_model_parameters.csv"
 #'
 #' @examples
 #' \dontrun{
@@ -93,8 +93,8 @@
 #'   scenario_name = "test_opt",
 #'   N_min = 2, N_max = 10,
 #'   k0_min = 1, k0_max = 30,
-#'   cqq_min = 0.00001, cqq_max = 0.2,
-#'   k_decay_min = 0.00001, k_decay_max = 0.2,
+#'   c_repulsion_min = 0.00001, c_repulsion_max = 0.2,
+#'   cooling_rate_min = 0.00001, cooling_rate_max = 0.2,
 #'   num_samples = 20,
 #'   num_cores = 4
 #' )
@@ -126,10 +126,10 @@ run_parameter_optimization <- function(distance_matrix,
                                      N_max,
                                      k0_min,
                                      k0_max,
-                                     cqq_min,
-                                     cqq_max,
-                                     k_decay_min,
-                                     k_decay_max,
+                                     c_repulsion_min,
+                                     c_repulsion_max,
+                                     cooling_rate_min,
+                                     cooling_rate_max,
                                      num_samples,
                                      folds = 20,
                                      verbose = FALSE,
@@ -171,10 +171,10 @@ run_parameter_optimization <- function(distance_matrix,
     relative_epsilon = relative_epsilon,
     k0_min = k0_min,
     k0_max = k0_max,
-    cqq_min = cqq_min,
-    cqq_max = cqq_max,
-    k_decay_min = k_decay_min,
-    k_decay_max = k_decay_max
+    c_repulsion_min = c_repulsion_min,
+    c_repulsion_max = c_repulsion_max,
+    cooling_rate_min = cooling_rate_min,
+    cooling_rate_max = cooling_rate_max
   )
   
   for (param_name in names(numeric_params)) {
@@ -191,11 +191,11 @@ run_parameter_optimization <- function(distance_matrix,
   if (k0_min >= k0_max) {
     stop("k0_min must be less than k0_max")
   }
-  if (cqq_min >= cqq_max) {
-    stop("cqq_min must be less than cqq_max")
+  if (c_repulsion_min >= c_repulsion_max) {
+    stop("c_repulsion_min must be less than c_repulsion_max")
   }
-  if (k_decay_min >= k_decay_max) {
-    stop("k_decay_min must be less than k_decay_max")
+  if (cooling_rate_min >= cooling_rate_max) {
+    stop("cooling_rate_min must be less than cooling_rate_max")
   }
   
   # Validate logical parameters
@@ -239,11 +239,11 @@ run_parameter_optimization <- function(distance_matrix,
     }
   
     # Create required directories
-    hyperparam_dir <- file.path(output_dir, "hyperparam_results")
-    run_topolow_dir <- file.path(output_dir, "run_topolow_arguments")
+    param_dir <- file.path(output_dir, "model_parameters")
+    run_topolow_dir <- file.path(output_dir, "init_param_optimization")
     
     if (write_files) {
-      for (dir in c(hyperparam_dir, run_topolow_dir)) {
+      for (dir in c(param_dir, run_topolow_dir)) {
         if (!dir.exists(dir)) {
           dir.create(dir, recursive = TRUE, showWarnings = FALSE)
         }
@@ -252,12 +252,12 @@ run_parameter_optimization <- function(distance_matrix,
     
     # Verify write permissions
     if (write_files) {
-      test_file <- file.path(hyperparam_dir, "test_write.txt")
+      test_file <- file.path(param_dir, "test_write.txt")
       tryCatch({
         write.table(data.frame(test=1), test_file)
         unlink(test_file)
       }, error = function(e) {
-        stop("No write permission in directory: ", hyperparam_dir)
+        stop("No write permission in directory: ", param_dir)
       })
     }
     
@@ -277,8 +277,8 @@ run_parameter_optimization <- function(distance_matrix,
   lhs_params <- data.frame(
     N = floor(qunif(lhs_samples[,1], min = N_min, max = N_max + 1)),
     k0 = qunif(lhs_samples[,2], min = k0_min, max = k0_max),
-    cqq = qunif(lhs_samples[,3], min = cqq_min, max = cqq_max),
-    k_decay = qunif(lhs_samples[,4], min = k_decay_min, max = k_decay_max)
+    c_repulsion = qunif(lhs_samples[,3], min = c_repulsion_min, max = c_repulsion_max),
+    cooling_rate = qunif(lhs_samples[,4], min = cooling_rate_min, max = cooling_rate_max)
   )
   
   # Create cross-validation folds
@@ -364,8 +364,8 @@ run_parameter_optimization <- function(distance_matrix,
       
       N <- lhs_params$N[sample_idx]
       k0 <- lhs_params$k0[sample_idx]
-      cqq <- lhs_params$cqq[sample_idx]
-      k_decay <- lhs_params$k_decay[sample_idx]
+      c_repulsion <- lhs_params$c_repulsion[sample_idx]
+      cooling_rate <- lhs_params$cooling_rate[sample_idx]
       
       truth_matrix <- matrix_list[[fold_idx]][[1]]
       input_matrix <- matrix_list[[fold_idx]][[2]]
@@ -376,8 +376,8 @@ run_parameter_optimization <- function(distance_matrix,
           ndim = N,
           max_iter = max_iter,
           k0 = k0,
-          k_decay = k_decay,
-          cqq = cqq,
+          cooling_rate = cooling_rate,
+          c_repulsion = c_repulsion,
           relative_epsilon = relative_epsilon,
           convergence_counter = convergence_counter,
           initial_positions = NULL,
@@ -404,8 +404,8 @@ run_parameter_optimization <- function(distance_matrix,
           result <- data.frame(
             N = N,
             k0 = k0,
-            k_decay = k_decay,
-            cqq = cqq,
+            cooling_rate = cooling_rate,
+            c_repulsion = c_repulsion,
             Holdout_MAE = mae_holdout,
             NLL = NLL
           )
@@ -413,7 +413,7 @@ run_parameter_optimization <- function(distance_matrix,
           # Save individual result if requested
           if(write_files) {
             result_file <- file.path(run_topolow_dir,
-                                     sprintf("%d_hyperparams_%s.csv", i, scenario_name))
+                                     sprintf("%d_params_%s.csv", i, scenario_name))
             write.csv(result, result_file, row.names = FALSE)
           }
           
@@ -484,7 +484,7 @@ run_parameter_optimization <- function(distance_matrix,
     
     # Combine results
     res_list <- do.call(rbind, res_list)
-    colnames(res_list) <- c("N", "k0", "k_decay", "cqq", "Holdout_MAE", "NLL")
+    colnames(res_list) <- c("N", "k0", "cooling_rate", "c_repulsion", "Holdout_MAE", "NLL")
     
     # Remove any remaining invalid values
     res_list <- res_list[complete.cases(res_list) & 
@@ -497,7 +497,7 @@ run_parameter_optimization <- function(distance_matrix,
     # Calculate median results across folds with error checking
     tryCatch({
       res_list_median <- aggregate(
-        cbind(Holdout_MAE, NLL) ~ N + k0 + k_decay + cqq,
+        cbind(Holdout_MAE, NLL) ~ N + k0 + cooling_rate + c_repulsion,
         data = res_list,
         FUN = median
       )
@@ -508,8 +508,8 @@ run_parameter_optimization <- function(distance_matrix,
     
     # Write aggregated results
     if(write_files) {
-      file_name <- file.path(hyperparam_dir,
-                             paste0(scenario_name, "_hyperparam_results.csv"))
+      file_name <- file.path(param_dir,
+                             paste0(scenario_name, "_model_parameters.csv"))
       
       if(file.exists(file_name)) {
         existing_data <- read.csv(file_name)
@@ -561,19 +561,19 @@ submit_parameter_jobs <- function(matrix_list_file,
   }
   
   # Create directories
-  slurm_dir <- file.path(output_dir, "run_topolow_arguments")
+  slurm_dir <- file.path(output_dir, "init_param_optimization")
   if (!dir.exists(slurm_dir)) {
     dir.create(slurm_dir, recursive = TRUE, showWarnings = FALSE)
   }
   
   # Get path to run script
   script_path <- system.file(
-    "scripts/run_topolow_arguments.R",
+    "scripts/init_param_optimization.R",
     package = "topolow"
   )
   
   if (!file.exists(script_path)) {
-    stop("Could not find run script in package: run_topolow_arguments.R")
+    stop("Could not find run script in package: init_param_optimization.R")
   }
   
   # Verify matrix_list before submitting jobs
@@ -597,8 +597,8 @@ submit_parameter_jobs <- function(matrix_list_file,
       as.character(lhs_params$N[sample_idx]),
       as.character(max_iter),
       as.character(lhs_params$k0[sample_idx]),
-      as.character(lhs_params$k_decay[sample_idx]),
-      as.character(lhs_params$cqq[sample_idx]),
+      as.character(lhs_params$cooling_rate[sample_idx]),
+      as.character(lhs_params$c_repulsion[sample_idx]),
       as.character(relative_epsilon),
       as.character(convergence_counter),
       "NULL", # initial_positions
@@ -611,10 +611,10 @@ submit_parameter_jobs <- function(matrix_list_file,
     )
     
     # Create job script
-    job_name <- paste0(i, "_run_topolow_arguments_", scenario_name)
-    output_file <- file.path("run_topolow_arguments",
+    job_name <- paste0(i, "_init_param_optimization_", scenario_name)
+    output_file <- file.path("init_param_optimization",
                             paste0(i, "_", scenario_name, ".out"))
-    error_file <- file.path("run_topolow_arguments",
+    error_file <- file.path("init_param_optimization",
                            paste0(i, "_", scenario_name, ".err"))
     
     script_file <- create_slurm_script(
@@ -642,21 +642,21 @@ submit_parameter_jobs <- function(matrix_list_file,
 #' \code{\link{submit_parameter_jobs}}.
 #'
 #' @details
-#' The function looks for CSV files in the run_topolow_arguments directory that match 
-#' the pattern "hyperparams_{scenario_name}.csv". It combines all results into a 
+#' The function looks for CSV files in the init_param_optimization directory that match 
+#' the pattern "params_{scenario_name}.csv". It combines all results into a 
 #' single dataset, computes median values across folds, and optionally writes the 
 #' aggregated results to a file.
 #'
 #' The output file is saved as:
-#' "hyperparam_results/{scenario_name}_hyperparam_results.csv"
+#' "model_parameters/{scenario_name}_model_parameters.csv"
 #'
 #' @param scenario_name Character. Name used in parameter optimization jobs.
 #' @param write_files Logical. Whether to save combined results (default: TRUE).
 #' @return Data frame of aggregated results containing median values across folds:
 #'   \item{N}{Number of dimensions}
 #'   \item{k0}{Initial spring constant}
-#'   \item{k_decay}{Spring decay rate}
-#'   \item{cqq}{Repulsion constant}
+#'   \item{cooling_rate}{Spring decay rate}
+#'   \item{c_repulsion}{Repulsion constant}
 #'   \item{Holdout_MAE}{Median holdout mean absolute error}
 #'   \item{NLL}{Median negative log likelihood}
 #'
@@ -679,8 +679,8 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
   }
   
   # Find result files
-  pattern <- paste0("_hyperparams_", scenario_name, "\\.csv$")
-  directory_path <- file.path(output_dir, "run_topolow_arguments")
+  pattern <- paste0("_params_", scenario_name, "\\.csv$")
+  directory_path <- file.path(output_dir, "init_param_optimization")
   
   csv_files <- list.files(
     path = directory_path,
@@ -716,20 +716,20 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
   
   # Calculate median results across folds
   results_median <- aggregate(
-    cbind(Holdout_MAE, NLL) ~ N + k0 + k_decay + cqq,
+    cbind(Holdout_MAE, NLL) ~ N + k0 + cooling_rate + c_repulsion,
     data = results,
     FUN = median
   )
   
   if(write_files) {
     output_file <- file.path(
-      "hyperparam_results",
-      paste0(scenario_name, "_hyperparam_results.csv")
+      "model_parameters",
+      paste0(scenario_name, "_model_parameters.csv")
     )
     
     # Create directory if it doesn't exist
     dir.create(
-      "hyperparam_results", 
+      "model_parameters", 
       showWarnings = FALSE, 
       recursive = TRUE
     )
@@ -763,10 +763,10 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #' 4. Can distribute computation via SLURM for large-scale sampling
 #'
 #' Both local and SLURM executions append results to the same output file:
-#' "hyperparam_results/{scenario_name}_hyperparam_results.csv"
+#' "model_parameters/{scenario_name}_model_parameters.csv"
 #'
 #' @param initial_samples_file Character. Path to CSV file containing initial samples.
-#'        Must contain columns: log_N, log_k0, log_k_decay, log_cqq, NLL
+#'        Must contain columns: log_N, log_k0, log_cooling_rate, log_c_repulsion, NLL
 #' @param distance_matrix Matrix. Distance matrix to optimize.
 #' @param max_iter Integer. Maximum iterations per sample evaluation.
 #' @param relative_epsilon Numeric. Convergence threshold.
@@ -780,7 +780,7 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #' @param cider Logical. Whether to use cider queue (default: FALSE).
 #'
 #' @return Invisible NULL. Results are appended to:
-#'         "hyperparam_results/{scenario_name}_hyperparam_results.csv"
+#'         "model_parameters/{scenario_name}_model_parameters.csv"
 #'
 #' @examples
 #' \dontrun{
@@ -872,9 +872,9 @@ run_adaptive_sampling <- function(initial_samples_file,
   
   # Create required directories
   adaptive_sampling_dir <- file.path(output_dir, "adaptive_sampling_jobs")
-  hyperparam_dir <- file.path(output_dir, "hyperparam_results")
+  param_dir <- file.path(output_dir, "model_parameters")
   
-  for (dir in c(adaptive_sampling_dir, hyperparam_dir)) {
+  for (dir in c(adaptive_sampling_dir, param_dir)) {
     if (!dir.exists(dir)) {
       dir.create(dir, recursive = TRUE, showWarnings = FALSE)
     }
@@ -887,7 +887,7 @@ run_adaptive_sampling <- function(initial_samples_file,
   
   # Read and validate initial samples
   init_samples <- read.csv(initial_samples_file)
-  required_cols <- c("log_N", "log_k0", "log_k_decay", "log_cqq", "NLL")
+  required_cols <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion", "NLL")
   if(!all(required_cols %in% names(init_samples))) {
     stop("Missing required columns: ", 
          paste(setdiff(required_cols, names(init_samples)), collapse=", "))
@@ -1004,9 +1004,9 @@ check_sampling_jobs <- function(scenario_name, expected_jobs) {
   )
   
   # Check for result files
-  pattern <- paste0("_hyperparam_results_", scenario_name, "\\.csv$")
+  pattern <- paste0("_model_parameters_", scenario_name, "\\.csv$")
   result_files <- list.files(
-    path = "hyperparam_results",
+    path = "model_parameters",
     pattern = pattern
   )
   status$completed <- length(result_files)
@@ -1096,7 +1096,7 @@ sample_from_distribution <- function(dist, n, epsilon) {
     samples <- as.data.frame(samples)
   }
   
-  names(samples) <- c("log_N", "log_k0", "log_k_decay", "log_cqq")
+  names(samples) <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
   return(samples)
 }
 
@@ -1155,7 +1155,7 @@ generate_kde_samples <- function(samples, n, epsilon = 0) {
   weights <- std_log_likes / sum(std_log_likes)
   
   # Get parameter names
-  par_names <- c("log_N", "log_k0", "log_k_decay", "log_cqq")
+  par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
   
   # Initialize results
   new_samples <- data.frame(matrix(nrow = n, ncol = length(par_names)))
@@ -1297,8 +1297,8 @@ unweighted_kde <- function(x, n = 512, from = min(x), to = max(x),
 #' @param relative_epsilon Convergence threshold
 #' @param N Number of dimensions
 #' @param k0 Initial spring constant
-#' @param k_decay Spring constant decay rate
-#' @param cqq Repulsion constant
+#' @param cooling_rate Spring constant decay rate
+#' @param c_repulsion Repulsion constant
 #' @param folds Number of CV folds
 #' @param num_cores Number of cores for parallel processing
 #' @return List with:
@@ -1306,8 +1306,8 @@ unweighted_kde <- function(x, n = 512, from = min(x), to = max(x),
 #'   \item{NLL}{Negative log likelihood}
 #' @keywords internal
 likelihood_function <- function(distance_matrix, max_iter,
-                              relative_epsilon, N, k0, k_decay,
-                              cqq, folds = 20, num_cores) {
+                              relative_epsilon, N, k0, cooling_rate,
+                              c_repulsion, folds = 20, num_cores) {
   # Create n folds in the data
   truth_matrix <- distance_matrix
   
@@ -1350,8 +1350,8 @@ likelihood_function <- function(distance_matrix, max_iter,
                              ndim = N, 
                              max_iter = max_iter, 
                              k0 = k0, 
-                             k_decay = k_decay, 
-                             cqq = cqq,
+                             cooling_rate = cooling_rate, 
+                             c_repulsion = c_repulsion,
                              relative_epsilon = relative_epsilon,
                              convergence_counter = 5,
                              initial_positions = NULL,
@@ -1365,7 +1365,7 @@ likelihood_function <- function(distance_matrix, max_iter,
     df <- errors$report_df
     mae_holdout <- mean(abs(df$OutSampleError), na.rm = TRUE)
     
-    data.frame(N = N, k0 = k0, k_decay = k_decay, cqq = cqq, 
+    data.frame(N = N, k0 = k0, cooling_rate = cooling_rate, c_repulsion = c_repulsion, 
                Holdout_MAE = mae_holdout)
   }
   
@@ -1374,9 +1374,9 @@ likelihood_function <- function(distance_matrix, max_iter,
   
   # Combine results
   res_list <- do.call(rbind, res_list)
-  colnames(res_list) <- c("N", "k0", "k_decay", "cqq", "Holdout_MAE")
+  colnames(res_list) <- c("N", "k0", "cooling_rate", "c_repulsion", "Holdout_MAE")
   
-  res_list_median <- aggregate(Holdout_MAE ~ N + k0 + k_decay + cqq, 
+  res_list_median <- aggregate(Holdout_MAE ~ N + k0 + cooling_rate + c_repulsion, 
                              data = res_list, FUN = median)
   
   n <- holdout_size
@@ -1429,7 +1429,7 @@ adaptive_MC_sampling_legacy <- function(samples_file, distance_matrix,
                                folds = 20, num_cores,
                                scenario_name, replace_csv) {
 
-  par_names <- c("log_N", "log_k0", "log_k_decay", "log_cqq")
+  par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
   
   for (iter in 1:n_iter) {
     # Get updated samples
@@ -1458,14 +1458,14 @@ adaptive_MC_sampling_legacy <- function(samples_file, distance_matrix,
     
     new_samples$log_N <- as.numeric(new_samples$log_N)
     new_samples$log_k0 <- as.numeric(new_samples$log_k0)
-    new_samples$log_k_decay <- as.numeric(new_samples$log_k_decay)
-    new_samples$log_cqq <- as.numeric(new_samples$log_cqq)
+    new_samples$log_cooling_rate <- as.numeric(new_samples$log_cooling_rate)
+    new_samples$log_c_repulsion <- as.numeric(new_samples$log_c_repulsion)
 
     # Transform parameters
     new_samples$N <- round(exp(new_samples$log_N))
     new_samples$k0 <- exp(new_samples$log_k0)
-    new_samples$k_decay = exp(new_samples$log_k_decay)
-    new_samples$cqq = exp(new_samples$log_cqq)
+    new_samples$cooling_rate = exp(new_samples$log_cooling_rate)
+    new_samples$c_repulsion = exp(new_samples$log_c_repulsion)
 
     # Evaluate likelihood
     new_likelihoods <- sapply(1:nrow(new_samples), function(i) 
@@ -1475,8 +1475,8 @@ adaptive_MC_sampling_legacy <- function(samples_file, distance_matrix,
         relative_epsilon=relative_epsilon, 
         N= new_samples[i, "N"],
         k0= new_samples[i, "k0"],
-        k_decay= new_samples[i, "k_decay"],
-        cqq= new_samples[i, "cqq"],
+        cooling_rate= new_samples[i, "cooling_rate"],
+        c_repulsion= new_samples[i, "c_repulsion"],
         folds = folds,
         num_cores=num_cores))
     
@@ -1493,8 +1493,8 @@ adaptive_MC_sampling_legacy <- function(samples_file, distance_matrix,
       
       # Save results
       for (i in 1:nrow(new_samples)) {
-        file_name <- paste0("hyperparam_results/", scenario_name, 
-                           "_hyperparam_results.csv")
+        file_name <- paste0("model_parameters/", scenario_name, 
+                           "_model_parameters.csv")
         
         if (file.exists(file_name)) {
           existing_data <- read.csv(file_name)
@@ -1530,7 +1530,6 @@ adaptive_MC_sampling_legacy <- function(samples_file, distance_matrix,
 #' @param num_cores Number of cores for parallel processing
 #' @param scenario_name Name for output files
 #' @param output_dir Directory for output files. If NULL, uses current directory
-#' @param replace_csv Whether to replace existing CSV
 #' @return Data frame of samples with evaluated likelihoods
 #' @export
 adaptive_MC_sampling <- function(samples_file, 
@@ -1566,17 +1565,17 @@ adaptive_MC_sampling <- function(samples_file,
   }
   
   # Create results directory
-  hyperparam_dir <- file.path(output_dir, "hyperparam_results")
-  if (!dir.exists(hyperparam_dir)) {
-    dir.create(hyperparam_dir, recursive = TRUE, showWarnings = FALSE)
+  param_dir <- file.path(output_dir, "model_parameters")
+  if (!dir.exists(param_dir)) {
+    dir.create(param_dir, recursive = TRUE, showWarnings = FALSE)
   }
   
-  par_names <- c("log_N", "log_k0", "log_k_decay", "log_cqq")
+  par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
   
   for (iter in 1:n_iter) {
     if(verbose) cat(sprintf("\nStarting iteration %d of %d\n", iter, n_iter))
     
-    # Read current samples
+    # Read & clean current samples
     current_samples <- read.csv(samples_file)
     current_samples <- current_samples[apply(current_samples, 1, 
                                              function(row) all(is.finite(row))), ]
@@ -1587,8 +1586,11 @@ adaptive_MC_sampling <- function(samples_file,
       break
     }
     
+    # Remove the first half of rows as burn-in
+    current_samples <- current_samples[-(1:round(nrow(current_samples) * 0.5)), ]
+
     # Check convergence
-    if(nrow(current_samples) > 1000) {
+    if(nrow(current_samples) > 500) {
       conv_check <- check_gaussian_convergence(data=current_samples[,par_names], 
                                                window_size = 500, 
                                                tolerance = 0.002)
@@ -1617,8 +1619,8 @@ adaptive_MC_sampling <- function(samples_file,
         relative_epsilon = relative_epsilon, 
         N = round(exp(new_samples[i, "log_N"])),
         k0 = exp(new_samples[i, "log_k0"]),
-        k_decay = exp(new_samples[i, "log_k_decay"]),
-        cqq = exp(new_samples[i, "log_cqq"]),
+        cooling_rate = exp(new_samples[i, "log_cooling_rate"]),
+        c_repulsion = exp(new_samples[i, "log_c_repulsion"]),
         folds = folds,
         num_cores = 1  # Use single core within parallel processes
       )
@@ -1656,8 +1658,8 @@ adaptive_MC_sampling <- function(samples_file,
       
       if (nrow(new_samples) > 0) {
         # Save results
-        result_file <- file.path(hyperparam_dir,
-                                 paste0(scenario_name, "_hyperparam_results.csv"))
+        result_file <- file.path(param_dir,
+                                 paste0(scenario_name, "_model_parameters.csv"))
         
         if (file.exists(result_file)) {
           existing_data <- read.csv(result_file)
@@ -1680,8 +1682,8 @@ adaptive_MC_sampling <- function(samples_file,
   }
   
   # Return final samples if any
-  result_file <- file.path(hyperparam_dir,
-                           paste0(scenario_name, "_hyperparam_results.csv"))
+  result_file <- file.path(param_dir,
+                           paste0(scenario_name, "_model_parameters.csv"))
   if(file.exists(result_file)) {
     final_samples <- read.csv(result_file)
     return(final_samples)
@@ -1699,7 +1701,7 @@ adaptive_MC_sampling <- function(samples_file,
 #' log-likelihoods. Uses parallel processing for efficiency.
 #'
 #' @param samples Data frame containing:
-#'        - log_N, log_k0, log_k_decay, log_cqq: Parameter columns
+#'        - log_N, log_k0, log_cooling_rate, log_c_repulsion: Parameter columns
 #'        - NLL: Negative log-likelihood column
 #' @return Named list of marginal distributions, each containing:
 #'   \item{x}{Vector of parameter values}
@@ -1713,7 +1715,7 @@ adaptive_MC_sampling <- function(samples_file,
 #' @export
 calculate_weighted_marginals <- function(samples) {
   # Input validation
-  required_cols <- c("log_N", "log_k0", "log_k_decay", "log_cqq", "NLL")
+  required_cols <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion", "NLL")
   if (!all(required_cols %in% names(samples))) {
     stop("Missing required columns: ", 
          paste(setdiff(required_cols, names(samples)), collapse = ", "))
@@ -1746,7 +1748,7 @@ calculate_weighted_marginals <- function(samples) {
   weights <- std_log_likelihoods / sum(std_log_likelihoods)
   
   # Define parameter columns to process
-  vars <- c("log_N", "log_k0", "log_k_decay", "log_cqq")
+  vars <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
   
   # Define KDE calculation function
   calculate_kde <- function(var, weights) {

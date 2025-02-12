@@ -10,8 +10,8 @@ likelihood_function(
   relative_epsilon,
   N,
   k0,
-  k_decay,
-  cqq,
+  cooling_rate,
+  c_repulsion,
   folds = 20,
   num_cores
 )
@@ -27,9 +27,9 @@ likelihood_function(
 
 \item{k0}{Initial spring constant}
 
-\item{k_decay}{Spring constant decay rate}
+\item{cooling_rate}{Spring constant decay rate}
 
-\item{cqq}{Repulsion constant}
+\item{c_repulsion}{Repulsion constant}
 
 \item{folds}{Number of CV folds}
 

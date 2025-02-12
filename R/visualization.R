@@ -1496,7 +1496,7 @@ create_diagnostic_plots <- function(chain_files,
   chains <- lapply(chain_files, read.csv)
   
   # Process samples 
-  par_names <- c("log_N", "log_k0", "log_k_decay", "log_cqq")
+  par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
   for(i in seq_along(chains)) {
     chains[[i]] <- chains[[i]][
       (nrow(chains[[i]]) - mutual_size - 1):nrow(chains[[i]]), 
@@ -1650,16 +1650,16 @@ plot.profile_likelihood <- function(x, LL_max, width = 3.5, height = 3.5,
   # Convert parameter names to mathematical expressions
   param_expr <- switch(x$param_name,
                        "log_N" = expression(log(N)),
-                       "log_cqq" = expression(log(c)),
-                       "log_k_decay" = expression(log(alpha)),
+                       "log_c_repulsion" = expression(log(c)),
+                       "log_cooling_rate" = expression(log(alpha)),
                        "log_k0" = expression(log(k)),
                        x$param_name)  # Default to original name if not matched
   
   # Create title expression
   title_expr <- switch(x$param_name,
                        "log_N" = expression(paste("Profile Likelihood: ", log(N))),
-                       "log_cqq" = expression(paste("Profile Likelihood: ", log(c))),
-                       "log_k_decay" = expression(paste("Profile Likelihood: ", log(alpha))),
+                       "log_c_repulsion" = expression(paste("Profile Likelihood: ", log(c))),
+                       "log_cooling_rate" = expression(paste("Profile Likelihood: ", log(alpha))),
                        "log_k0" = expression(paste("Profile Likelihood: ", log(k))),
                        paste("Profile Likelihood:", x$param_name))
   

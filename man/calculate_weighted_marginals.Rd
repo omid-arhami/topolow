@@ -8,7 +8,7 @@ calculate_weighted_marginals(samples)
 }
 \arguments{
 \item{samples}{Data frame containing:
-- log_N, log_k0, log_k_decay, log_cqq: Parameter columns
+- log_N, log_k0, log_cooling_rate, log_c_repulsion: Parameter columns
 - NLL: Negative log-likelihood column}
 }
 \value{

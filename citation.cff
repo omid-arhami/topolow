@@ -3,11 +3,12 @@ message: "If you use this software, please cite it as below."
 authors:
 - family-names: "Arhami"
   given-names: "Omid"
-  orcid: # Add your ORCID
+  orcid: 0009-0005-2681-6598
 - family-names: "Rohani"
   given-names: "Pejman"
-title: "topolow: ..."
-version: 0.1.0
+  orcid: 0000-0002-7221-3801
+title: "Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assay results"
+version: 0.1.1
 doi: pending
 date-released: 2025
 url: "https://github.com/omid-arhami/topolow"
@@ -18,5 +19,5 @@ preferred-citation:
     given-names: "Omid"
   - family-names: "Rohani"
     given-names: "Pejman"
-  title: "..."
+  title: "Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assay results"
   year: 2025

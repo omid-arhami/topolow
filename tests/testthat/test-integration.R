@@ -32,8 +32,8 @@ test_that("full workflow executes correctly", {
     ndim = 2,
     max_iter = 100,
     k0 = 3.0,
-    k_decay = 0.1,
-    cqq = 0.001
+    cooling_rate = 0.1,
+    c_repulsion = 0.001
   )
   
   # Create visualization
@@ -81,10 +81,10 @@ test_that("parameter optimization workflow works", {
     N_max = 4,
     k0_min = 0.5,
     k0_max = 5,
-    cqq_min = 0.001,
-    cqq_max = 0.01,
-    k_decay_min = 0.001,
-    k_decay_max = 0.05,
+    c_repulsion_min = 0.001,
+    c_repulsion_max = 0.01,
+    cooling_rate_min = 0.001,
+    cooling_rate_max = 0.05,
     num_samples = 5, # Reduced for testing
     folds = 3,      # Reduced for testing
     write_files = FALSE,
@@ -92,7 +92,7 @@ test_that("parameter optimization workflow works", {
   )
   
   expect_true(is.data.frame(results))
-  expect_true(all(c("N", "k0", "k_decay", "cqq", "Holdout_MAE", "NLL") %in% 
+  expect_true(all(c("N", "k0", "cooling_rate", "c_repulsion", "Holdout_MAE", "NLL") %in% 
                     names(results)))
 })
 
@@ -100,17 +100,26 @@ test_that("parameter optimization workflow works", {
 test_that("adaptive sampling workflow executes", {
   # Create initial samples
   samples <- data.frame(
-    log_N = log(c(2,3,4)),
-    log_k0 = log(c(1,1.5,2)),
-    log_k_decay = log(c(0.001, 0.002, 0.003)),
-    log_cqq = log(c(0.001, 0.002, 0.003)),
-    NLL = c(100, 90, 95),
-    Holdout_MAE = c(2, 1.8, 1.9)
+    log_N = log(c(5,3,4,3, 3.5, 4.5, 2.5, 5.5, 3.2)),
+    log_k0 = log(c(1,1.5,2,0.5, 1.2, 1.8, 0.8, 2.2, 1.1)),
+    log_cooling_rate = log(c(0.001, 0.002, 0.003, 0.0005, 0.0015, 0.0025, 0.0008, 0.0032, 0.0011)),
+    log_c_repulsion = log(c(0.001, 0.002, 0.003, 0.0001, 0.0012, 0.0022, 0.0002, 0.0035, 0.0015)),
+    NLL = c(100, 90, 95, 120, 92, 98, 110, 85, 105),
+    Holdout_MAE = c(2, 1.8, 1.9, 2.8, 1.85, 1.95, 2.6, 1.75, 2.1)
   )
+  
   write.csv(samples, "test_samples.csv", row.names = FALSE)
   
   # Create test distance matrix
-  test_mat <- matrix(c(0,1,2, 1,0,3, 2,3,0), 3, 3)
+  test_mat <- matrix(0, 10, 10)
+  
+  for (i in 1:10) {
+    for (j in 1:10) {
+      if (i != j) {
+        test_mat[i, j] <- abs(i - j) + sample(0:3, 1) # Introducing slight variation
+      }
+    }
+  }
   
   # Run adaptive sampling
   result <- adaptive_MC_sampling(
@@ -126,7 +135,7 @@ test_that("adaptive sampling workflow executes", {
   )
   
   expect_true(is.data.frame(result))
-  expect_true(all(c("log_N", "log_k0", "log_k_decay", "log_cqq", 
+  expect_true(all(c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion", 
                     "NLL", "Holdout_MAE") %in% names(result)))
   
   # Clean up

@@ -1,0 +1,894 @@
+---
+title: "Parameter Fitting and Analyzing Neutralization Assay Data with Topolow"
+author: "Omid Arhami"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Analyzing HIV Neutralization Data with Topolow}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 8,
+  fig.height = 6,
+  warning = TRUE,
+ message = TRUE,    # Show messages
+  error = TRUE      # Continue on error
+)
+```
+
+## Introduction
+
+This vignette demonstrates how to analyze HIV neutralization data, as a sample antigenic assay, using the topolow package. We'll cover:
+
+* Loading and preprocessing IC50 data for HIV subtypes "B" and "C"
+* Analyzing coverage patterns across years 
+* Selecting representative virus panels
+* Optimizing topolow parameters using Latin Hypercube Sampling (LHS)
+* Running Adaptive Monte Carlo (AMC) sampling
+* Analyzing convergence and profile likelihood
+* Creating antigenic maps
+
+To find the optimal parameters of Topolow, you can either run sufficient number of Monte Carlo simulations in the corresponding secttion in this file, or use the results of simulations we have provided on Github (the csv files used in this script), or use the optimal parameters provided below:
+
+optimal_params <- list(
+    N = 2,
+    k0 = 3.550036,
+    cooling_rate = 0.04130713, 
+    c_repulsion = 0.0007038619
+  )
+
+## Required Packages
+
+```{r}
+library(topolow)
+library(ggplot2)
+library(dplyr)
+library(data.table)
+```
+
+## Loading and Preprocessing Data
+
+First, let's load and preprocess the HIV neutralization data. The topolow package provides functions to handle both titer data (like HI assays) and direct distance measurements (like IC50 values).
+
+1- Outlier removal
+
+The median absolute deviation (MAD) method applied to log-transformed IC50 values provides a robust approach for detecting outliers in right-skewed neutralization data. After log transformation, which normalizes the exponential distribution of IC50 measurements, deviations from the median are assessed using MAD - a metric resistant to extreme values unlike standard deviation. Data points are flagged as outliers if they deviate from the median by more than twice the MAD.
+
+```{r}
+# Combine the two files downloaded from Los Alamos website:
+data("hiv_titers")
+
+data("hiv_viruses")
+
+# Add meta data
+hiv_viruses <- hiv_viruses %>%
+  dplyr::select(c("Virus.name", "Country", "Subtype", "Year"))
+
+hiv_titers <- hiv_titers %>% 
+  dplyr::left_join(hiv_viruses, by = join_by(Virus == Virus.name)) %>%
+  dplyr::select(c("Antibody", "Virus", "Country", "Subtype", "Year", "IC50")) %>% 
+  dplyr::rename("virusYear" = "Year")
+
+hiv_titers <- na.omit(hiv_titers)
+
+hiv_titers <- hiv_titers %>% dplyr::filter(IC50 != "")
+```
+
+
+```{r}
+summary_by_subtype <- hiv_titers %>%
+  # Group by subtype and count unique viruses and antibodies
+  group_by(Subtype) %>%
+  summarise(
+    Unique_Viruses = n_distinct(Virus),
+    Unique_Antibodies = n_distinct(Antibody),
+    Total_Points = Unique_Viruses + Unique_Antibodies,
+    Total_Records = n()
+  ) %>%
+  # Sort by total unique points in descending order
+  arrange(desc(Total_Points))
+
+# Print the table
+print(summary_by_subtype, n = Inf)  # n = Inf shows all rows
+
+# Add percentage calculations
+summary_by_subtype <- summary_by_subtype %>%
+  mutate(
+    Percent_Points = round(Total_Points / sum(Total_Points) * 100, 1),
+    Percent_Records = round(Total_Records / sum(Total_Records) * 100, 1)
+  ) %>%
+  arrange(desc(Total_Points))
+
+# Print enhanced table
+print(summary_by_subtype, n = Inf)
+```
+
+```{r}
+hiv_titers <- hiv_titers %>% dplyr::filter(Subtype %in% c("B", "C")) #, "01_AE", "A1", "G", "07_BC", "02_AG", "D", "A1D", "02A1"
+
+hiv_titers$IC50 <- clean_data(hiv_titers$IC50, k=2, take_log=TRUE)
+hiv_titers <- na.omit(hiv_titers)
+```
+
+hiv_distance_matrix will be sorted by year.
+
+```{r}
+# Sort the dataset based on the "year" column
+hiv_titers <- hiv_titers[order(hiv_titers$virusYear), ]
+
+# Save the merged and prepared raw data into a csv:
+write.csv(hiv_titers, "data_files/hiv_assay_full.csv")
+
+# Load and process HIV data
+hiv_results <- process_antigenic_data(
+  file_path = "data_files/hiv_assay_full.csv",
+  antigen_col = "Virus",
+  serum_col = "Antibody", 
+  value_col = "IC50",
+  is_titer = FALSE,
+  base = 2,
+  scale_factor = 1,
+  metadata_cols = c("Subtype", "Country")
+)
+
+# Extract distance matrix
+hiv_distance_matrix <- hiv_results$matrix
+hiv_long <- hiv_results$long
+
+# Quick look at the processed data
+head(hiv_results$long)
+
+summary(as.numeric(hiv_results$long$distance))
+```
+
+## Analyzing Measurement Coverage
+
+An important consideration in antigenic cartography is ensuring adequate measurements per virus. Let's analyze the distribution of measurements:
+
+```{r}
+# # Calculate measurements per virus by virusYear
+coverage_stats <- hiv_long %>%
+  group_by(virusYear, Virus) %>%
+  summarise(
+    n_measurements = n_distinct(Antibody),
+    .groups = 'drop'
+  )
+
+# Quick summary
+summary(coverage_stats$n_measurements)
+```
+
+
+```{r}
+# Prepare matrix for visualization
+heatmap_data <- prepare_heatmap_data(hiv_distance_matrix, cluster_rows = FALSE)
+
+# Plot heatmap
+plot_distance_heatmap(heatmap_data, "hiv_panel")
+
+# Analyze and visualize network structure
+net_results <- analyze_network_structure(hiv_distance_matrix)
+plot_network_structure(net_results, "hiv_network")
+
+```
+
+
+## Selecting Representative Virus Panels 
+
+To create reliable antigenic maps, we want to select viruses with good measurement coverage. Considering the large size of this dataset, and its median, we decide to choose top N viruses and antibodies in each year with at least 10 measurements. Let's analyze how different cutoffs (N) for minimum measurements affect our dataset:
+
+The threshold for the minimum number of measurements per point must be greater than the dimensionality of the data. For example here, our initial estimates show that this data needs 2 to 6 dimensions, so, we define 5 measurements or less as insufficient.
+
+```{r}
+insufficient_thresh <- 5
+
+# Function to analyze panel composition at different cutoffs
+analyze_panel_sizes <- function(data, max_cutoff = 30) {
+  cutoff_stats <- list()
+  
+  for(i in 1:max_cutoff) {
+    # Select top viruses per year with > insufficient_thresh measurements
+    top_viruses <- data %>%
+      group_by(virusYear, Virus) %>%
+      summarise(n_sera = n_distinct(Antibody), .groups = 'drop') %>%
+      group_by(virusYear) %>%
+      filter(n_sera > insufficient_thresh) %>%
+      slice_max(order_by = n_sera, n = i)
+    
+    # Select top sera per year with > insufficient_thresh measurements
+    top_sera <- data %>%
+      group_by(virusYear, Antibody) %>%
+      summarise(n_virus = n_distinct(Virus), .groups = 'drop') %>%
+      group_by(virusYear) %>%
+      filter(n_virus > insufficient_thresh) %>%
+      slice_max(order_by = n_virus, n = i)
+    
+    # Get measurements for selected viruses and sera
+    filtered_data <- data %>%
+      semi_join(top_viruses, by = c("virusYear", "Virus")) %>%
+      semi_join(top_sera, by = c("virusYear", "Antibody"))
+    
+    # Calculate stats
+    virus_stats <- filtered_data %>%
+      group_by(Virus) %>%
+      summarise(n_sera = n_distinct(Antibody))
+    
+    sera_stats <- filtered_data %>%
+      group_by(Antibody) %>%
+      summarise(n_virus = n_distinct(Virus))
+    
+    cutoff_stats[[i]] <- data.frame(
+      cutoff = i,
+      n_viruses = nrow(virus_stats),
+      n_sera = nrow(sera_stats),
+      virus_low_coverage = sum(virus_stats$n_sera <= insufficient_thresh),
+      sera_low_coverage = sum(sera_stats$n_virus <= insufficient_thresh),
+      virus_pct_low = mean(virus_stats$n_sera <= insufficient_thresh) * 100,
+      sera_pct_low = mean(sera_stats$n_virus <= insufficient_thresh) * 100
+    )
+  }
+  
+  bind_rows(cutoff_stats)
+}
+
+# Analyze panels
+panel_analysis <- analyze_panel_sizes(hiv_long, max_cutoff=30)
+
+# Create visualization
+p <- ggplot() +
+  # counts (left y-axis)
+  geom_line(data = panel_analysis, 
+            aes(x = cutoff, y = virus_low_coverage+sera_low_coverage, color = "Count"), 
+            size = 1) +
+  geom_point(data = panel_analysis,
+             aes(x = cutoff, y = virus_low_coverage+sera_low_coverage), 
+             color = "blue", size = 3) +
+  
+  # % (right y-axis) 
+  geom_line(data = panel_analysis,
+            aes(x = cutoff, y = (virus_pct_low+sera_pct_low)/2, color = "Percentage"),
+            size = 1) +
+  geom_point(data = panel_analysis,
+             aes(x = cutoff, y = (virus_pct_low+sera_pct_low)/2),
+             color = "red", size = 3) +
+  
+  # Add reference line at optimal cutoff
+  geom_vline(xintercept = 8, linetype = 2) +
+  
+  scale_y_continuous(
+    name = "Points with ≤5 measurements"
+    #sec.axis = sec_axis(~ . * 1, name = "Percentage", breaks = seq(0, 100, by = 50))
+  ) +
+  scale_x_continuous(breaks = unique(panel_analysis$cutoff)) +
+  scale_color_manual(values = c("Count" = "blue", "Percentage" = "red")) +
+  
+  theme_minimal() +
+  theme(
+    axis.title.y = element_text(color = "black"),
+    axis.text.y = element_text(color = "black"),
+    legend.position = "top"
+  ) +
+  labs(
+    x = "Top N viruses/sera kept per year",
+    title = "Coverage Analysis by Panel Size",
+    color = "Metric"
+  )
+
+q <- ggplot() +
+  geom_line(data = panel_analysis,
+            aes(x = cutoff, y = (virus_pct_low+sera_pct_low)/2, color = "Percentage"),
+            size = 1) +
+  geom_point(data = panel_analysis,
+             aes(x = cutoff, y = (virus_pct_low+sera_pct_low)/2),
+             color = "red", size = 3) +
+  
+  # Add reference line at optimal cutoff
+  geom_vline(xintercept = 11, linetype = 2) +
+  
+  scale_y_continuous(
+    name = "% Points with measurements ≤ 5"
+    #sec.axis = sec_axis(~ . * 1, name = "Percentage", breaks = seq(0, 100, by = 50))
+  ) +
+  scale_x_continuous(breaks = unique(panel_analysis$cutoff)) +
+  scale_color_manual(values = c("Percentage" = "red")) +
+  
+  theme_minimal() +
+  theme(
+    axis.title.y = element_text(color = "black"),
+    axis.text.y = element_text(color = "black"),
+    legend.position = "top"
+  ) +
+  labs(
+    x = "Top N viruses/sera kept per year",
+    title = "Coverage Analysis by Panel Size",
+    color = "Metric"
+  )
+
+print(q)
+```
+
+## Selecting Optimal Panel Size
+
+Based on the analysis above, we can select an optimal number of viruses per virusYear that balances panel size and measurement quality. Another consideration is the large number of viruses and measurements in this dataset, which forces us to choose a smaller sample of viruses in each year to be able to make the data size reasonable while covering all years.
+
+Let's examine the distribution of measurements per virus at our chosen cutoff:
+
+```{r}
+# Create filtered dataset
+create_filtered_dataset <- function(data, optimal_cutoff) {
+  # Find top viruses
+  top_viruses <- data %>%
+    group_by(virusYear, Virus) %>%
+    summarise(n_sera = n_distinct(Antibody), .groups = 'drop') %>%
+    group_by(virusYear) %>%
+    filter(n_sera > insufficient_thresh) %>%
+    slice_max(order_by = n_sera, n = optimal_cutoff)
+  
+  # Find top sera
+  top_sera <- data %>%
+    group_by(virusYear, Antibody) %>%
+    summarise(n_virus = n_distinct(Virus), .groups = 'drop') %>%
+    group_by(virusYear) %>%
+    filter(n_virus > insufficient_thresh) %>%
+    slice_max(order_by = n_virus, n = optimal_cutoff)
+  
+  # Create filtered dataset
+  filtered_data <- data %>%
+    semi_join(top_viruses, by = c("virusYear", "Virus")) %>%
+    semi_join(top_sera, by = c("virusYear", "Antibody"))
+  
+  return(filtered_data)
+}
+
+
+# Create filtered dataset with optimal cutoff
+insufficient_thresh = 5
+optimal_cutoff = 11
+filtered_data <- create_filtered_dataset(hiv_long, optimal_cutoff)
+#filtered_data <- hiv_long
+
+# Remove pairs with insufficient measurements (< 3 unique partners)
+# Count unique partners for each Antibody and Virus
+pairing_counts <- list(
+  antibodies = filtered_data %>%
+    group_by(Antibody) %>%
+    summarise(n_partners = n_distinct(Virus)) %>%
+    filter(n_partners >= 3),
+  
+  viruses = filtered_data %>%
+    group_by(Virus) %>%
+    summarise(n_partners = n_distinct(Antibody)) %>%
+    filter(n_partners >= 3)
+)
+
+# Filter data to keep only entries with sufficient partners
+filtered_data <- filtered_data %>%
+  filter(Antibody %in% pairing_counts$antibodies$Antibody,
+         Virus %in% pairing_counts$viruses$Virus)
+
+write.csv(filtered_data, "data_files/hiv_filtered_long_data.csv")
+```
+
+```{r}
+# Visualize measurement distributions
+measurement_stats <- bind_rows(
+  filtered_data %>%
+    group_by(Virus) %>%
+    summarise(
+      n_measurements = n_distinct(Antibody),
+      type = "Virus"
+    ),
+  filtered_data %>%
+    group_by(Antibody) %>%
+    summarise(
+      n_measurements = n_distinct(Virus),
+      type = "Sera"
+    )
+)
+
+ggplot(measurement_stats) +
+  geom_boxplot(aes(x = type, y = n_measurements, fill = type), 
+               outlier.shape = NA) +
+  geom_jitter(aes(x = type, y = n_measurements), 
+              width = 0.2, alpha = 0.5) +
+  theme_minimal() +
+  labs(
+    title = "Distribution of Measurements",
+    x = NULL,
+    y = "Number of Measurements",
+    fill = "Type"
+  )
+```
+
+```{r}
+length(unique(filtered_data$Virus))
+length(unique(filtered_data$Antibody))
+length(unique(filtered_data$Virus)) + length(unique(filtered_data$Antibody))
+```
+
+```{r}
+# Filter the data for Subtype "B" and "C"
+filtered_data_plot <- filtered_data %>%
+  filter(Subtype %in% c("B", "C"))
+
+# Count the occurrences of each Subtype for each year
+count_data <- filtered_data_plot %>%
+  group_by(virusYear, Subtype) %>%
+  summarise(count = n())
+
+# Plot the data
+ggplot(count_data, aes(x = virusYear, y = count, color = Subtype)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Count of Subtype B and C Over Years",
+       x = "Year",
+       y = "Count",
+       color = "Subtype") +
+  theme_minimal()
+```
+
+```{r}
+# Filter the data for Subtype "B"
+filtered_data_plot <- filtered_data %>%
+  filter(Subtype == "B")
+
+# Calculate the mean of IC50 values for each year
+mean_data <- filtered_data_plot %>%
+  group_by(virusYear) %>%
+  summarise(mean_IC50 = mean(as.numeric(distance), na.rm = TRUE))
+
+# Plot the data
+ggplot(mean_data, aes(x = virusYear, y = mean_IC50)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Mean distance Values for Subtype B Over Years",
+       x = "Year",
+       y = "Mean distance") +
+  theme_minimal()
+```
+
+## Creating and Analyzing the Filtered Distance Matrix
+
+Now that we have prepared our virus panel, we can create the distance matrix for mapping:
+
+```{r}
+# Create distance matrix
+hiv_distance_matrix <- long_to_matrix(
+  filtered_data,
+  chnames = "Virus",
+  chorder = "virusYear", 
+  rnames = "Antibody",
+  rorder = "virusYear",
+  values_column = "distance",
+  rc = FALSE,
+  sort = TRUE
+)
+
+sum(!is.na(hiv_distance_matrix))
+sum(!is.na(hiv_distance_matrix))/nrow(hiv_distance_matrix)/ncol(hiv_distance_matrix)
+
+# Prepare matrix for visualization
+heatmap_data <- prepare_heatmap_data(hiv_distance_matrix, cluster_rows = FALSE)
+
+# Plot heatmap
+plot_distance_heatmap(heatmap_data, "hiv_panel")
+
+# Analyze and visualize network structure
+net_results <- analyze_network_structure(hiv_distance_matrix)
+plot_network_structure(net_results, "hiv_network")
+
+```
+
+
+## Initial Parameter Optimization with LHS
+
+We'll first explore the parameter space using Latin Hypercube Sampling combined with leave 5% out (20-fold) cross-validation:
+
+```{r}
+# Define parameter ranges
+param_ranges <- list(
+  N_min = 2,          # Minimum dimensions 
+  N_max = 10,         # Maximum dimensions
+  k0_min = 1,         # Minimum spring constant
+  k0_max = 40,        # Maximum spring constant 
+  cooling_rate_min = 1e-4, # Minimum decay rate
+  cooling_rate_max = 0.05,  # Maximum decay rate
+  c_repulsion_min = 1e-4,     # Minimum repulsion constant
+  c_repulsion_max = 0.05       # Maximum repulsion constant
+)
+
+# Setup optimization parameters
+opt_params <- list(
+  max_iter = 2000,    # Maximum optimization iterations
+  num_samples = 30,   # Number of LHS samples
+  folds = 20,         # Number of CV folds
+  num_cores = max(1, parallel::detectCores() - 1),
+  use_slurm = FALSE
+)
+```
+
+
+```{r eval=FALSE}
+# Run initial parameter optimization
+results <- run_parameter_optimization(
+  distance_matrix = hiv_distance_matrix,
+  max_iter = opt_params$max_iter,
+  relative_epsilon = 1e-4,
+  convergence_counter = 5,
+  scenario_name = "HIV_BC_AMC2",
+  N_min = param_ranges$N_min, 
+  N_max = param_ranges$N_max,
+  k0_min = param_ranges$k0_min,
+  k0_max = param_ranges$k0_max, 
+  c_repulsion_min = param_ranges$c_repulsion_min,
+  c_repulsion_max = param_ranges$c_repulsion_max,
+  cooling_rate_min = param_ranges$cooling_rate_min,
+  cooling_rate_max = param_ranges$cooling_rate_max,
+  num_samples = opt_params$num_samples,
+  folds = opt_params$folds,
+  num_cores = opt_params$num_cores,
+  write_files = TRUE,
+  use_slurm = opt_params$use_slurm,
+  cider = FALSE,
+  verbose = TRUE
+)
+```
+
+## Aggregate the results
+
+(Only if SLURM was used) Wait until the jobs are done.
+
+```{r eval=FALSE}
+# scenario_name <- "HIV_BC_MC80"
+# aggregate_parameter_optimization_results(scenario_name, write_files=TRUE)
+```
+
+## Adaptive Monte Carlo Sampling
+
+Using the initial results as a starting point, we'll now perform adaptive sampling to refine our parameter estimates:
+
+
+```{r eval=FALSE}
+# Transform samples (with previous code's path)
+samples <- log_transform_parameters(
+  "model_parameters/HIV_BC_AMC1_model_parameters.csv")
+
+# Setup adaptive sampling parameters
+amc_params <- list(
+  num_samples = 50,  # Total samples to collect
+  n_iter = 5,        # Number of consecutive iterations at each parallel job
+  batch_size = 1,     # Samples per iteration
+  max_iter = 2000,    # Maximum iterations per optimization
+  relative_epsilon = 1e-4
+)
+
+# Run adaptive sampling
+run_adaptive_sampling(
+  initial_samples_file = "model_parameters/HIV_BC_AMC1_model_parameters.csv",
+  distance_matrix = hiv_distance_matrix,
+  max_iter = amc_params$max_iter,
+  scenario_name = "HIV_BC_AMC1",
+  num_samples = amc_params$num_samples,
+  n_iter = amc_params$n_iter,
+  batch_size = amc_params$batch_size,
+  relative_epsilon = amc_params$relative_epsilon,
+  folds = opt_params$folds,
+  num_cores = opt_params$num_cores,
+  use_slurm = FALSE,
+  cider = FALSE,
+  verbose = TRUE
+)
+```
+
+## Convergence Diagnostics
+
+We can run the AMC sampling more than once and compare the results to asses the convergence of the sampling probabilities. If they are close, 
+it indicates that all sampling attempts are moving toward the same optimum, which increases its likelihood of being the global optimum. 
+
+Let's run the previous parts twice and check if our chains have converged:
+
+```{r}
+# List chain files
+chain_files <- c(
+  "model_parameters/HIV_BC_AMC1_model_parameters.csv",
+  "model_parameters/HIV_BC_AMC2_model_parameters.csv",
+  "model_parameters/HIV_BC_AMC3_model_parameters.csv",
+  "model_parameters/HIV_BC_MC5_model_parameters.csv",
+  "model_parameters/HIV_BC_MC6_model_parameters.csv",
+  "model_parameters/HIV_BC_MC7_model_parameters.csv",
+  "model_parameters/HIV_BC_MC8_model_parameters.csv",
+  "model_parameters/HIV_BC_MC9_model_parameters.csv",
+  "model_parameters/HIV_BC_MC80_model_parameters.csv"
+)
+
+# Calculate diagnostics
+diagnostics <- calculate_diagnostics(
+  chain_files = chain_files,
+  mutual_size = 150  # Number of samples to use from end of chains
+)
+
+# Print results
+print(diagnostics)
+
+# Create and display diagnostic plots
+diag_plots <- create_diagnostic_plots(
+  chain_files = chain_files,
+  mutual_size = 150,
+  output_file = "output_figures/HIV_diagnostic_plots.png"
+)
+print(diag_plots)
+```
+
+## Profile Likelihood Analysis
+
+Now we'll analyze parameter uncertainties using profile likelihood:
+
+```{r}
+# Combine chain results
+samples <- do.call(rbind, lapply(chain_files, read.csv))
+samples <- samples %>%
+  filter(!is.na(NLL) & !is.na(Holdout_MAE) & 
+           is.finite(NLL) & is.finite(Holdout_MAE)) %>%
+  na.omit()
+samples <- samples[samples$log_N >= log(2),]
+
+# Throw away the burn-in
+#samples <- samples[101:nrow(samples),]
+
+# Apply clean_data to all columns of the dataframe
+samples <- as.data.frame(lapply(samples, clean_data, k = 4))
+samples <- na.omit(samples)
+
+# Calculate maximum likelihood (average over top n to smooth out any outlier situation)
+samples$LL <- -samples$NLL
+top_ll <- sort(samples$LL, decreasing = TRUE)[1:3]
+max_ll <- max(top_ll) + log(sum(exp(top_ll - max(top_ll)))) - log(3)
+
+# Parameters to analyze
+params <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
+
+# Calculate profile likelihoods
+for(param in params) {
+  pl_result <- profile_likelihood(
+    param = param,
+    samples = samples,
+    grid_size = 30,
+    bandwidth_factor = 0.07, #0.03
+    start_factor = 0.5, 
+    end_factor = 1.7
+  )
+  
+  # Plot results
+  pl_plot <- plot(pl_result, max_ll)
+  #ggsave(paste0("profile_likelihood_HIV_", param, ".pdf"), pl_plot)
+  print(pl_plot)
+}
+```
+
+## Finding Optimal Parameters
+
+Based on our analysis, we can extract optimal parameter values. Modes of marginal sampling probability distributions are maximum likelihood estimators.
+
+(If the Profile Likelihood surfaces are too ragged and the optimal point appeared as a sharp peak, choosing the parameters with the maximum likelihood is a better approach than using the mode.)
+
+```{r}
+
+best_params <- samples[which.min(samples$Holdout_MAE),]
+optimal_params <- list(
+  N = round(exp(as.numeric(best_params$log_N))),
+  k0 = exp(as.numeric(best_params$log_k0)),
+  cooling_rate = exp(as.numeric(best_params$log_cooling_rate)),
+  c_repulsion = exp(as.numeric(best_params$log_c_repulsion))
+)
+
+# Print optimal parameters
+print(optimal_params)
+```
+
+## Validation Run
+
+Finally, let's validate our optimal parameters:
+
+(The internal variable convergence_error is the objective of the algorithm. It is slightly different from MAE. MAE is calculated between the predicted distances and measured distances in the assays wherever the measurement is reported as an exact number. However, convergence_error adds the thresholded measurements, only when the fitted distance does not satisfy the inequality.)
+
+```{r}
+# Run topolow with optimal parameters
+result <- topolow_full(
+  distance_matrix = hiv_distance_matrix,
+  ndim = optimal_params$N,
+  max_iter = 1000,
+  k0 = optimal_params$k0,
+  cooling_rate = optimal_params$cooling_rate,
+  c_repulsion = optimal_params$c_repulsion,
+  relative_epsilon = 1e-10,
+  convergence_counter = 5,
+  verbose = TRUE
+)
+
+# Print performance metrics
+cat("Correlation:", round(result$r, 4), "\n")
+cat("MAE:", round(result$mae, 4), "\n")
+
+# Compare the error with the range of data
+cat("Summary of log of original distances:\n")
+summary(as.numeric(hiv_distance_matrix))
+```
+
+
+## The resulting maps
+
+```{r}
+# Convert positions matrix to data frame
+positions <- as.data.frame(result$positions)
+
+positions$name <- rownames(positions)
+
+# Add antigen/antiserum indicators based on rownames
+positions$antigen <- startsWith(positions$name, "V/")
+positions$antiserum <- startsWith(positions$name, "S/")
+
+positions$name <- sub("^S/", "", positions$name)
+positions$name <- sub("^V/", "", positions$name)
+
+# Add  year
+positions <- positions %>% 
+  dplyr::left_join(hiv_viruses, by = join_by(name == Virus.name)) %>%
+  dplyr::rename("year" = "Year")
+
+positions <- na.omit(positions)
+
+write.csv(positions, "data_files/hiv_positions.csv", row.names = FALSE)
+```
+
+Figures:
+```{r}
+positions <- read.csv("data_files/hiv_positions.csv")
+positions$cluster <- positions$Subtype
+
+library(Polychrome)
+P60 = Polychrome::createPalette(2,  c("#ff0000", "#00ff00", "#0000ff"))
+P60 = unname(P60)
+
+aesthetic_config <- new_aesthetic_config(
+  point_shapes = c(antigen = 16, antiserum = 4),
+  point_size = 1.5,
+  point_alpha = 0.6,
+  color_palette = P60,
+  gradient_colors = list(low = "blue", high = "red"),
+  title_size = 7,
+  subtitle_size = 6,
+  axis_title_size = 6,
+  axis_text_size = 6,
+  legend_text_size =  6,
+  legend_title_size = 6,
+  show_legend = TRUE,
+  #legend_position = "none",
+  show_title = FALSE
+)
+
+layout_config <- new_layout_config(
+  width = 3.26772,
+  height = 2.6,
+  dpi = 300,
+  x_limits = c(-3.1, 3.1),
+  y_limits = c(-3, 4),
+  plot_margin = margin(0.05, 0.05, 0.05, 0.05, "cm"),
+  save_format = "pdf"
+)
+
+cart_plot <- plot_temporal_mapping(positions, ndim = 2, 
+                                   layout_config=layout_config,
+                                   aesthetic_config = aesthetic_config)
+print(cart_plot)
+```
+
+```{r}
+plot_subtypes <- plot_cluster_mapping(positions, ndim = 2,
+                                      layout_config = layout_config,
+                                   aesthetic_config = aesthetic_config)
+
+print(plot_subtypes)
+```
+
+```{r}
+#set.seed(2209345) # for reproducibility
+
+# Create and display temporal mapping
+umap_config <- new_dim_reduction_config(
+  method = "umap",
+  n_components = 2,
+  scale = FALSE
+)
+
+umap_plot_temporal <- plot_temporal_mapping(positions, ndim = optimal_params$N,
+                                            layout_config = layout_config,
+                                            aesthetic_config = aesthetic_config,
+                                            dim_config = umap_config)
+print(umap_plot_temporal)
+```
+
+```{r}
+umap_plot_temporal_interac <- make_interactive(umap_plot_temporal, tooltip_vars = c("year", "text"))
+umap_plot_temporal_interac
+```
+
+```{r}
+
+umap_plot_subtypes <- plot_cluster_mapping(positions, ndim = optimal_params$N,
+                                      layout_config = layout_config,
+                                   aesthetic_config = aesthetic_config,
+                                   dim_config = umap_config)
+
+print(umap_plot_subtypes)
+```
+
+Combining the 3 plots used in papers supplementary.
+```{r}
+
+# Create combined plot
+combined_plot_HIV <- plot_grid(
+  cart_plot, umap_plot_temporal, umap_plot_subtypes,
+  labels = c("A. PCA: Temporal", "B. UMAP: Temporal", "C. UMAP: Subtypes"),
+  label_size = 7,
+  nrow = 1,
+  align = 'h',
+  axis = 'tb',
+  rel_widths = c(1, 1, 1)  # Make the last panel slightly wider to accommodate legend
+)
+
+# Save combined plot
+save_plot(
+  "combined_HIV_S_plots.pdf",
+  combined_plot_HIV,
+  ncol = 3,
+  nrow = 1,
+  base_width = layout_config$width*2/2.7,  # or Slightly wider to accommodate legend
+  base_height = layout_config$height
+)
+```
+
+```{r}
+temporal_interac <- make_interactive(cart_plot, tooltip_vars = c("cluster", "text"))
+temporal_interac
+```
+
+```{r}
+positions$cluster <- positions$Country
+
+library(Polychrome)
+P60 = Polychrome::createPalette(60,  c("#ff0000", "#00ff00", "#0000ff"))
+P60 = unname(P60)
+
+aesthetic_config <- new_aesthetic_config(color_palette = P60)
+
+umap_plot_geo <- plot_cluster_mapping(positions, ndim = optimal_params$N,
+                                   dim_config = umap_config,
+                                   aesthetic_config = aesthetic_config)
+
+p_geo <- make_interactive(umap_plot_geo, tooltip_vars = c("cluster", "text"))
+p_geo
+```
+
+## Conclusion
+
+This vignette demonstrated how to:
+
+1. Load and preprocess HIV neutralization data
+
+2. Analyze measurement coverage and select optimal panels
+
+3. Create and visualize distance matrices
+
+4. Run topolow optimization
+
+5. Visualize the results
+
+
+```{r}
+sessionInfo()
+```

@@ -434,7 +434,7 @@ only_virus_vs_as <- function(dist_matrix, selected_names) {
 #' Log Transform Parameter Samples
 #'
 #' @description
-#' Reads samples from a CSV file and log transforms specific parameters (N, k0, k_decay, cqq)
+#' Reads samples from a CSV file and log transforms specific parameters (N, k0, cooling_rate, c_repulsion)
 #' if they exist in the data. Handles validation and error checking.
 #'
 #' @param samples_file Character. Path to CSV file containing samples
@@ -467,7 +467,7 @@ log_transform_parameters <- function(samples_file, output_file = NULL) {
   samples <- stats::na.omit(samples)
   
   # Check which parameters exist
-  params_to_transform <- c("N", "k0", "k_decay", "cqq")
+  params_to_transform <- c("N", "k0", "cooling_rate", "c_repulsion")
   existing_params <- intersect(names(samples), params_to_transform)
   
   if(length(existing_params) == 0) {

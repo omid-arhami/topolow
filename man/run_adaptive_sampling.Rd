@@ -23,7 +23,7 @@ run_adaptive_sampling(
 }
 \arguments{
 \item{initial_samples_file}{Character. Path to CSV file containing initial samples.
-Must contain columns: log_N, log_k0, log_k_decay, log_cqq, NLL}
+Must contain columns: log_N, log_k0, log_cooling_rate, log_c_repulsion, NLL}
 
 \item{distance_matrix}{Matrix. Distance matrix to optimize.}
 
@@ -49,7 +49,7 @@ Must contain columns: log_N, log_k0, log_k_decay, log_cqq, NLL}
 }
 \value{
 Invisible NULL. Results are appended to:
-"hyperparam_results/{scenario_name}_hyperparam_results.csv"
+"model_parameters/{scenario_name}_model_parameters.csv"
 }
 \description{
 Performs adaptive Monte Carlo sampling to explore parameter space, either locally
@@ -67,7 +67,7 @@ The function:
 }
 
 Both local and SLURM executions append results to the same output file:
-"hyperparam_results/{scenario_name}_hyperparam_results.csv"
+"model_parameters/{scenario_name}_model_parameters.csv"
 }
 \examples{
 \dontrun{

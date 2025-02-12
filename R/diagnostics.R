@@ -181,7 +181,7 @@ calculate_diagnostics <- function(chain_files, mutual_size=2000) {
   chains <- lapply(chain_files, read.csv)
   
   # Get parameter names, excluding NLL/Holdout columns
-  par_names <- c("log_N", "log_k0", "log_k_decay", "log_cqq")
+  par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
   
   # Process each chain
   for(i in 1:length(chains)) {

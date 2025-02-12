@@ -19,8 +19,8 @@ aggregate_parameter_optimization_results(
 Data frame of aggregated results containing median values across folds:
 \item{N}{Number of dimensions}
 \item{k0}{Initial spring constant}
-\item{k_decay}{Spring decay rate}
-\item{cqq}{Repulsion constant}
+\item{cooling_rate}{Spring decay rate}
+\item{c_repulsion}{Repulsion constant}
 \item{Holdout_MAE}{Median holdout mean absolute error}
 \item{NLL}{Median negative log likelihood}
 }
@@ -30,13 +30,13 @@ into a single dataset. This function processes results from jobs submitted by
 \code{\link{submit_parameter_jobs}}.
 }
 \details{
-The function looks for CSV files in the run_topolow_arguments directory that match
-the pattern "hyperparams_{scenario_name}.csv". It combines all results into a
+The function looks for CSV files in the init_param_optimization directory that match
+the pattern "params_{scenario_name}.csv". It combines all results into a
 single dataset, computes median values across folds, and optionally writes the
 aggregated results to a file.
 
 The output file is saved as:
-"hyperparam_results/{scenario_name}_hyperparam_results.csv"
+"model_parameters/{scenario_name}_model_parameters.csv"
 }
 \examples{
 \dontrun{

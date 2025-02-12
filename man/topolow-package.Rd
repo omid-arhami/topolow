@@ -130,8 +130,8 @@ create subdirectories in either:
 
 The following subdirectories may be created:
 \itemize{
-\item hyperparam_results/: Contains optimization results and hyperparameter evaluations
-\item run_topolow_arguments/: Contains SLURM job files and outputs when using SLURM
+\item model_parameters/: Contains optimization results and parameter evaluations
+\item init_param_optimization/: Contains SLURM job files and outputs when using SLURM
 }
 }
 

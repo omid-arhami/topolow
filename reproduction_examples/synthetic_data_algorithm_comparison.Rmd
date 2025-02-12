@@ -23,7 +23,9 @@ knitr::opts_chunk$set(
 
 ##Introduction
 
-This vignette demonstrates how to perform a rigorous comparison between Topolow and RACMACS algorithms for antigenic cartography. We conduct k-fold cross-validation and evaluate performance using multiple metrics including mean absolute error (MAE), correlation, and coverage.
+This vignette demonstrates how to perform a rigorous comparison between Topolow and RACMACS algorithms for antigenic cartography. We conduct k-fold cross-validation and evaluate performance using multiple metrics including mean absolute error (MAE), Mean Absolute Percentage Error (MAPE), and coverage.
+
+You need the optimal parameters to create topolow maps. They are in csv files named "optimal_parameters_80points.csv" or "optimal_parameters_250points.csv" which are provided on Github or you can generate them by running sufficient Monte Carlo simulations (on a machine with tens of CPU cores for faster calculations) in file synthetic-parameter-fitting.Rmd in the same folder is current file.
 
 ##Setup
 
@@ -49,7 +51,7 @@ opt_params <- list(
   topolow_opt_rounds = 1,
   racmacs_opt_rounds = 200,  # Optimization rounds for RACMACS (You needs to do many optimizations and pick the best result)
   topolow_opt_rounds = 1,  # Optimization rounds for Topolow
-  final_results = read.csv("final_parameters_80points.csv"),  # From parameter fitting
+  final_params = read.csv("optimal_parameters_80points.csv"),  # From parameter fitting
   use_slurm = FALSE
 )
 
@@ -221,7 +223,7 @@ for (ndim in results$metadata$dimension) {
     scenario_name <- sprintf("dim%d_%s", ndim, matrix_type)
     
     # Get optimal parameters for this scenario
-    best_params <- opt_params$final_results %>%
+    best_params <- opt_params$final_params %>%
       filter(true_dim == ndim, matrix_type == !!matrix_type)
     
     if (nrow(best_params) == 0) {
@@ -233,8 +235,8 @@ for (ndim in results$metadata$dimension) {
     best_params <- list(
       N = round(exp(best_params$log_N)),
       k0 = exp(best_params$log_k0),
-      k_decay = exp(best_params$log_k_decay),
-      cqq = exp(best_params$log_cqq)
+      cooling_rate = exp(best_params$log_cooling_rate),
+      c_repulsion = exp(best_params$log_c_repulsion)
     )
     
     # Get truth matrix and corresponding no-noise truth if needed
@@ -274,8 +276,8 @@ for (ndim in results$metadata$dimension) {
           as.character(best_params$N),
           as.character(opt_params$max_topolow_iter),
           as.character(best_params$k0),
-          as.character(best_params$k_decay),
-          as.character(best_params$cqq),
+          as.character(best_params$cooling_rate),
+          as.character(best_params$c_repulsion),
           scenario_name,
           as.character(i),
           as.character(results_dir)
@@ -307,8 +309,8 @@ for (ndim in results$metadata$dimension) {
           ndim = best_params$N,
           max_iter = opt_params$max_topolow_iter,
           k0 = best_params$k0,
-          k_decay = best_params$k_decay,
-          cqq = best_params$cqq,
+          cooling_rate = best_params$cooling_rate,
+          c_repulsion = best_params$c_repulsion,
           write_positions_to_csv = FALSE,
           verbose = TRUE
         )
@@ -747,37 +749,6 @@ print(p)
 ```
 
 
-```{r}
-# all_cor_results <- rbind(topolow_cor_stats, racmacs_cor_stats)
-# 
-# all_cor_results$Variant <- factor(all_cor_results$Variant, levels = c("Original", "+Noise", "+Noise+Bias"))
-# 
-# p <- ggplot(all_cor_results, aes(x = Missing, y = MAE, fill = Method)) +
-#   geom_bar(stat = "identity", position = position_dodge()) +
-#   geom_errorbar(aes(ymin = MAE - SD, ymax = MAE + SD),
-#                 position = position_dodge(width = 0.9), width = 0.25) +
-#   facet_grid(Dimension ~ Variant) +
-#   scale_fill_manual(values = c("Topolow" = "#4dbedf", "MDS" = "#DC3912")) +
-#   theme_minimal() +
-#   theme(
-#     axis.text.x = element_text(angle = 45, hjust = 1),
-#     panel.grid.major = element_line(color = "gray90"),
-#     panel.grid.minor = element_blank(),
-#     strip.background = element_rect(fill = "gray95"),
-#     strip.text = element_text(face = "bold")
-#   ) +
-#   labs(
-#     x = "Missing Data Level",
-#     y = "Pearson r (±SD)",
-#     title = "Comparison of Topolow and MDS Performance",
-#     subtitle = "Across dimensions, missing data levels, and data variants"
-#   )
-# # Save the plot
-# ggsave("Method_comparison_cor_plot.png", plot = p, width = 10, height = 8, dpi = 300)
-# 
-# print(p)
-```
-
 ## Summary table
 
 ```{r}
@@ -1202,14 +1173,14 @@ positions_df$name <- sub("^V/", "", positions_df$name)
 
 # Get the optimal parameters
 amc_files <- c(
-  file.path("hyperparam_results",
-            sprintf("synthetic_dim%d_%s_hyperparam_results.csv", 
+  file.path("model_parameters",
+            sprintf("synthetic_dim%d_%s_model_parameters.csv", 
                    ndim, matrix_type)),
-  file.path("hyperparam_results",
-            sprintf("synthetic_MC2_dim%d_%s_hyperparam_results.csv", 
+  file.path("model_parameters",
+            sprintf("synthetic_MC2_dim%d_%s_model_parameters.csv", 
                    ndim, matrix_type)),
-  file.path("hyperparam_results",
-            sprintf("synthetic_MC7_dim%d_%s_hyperparam_results.csv", 
+  file.path("model_parameters",
+            sprintf("synthetic_MC7_dim%d_%s_model_parameters.csv", 
                    ndim, matrix_type))
 )
 
@@ -1227,8 +1198,8 @@ optimal_params <- amc_results[which.min(amc_results$Holdout_MAE),]
 optimal_params <- list(
   N = round(exp(as.numeric(optimal_params$log_N))),
   k0 = exp(as.numeric(optimal_params$log_k0)),
-  k_decay = exp(as.numeric(optimal_params$log_k_decay)),
-  cqq = exp(as.numeric(optimal_params$log_cqq))
+  cooling_rate = exp(as.numeric(optimal_params$log_cooling_rate)),
+  c_repulsion = exp(as.numeric(optimal_params$log_c_repulsion))
 )
     
 # Create and save temporal plot
@@ -1315,14 +1286,14 @@ for(ndim in results$metadata$dimension) {
     
     # Get the optimal parameters
     amc_files <- c(
-      file.path("hyperparam_results",
-                sprintf("synthetic_dim%d_%s_hyperparam_results.csv", 
+      file.path("model_parameters",
+                sprintf("synthetic_dim%d_%s_model_parameters.csv", 
                        ndim, matrix_type)),
-      file.path("hyperparam_results",
-                sprintf("synthetic_MC2_dim%d_%s_hyperparam_results.csv", 
+      file.path("model_parameters",
+                sprintf("synthetic_MC2_dim%d_%s_model_parameters.csv", 
                        ndim, matrix_type)),
-      file.path("hyperparam_results",
-                sprintf("synthetic_MC7_dim%d_%s_hyperparam_results.csv", 
+      file.path("model_parameters",
+                sprintf("synthetic_MC7_dim%d_%s_model_parameters.csv", 
                        ndim, matrix_type))
     )
     
@@ -1340,8 +1311,8 @@ for(ndim in results$metadata$dimension) {
     optimal_params <- list(
       N = round(exp(as.numeric(optimal_params$log_N))),
       k0 = exp(as.numeric(optimal_params$log_k0)),
-      k_decay = exp(as.numeric(optimal_params$log_k_decay)),
-      cqq = exp(as.numeric(optimal_params$log_cqq))
+      cooling_rate = exp(as.numeric(optimal_params$log_cooling_rate)),
+      c_repulsion = exp(as.numeric(optimal_params$log_c_repulsion))
     )
     
     # Get corresponding distance matrix
@@ -1359,8 +1330,8 @@ for(ndim in results$metadata$dimension) {
         relative_epsilon = 1e-10,
         convergence_counter = 5,
         k0 = optimal_params$k0,
-        k_decay = optimal_params$k_decay,
-        cqq = optimal_params$cqq,
+        cooling_rate = optimal_params$cooling_rate,
+        c_repulsion = optimal_params$c_repulsion,
         write_positions_to_csv = FALSE,
         trace_sse = FALSE
       )
@@ -1505,15 +1476,6 @@ for(ndim in results$metadata$dimension) {
 }
 ```
 
-
-## Summary of Findings
-
-[Analysis of results including:]
-1. Overall performance comparison
-2. Impact of dimensionality
-3. Effect of missing data
-4. Sensitivity to noise
-5. Statistical significance of differences
 
 
 ```{r}

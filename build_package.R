@@ -49,7 +49,7 @@ devtools::check(document = TRUE,
                 cran = TRUE)
 
 # Build package distributions
-devtools::build(vignettes = TRUE)                   # Source package (.tar.gz)
+devtools::build()                   # Source package (.tar.gz)
 devtools::build(binary = TRUE)      # Windows binary (.zip)
 
 # Install locally

@@ -23,7 +23,20 @@ knitr::opts_chunk$set(
 
 ## Introduction
 
-This vignette demonstrates how to fit parameters for the Topolow algorithm using a combination of initial Latin Hypercube Sampling (LHS) and adaptive Monte Carlo sampling. We'll cover:
+This vignette demonstrates how to fit parameters for the Topolow algorithm using a combination of initial Latin Hypercube Sampling (LHS) and Adaptive Monte Carlo (AMC) sampling.
+
+The output of all processes are provided as csv files in model_parameters directory, so, you can skip running samplings on your machine and use them to find the optimal parameter values. For this option, skip to section 'Convergence Diagnostics'.
+
+You can also use the optimal parameters:
+
+optimal_params <- list(
+    N = 4,
+    k0 = 14.76214,
+    cooling_rate = 0.03641074, 
+    c_repulsion = 0.002943064
+  )
+
+We'll cover:
 
 * Initial parameter space exploration with LHS
 * Adaptive sampling to refine parameter estimates
@@ -57,13 +70,13 @@ library(doParallel)
 We'll demonstrate using the Smith et al. 2004 influenza dataset included in topolow:
 
 ```{r}
-# Load and process Smith data
+# Load and process H3N2 data of Smith et al 2004
 data(h3n2_data)
 
-write.csv(h3n2_data, "h3n2_data.csv", row.names = FALSE)
+write.csv(h3n2_data, "data_files/h3n2_data.csv", row.names = FALSE)
 
 H3N2_2003_data_results <- process_antigenic_data(
-  file_path = "h3n2_data.csv",
+  file_path = "data_files/h3n2_data.csv",
   antigen_col = "virusStrain",
   serum_col = "serumStrain",
   value_col = "titer", 
@@ -88,24 +101,21 @@ param_ranges <- list(
   N_max = 10,         # Maximum dimensions
   k0_min = 1,         # Minimum spring constant
   k0_max = 20,        # Maximum spring constant 
-  k_decay_min = 1e-3, # Minimum decay rate
-  k_decay_max = 0.05,  # Maximum decay rate
-  cqq_min = 1e-4,     # Minimum repulsion constant
-  cqq_max = 0.02       # Maximum repulsion constant
+  cooling_rate_min = 1e-3, # Minimum decay rate
+  cooling_rate_max = 0.05,  # Maximum decay rate
+  c_repulsion_min = 1e-4,     # Minimum repulsion constant
+  c_repulsion_max = 0.02       # Maximum repulsion constant
 )
 
 # Setup optimization parameters
 opt_params <- list(
   max_iter = 2000,    # Maximum optimization iterations
-  num_samples = 40,   # Number of LHS samples
+  num_samples = 2,   # Number of LHS samples
   folds = 20,         # Number of CV folds
-  num_cores = 60, # max(1, parallel::detectCores() - 1),
-  use_slurm = TRUE
+  num_cores = max(1, parallel::detectCores() - 1),
+  use_slurm = FALSE
 )
 ```
-
-
-mc 7 , 8, 9: outliers removed, sampling with weighted_kde 
 
 
 ```{r eval=FALSE}
@@ -115,21 +125,21 @@ results <- run_parameter_optimization(
   max_iter = opt_params$max_iter,
   relative_epsilon = 1e-4,
   convergence_counter = 5,
-  scenario_name = "H3N2_2003_data_AMC3",
+  scenario_name = "H3N2_2003_data_AMC4",
   N_min = param_ranges$N_min, 
   N_max = param_ranges$N_max,
   k0_min = param_ranges$k0_min,
   k0_max = param_ranges$k0_max,
-  cqq_min = param_ranges$cqq_min,
-  cqq_max = param_ranges$cqq_max,
-  k_decay_min = param_ranges$k_decay_min,
-  k_decay_max = param_ranges$k_decay_max,
+  c_repulsion_min = param_ranges$c_repulsion_min,
+  c_repulsion_max = param_ranges$c_repulsion_max,
+  cooling_rate_min = param_ranges$cooling_rate_min,
+  cooling_rate_max = param_ranges$cooling_rate_max,
   num_samples = opt_params$num_samples,
   folds = opt_params$folds,
   num_cores = opt_params$num_cores,
   write_files = TRUE,
   use_slurm = opt_params$use_slurm,
-  cider = TRUE,
+  cider = FALSE,
   verbose = TRUE
 )
 ```
@@ -139,8 +149,8 @@ results <- run_parameter_optimization(
 (Only if SLURM was used) Wait until the jobs are done.
 
 ```{r eval=FALSE}
-scenario_name <- "H3N2_2003_data_AMC1"
-aggregate_parameter_optimization_results(scenario_name, write_files=TRUE)
+# scenario_name <- "H3N2_2003_data_AMC1"
+# aggregate_parameter_optimization_results(scenario_name, write_files=TRUE)
 ```
 
 ## Adaptive Monte Carlo Sampling
@@ -150,13 +160,13 @@ Using the initial results as a starting point, we'll now perform adaptive sampli
 ```{r eval=FALSE}
 # Transform samples (with previous code's path)
 samples <- log_transform_parameters(
-  "hyperparam_results/H3N2_2003_data_AMC2_hyperparam_results.csv"
+  "model_parameters/H3N2_2003_data_AMC4_model_parameters.csv"
 )
 
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_samples = 80,  # Total samples to collect
-  n_iter = 2,        # Number of consecutive iterations at each parallel job
+  num_samples = 2,  # Total samples to collect
+  n_iter = 1,        # Number of consecutive iterations at each parallel job
   batch_size = 1,     # Samples per iteration
   max_iter = 2000,    # Maximum iterations per optimization
   relative_epsilon = 1e-4
@@ -164,10 +174,10 @@ amc_params <- list(
 
 # Run adaptive sampling
 run_adaptive_sampling(
-  initial_samples_file = "hyperparam_results/H3N2_2003_data_AMC2_hyperparam_results.csv",
+  initial_samples_file = "model_parameters/H3N2_2003_data_AMC4_model_parameters.csv",
   distance_matrix = h3n2_distance_matrix,
   max_iter = amc_params$max_iter,
-  scenario_name = "H3N2_2003_data_AMC2",
+  scenario_name = "H3N2_2003_data_AMC4",
   num_samples = amc_params$num_samples,
   n_iter = amc_params$n_iter,
   batch_size = amc_params$batch_size,
@@ -190,17 +200,14 @@ Let's run the previous parts twice and check if our chains have converged:
 ```{r}
 # List chain files
 chain_files <- c(
-  "hyperparam_results/H3N2_2003_data_AMC1_hyperparam_results.csv",
-  "hyperparam_results/H3N2_2003_data_AMC2_hyperparam_results.csv"
-  # "hyperparam_results/H3N2_2003_data_MC7_hyperparam_results.csv",
-  # "hyperparam_results/H3N2_2003_data_MC8_hyperparam_results.csv",
-  # "hyperparam_results/H3N2_2003_data_MC9_hyperparam_results.csv"
+  "model_parameters/H3N2_2003_data_AMC2_model_parameters.csv",
+  "model_parameters/H3N2_2003_data_AMC3_model_parameters.csv"
 )
 
 # Calculate diagnostics
 diagnostics <- calculate_diagnostics(
   chain_files = chain_files,
-  mutual_size = 120  # Number of samples to use from end of chains
+  mutual_size = 150  # Number of samples to use from end of chains
 )
 
 # Print results
@@ -209,8 +216,8 @@ print(diagnostics)
 # Create and display diagnostic plots
 diag_plots <- create_diagnostic_plots(
   chain_files = chain_files,
-  mutual_size = 120,
-  output_file = "H3N2_2003_data_diagnostic_plots.png"
+  mutual_size = 150,
+  output_file = "output_figures/H3N2_2003_data_diagnostic_plots.png"
 )
 print(diag_plots)
 ```
@@ -234,11 +241,11 @@ samples <- as.data.frame(lapply(samples, clean_data, k = 10))
 samples <- na.omit(samples)
 # Calculate maximum likelihood (average over top n to smooth out any outlier situation)
 samples$LL <- -samples$NLL
-top_ll <- sort(samples$LL, decreasing = TRUE)[1:3]
-max_ll <- max(top_ll) + log(sum(exp(top_ll - max(top_ll)))) - log(3)
+top_ll <- sort(samples$LL, decreasing = TRUE)[1:5]
+max_ll <- max(top_ll) + log(sum(exp(top_ll - max(top_ll)))) - log(5)
 
 # Parameters to analyze
-params <- c("log_N", "log_k0", "log_k_decay", "log_cqq")
+params <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
 
 # Calculate profile likelihoods
 for (param in params) {
@@ -247,8 +254,8 @@ for (param in params) {
     samples = samples,
     grid_size = 20,
     bandwidth_factor = 0.07,
-    start_factor = 0.1, 
-    end_factor = 1.8
+    start_factor = 0.3, 
+    end_factor = 1.5
   )
   
   # Plot results
@@ -273,8 +280,8 @@ weighted_marginals <- calculate_weighted_marginals(samples)
 optimal_params <- list(
   N = round(exp(find_mode(weighted_marginals[['log_N']]))),
   k0 = exp(find_mode(weighted_marginals[['log_k0']])),
-  k_decay = exp(find_mode(weighted_marginals[['log_k_decay']])),
-  cqq = exp(find_mode(weighted_marginals[['log_cqq']]))
+  cooling_rate = exp(find_mode(weighted_marginals[['log_cooling_rate']])),
+  c_repulsion = exp(find_mode(weighted_marginals[['log_c_repulsion']]))
 )
 
 # Case 2: Parameters with the maximum likelihood 
@@ -283,8 +290,8 @@ best_params <- samples[which.min(samples$NLL),]
 optimal_params <- list(
   N = round(exp(as.numeric(best_params$log_N))),
   k0 = exp(as.numeric(best_params$log_k0)),
-  k_decay = exp(as.numeric(best_params$log_k_decay)),
-  cqq = exp(as.numeric(best_params$log_cqq))
+  cooling_rate = exp(as.numeric(best_params$log_cooling_rate)),
+  c_repulsion = exp(as.numeric(best_params$log_c_repulsion))
 )
 
 # Print optimal parameters
@@ -295,6 +302,8 @@ print(optimal_params)
 
 Finally, let's validate our optimal parameters:
 
+(The internal variable convergence_error is the objective of the algorithm. It is slightly different from MAE. MAE is calculated between the predicted distances and measured distances in the assays wherever the measurement is reported as an exact number. However, convergence_error adds the thresholded measurements, only when the fitted distance does not satisfy the inequality.)
+
 ```{r}
 # Run topolow with optimal parameters
 result <- topolow_full(
@@ -302,8 +311,8 @@ result <- topolow_full(
   ndim = optimal_params$N,
   max_iter = 3000,
   k0 = optimal_params$k0,
-  k_decay = optimal_params$k_decay,
-  cqq = optimal_params$cqq,
+  cooling_rate = optimal_params$cooling_rate,
+  c_repulsion = optimal_params$c_repulsion,
   relative_epsilon = 1e-10,
   convergence_counter = 5,
   verbose = TRUE
@@ -313,20 +322,6 @@ result <- topolow_full(
 cat("Correlation:", round(result$r, 4), "\n")
 cat("MAE:", round(result$mae, 4), "\n")
 
-# Create validation plots
-validation_plots <- scatterplot_fitted_vs_true(
-  h3n2_distance_matrix,
-  result$est_distances,
-  scenario_name = "validation",
-  ndim = optimal_params$N
-)
-
-# Or arrange them side by side
-gridExtra::grid.arrange(
-  validation_plots$scatter_plot,
-  validation_plots$residuals_plot,
-  ncol = 2
-)
 ```
 
 ```{r}

@@ -2,7 +2,7 @@
 # Licensed under MIT License
 # R/topolow-package.R
 
-#' @title TopoLow: Topological Optimization for Low-Dimensional Mapping
+#' @title Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assay results
 #'
 #' @description
 #' An implementation of the TopoLow algorithm for antigenic cartography mapping and analysis. 
@@ -43,8 +43,8 @@
 #'
 #' The following subdirectories may be created:
 #' \itemize{
-#'   \item hyperparam_results/: Contains optimization results and hyperparameter evaluations
-#'   \item run_topolow_arguments/: Contains SLURM job files and outputs when using SLURM
+#'   \item model_parameters/: Contains optimization results and parameter evaluations
+#'   \item init_param_optimization/: Contains SLURM job files and outputs when using SLURM
 #' }
 #'
 #' @section Citation:

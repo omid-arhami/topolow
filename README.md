@@ -1,4 +1,4 @@
-# topolow: Antigenic Cartography Using Topological Optimization
+# Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assay results
 
 ## Overview
 
@@ -26,10 +26,10 @@ Alternatively, you can install using the single source file:
 
 ```r
 # For Windows binary
-install.packages("path/to/topolow_0.1.0.zip", repos = NULL)
+install.packages("path/to/topolow_0.1.1.zip", repos = NULL)
 
 # For source package
-install.packages("path/to/topolow_0.1.0.tar.gz", repos = NULL, type = "source")
+install.packages("path/to/topolow_0.1.1.tar.gz", repos = NULL, type = "source")
 ```
 
 ## Quick Start
@@ -45,7 +45,7 @@ rownames(dist_mat) <- colnames(dist_mat) <- c("V/1", "V/2", "S/1")
 
 # Run TopoLow in 2D
 result <- topolow_full(dist_mat, ndim=2, max_iter=100, 
-                      k0=1.0, k_decay=0.01, cqq=0.01)
+                      k0=1.0, cooling_rate=0.01, c_repulsion=0.01)
 
 # Visualize results
 
@@ -71,6 +71,8 @@ vignette("parameter-fitting", package = "topolow")
 Additional vignettes with detailed computational studies are available in the `reproduction_examples/` directory:
 
 - `parameter-fitting-h3n2.Rmd`
+- `assay_data_analysis_HIV_Subtype.Rmd`
+- `methods-comparison-h3n2-hiv.Rmd`
 - `synthetic-parameter-fitting.Rmd`
 - `synthetic_data_algorithm_comparison.Rmd`
 
@@ -113,8 +115,8 @@ Key parameters for the TopoLow algorithm:
 
 * ndim: Number of dimensions (typically 2-20)
 * k0: Initial spring constant (typical range: 0.1-30)
-* k_decay: Spring decay rate (typical range: 0.0001-0.1)
-* cqq: Repulsion constant (typical range: 0.00001-0.1)
+* cooling_rate: Spring decay rate (typical range: 0.0001-0.1)
+* c_repulsion: Repulsion constant (typical range: 0.00001-0.1)
 
 ## Contributing
 
@@ -122,13 +124,18 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is protected by a pre-publication license.
+
+* Researchers can use the software for academic purposes.
+* Redistribution, modification, and commercial use are prohibited before publication.
+
+The license will transition upon publication - see the LICENSE file for details.
 
 ## Citation
 
 If you use this package, please cite:
 
-Arhami and Rohani 2025 [doi:to be added]
+Arhami and Rohani, 2025 [doi:to be added]
 
 ## Contact
 
