@@ -1,5 +1,4 @@
----
-title: 'Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assay results'
+title: 'TOPOLOW: A MAPPING ALGORITHM FOR ANTIGENIC CROSS-REACTIVITY AND BINDING AFFINITY ASSAY RESULTS'
 tags:
   - R
   - bioinformatics
@@ -21,7 +20,19 @@ affiliations:
    index: 3
 date: 2025
 bibliography: paper.bib
----
+
+@article {Arhami2025.02.09.637307,
+	author = {Arhami, Omid and Rohani, Pejman},
+	title = {TOPOLOW: A MAPPING ALGORITHM FOR ANTIGENIC CROSS-REACTIVITY AND BINDING AFFINITY ASSAY RESULTS},
+	elocation-id = {2025.02.09.637307},
+	year = {2025},
+	doi = {10.1101/2025.02.09.637307},
+	publisher = {Cold Spring Harbor Laboratory},
+	URL = {https://www.biorxiv.org/content/early/2025/02/12/2025.02.09.637307},
+	eprint = {https://www.biorxiv.org/content/early/2025/02/12/2025.02.09.637307.full.pdf},
+	journal = {bioRxiv}
+}
+
 
 # Summary
 
