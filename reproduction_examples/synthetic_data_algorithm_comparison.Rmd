@@ -51,7 +51,7 @@ opt_params <- list(
   topolow_opt_rounds = 1,
   racmacs_opt_rounds = 200,  # Optimization rounds for RACMACS (You needs to do many optimizations and pick the best result)
   topolow_opt_rounds = 1,  # Optimization rounds for Topolow
-  final_params = read.csv("optimal_parameters_80points.csv"),  # From parameter fitting
+  final_params = read.csv("optimal_parameters_250points.csv"),  # From parameter fitting
   use_slurm = FALSE
 )
 
@@ -86,7 +86,7 @@ First, let's create synthetic datasets with different dimensionalities. We'll us
 results <- generate_synthetic_datasets(
   n_dims_list = c(2, 5, 10), 
   seeds = c(123450, 903450 , 13450), 
-  n_points = 80,
+  n_points = 250,
   output_dir = "synthetic_data"
 )
 
@@ -700,7 +700,9 @@ p <- ggplot(all_mape_results, aes(x = Missing, y = MAPE, fill = Method)) +
   )
 
 # Save plot
-ggsave("Method_comparison_MAPE_plot.pdf", plot = p, width = 172, height = 0.5*172, units = "mm", dpi = 300)
+ggsave("Method_comparison_MAPE_plot_250points.pdf", plot = p, width = 172, height = 0.5*172, units = "mm", dpi = 300)
+
+print(p)
 ```
 
 
@@ -743,7 +745,7 @@ p <- ggplot(all_mae_results, aes(x = Missing, y = MAE, fill = Method)) +
   )
 
 # Save with adjusted dimensions to accommodate smaller text
-ggsave("Method_comparison_MAE_plot.pdf", plot = p, width = 7, height = 4.5, dpi = 300)
+ggsave("Method_comparison_MAE_plot_250points.pdf", plot = p, width = 172, height = 0.5*172, units = "mm", dpi = 300)
 
 print(p)
 ```
