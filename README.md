@@ -76,12 +76,13 @@ To run these studies:
 ```r
 # Clone the repository
 git clone https://github.com/omid-arhami/topolow.git
-
-# Run specific reproduction study
-rmarkdown::render("reproduction_examples/synthetic_data_algorithm_comparison.Rmd")
 ```
 
-Note: These studies may take several hours to complete and require significant computational resources. Therefore, results of time-intensive sections are provided and explained at the beginning of each Rmd file.
+Then read through the markdown notebooks in `reproduction_examples/` and choose which parts you wish to run. There are usually options to use the provided parameters to bypass some parts of the simulations.
+
+To generate supplementary figure S-1, the pairwise distances in the original space (10D) versus the pairwise distances after reducing the dimensions to 2, use file `reproduction_examples/10d_2d_pairwise_distance_comparison_plot.R`
+
+Note: These studies may take several hours to complete and require significant computational resources. Therefore, results of time-intensive sections are provided and explained at the beginning of each Rmd file. 
 
 ## Features
 
