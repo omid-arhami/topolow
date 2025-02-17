@@ -1,5 +1,6 @@
 # Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
-# Licensed under MIT License
+# License: free of charge access granted to any academic researcher to use this software for non-commercial, academic research purposes **only**.  Nobody may modify, distribute, sublicense, or publicly share the Software or any derivative works, until the paper is published by the original authors.  The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.  In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the Software or the use or other dealings in the Software.
+
 # R/data_preprocessing.R
 
 #' Antigenic Data Preprocessing Functions
@@ -1139,13 +1140,13 @@ prune_distance_network_topn <- function(data, virus_col, antibody_col, year_col,
 #' @param data Numeric vector of values to analyze
 #' @param k Numeric threshold for outlier detection (default: 3). Points more than
 #'        k MADs from median are considered outliers.
-#' @return List containing:
+#' @return A list containing:
 #'   \item{outlier_mask}{Logical vector indicating outliers}
-#'   \item{stats}{List with:
+#'   \item{stats}{List containing:
 #'     \itemize{
-#'       \item{median}{Median of data}
-#'       \item{mad}{Median absolute deviation}
-#'       \item{n_outliers}{Number of outliers detected}
+#'       \item median: Median of data
+#'       \item mad: Median absolute deviation
+#'       \item n_outliers: Number of outliers detected
 #'     }
 #'   }
 #' @examples

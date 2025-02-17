@@ -43,13 +43,17 @@ Must contain columns: log_N, log_k0, log_cooling_rate, log_c_repulsion, NLL}
 
 \item{scenario_name}{Character. Name for output files.}
 
+\item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+
 \item{use_slurm}{Logical. Whether to use SLURM (default: FALSE).}
 
 \item{cider}{Logical. Whether to use cider queue (default: FALSE).}
+
+\item{verbose}{Logical. Whether to print progress messages. Default: FALSE}
 }
 \value{
 Invisible NULL. Results are appended to:
-"model_parameters/{scenario_name}_model_parameters.csv"
+model_parameters/\{scenario_name\}_model_parameters.csv
 }
 \description{
 Performs adaptive Monte Carlo sampling to explore parameter space, either locally
@@ -67,7 +71,7 @@ The function:
 }
 
 Both local and SLURM executions append results to the same output file:
-"model_parameters/{scenario_name}_model_parameters.csv"
+model_parameters/\{scenario_name\}_model_parameters.csv
 }
 \examples{
 \dontrun{

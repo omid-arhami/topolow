@@ -77,7 +77,7 @@ If write_files=FALSE, returns a data frame with columns:
 \item{NLL}{Negative log likelihood}
 
 If write_files=TRUE, results are saved to CSV files in the format:
-"{scenario_name}_model_parameters.csv"
+\{scenario_name\}_model_parameters.csv
 }
 \description{
 Performs parameter optimization using Latin Hypercube Sampling (LHS) combined with

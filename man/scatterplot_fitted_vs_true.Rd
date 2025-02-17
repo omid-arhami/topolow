@@ -23,13 +23,17 @@ scatterplot_fitted_vs_true(
 
 \item{ndim}{Integer number of dimensions used in the model}
 
+\item{save_plot}{Logical. Whether to save plots to files. Default: TRUE}
+
+\item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+
 \item{confidence_level}{Numeric confidence level for prediction intervals (default: 0.95)}
 }
 \value{
 Invisibly returns NULL, creates two plot files:
 \itemize{
-\item "{scenario_name}\emph{prediction_scatter_dim}{ndim}.png"
-\item "{scenario_name}\emph{residuals_vs_fitted_dim}{ndim}.png"
+\item \{scenario_name\}\emph{prediction_scatter_dim}\{ndim\}.png
+\item \{scenario_name\}\emph{residuals_vs_fitted_dim}\{ndim\}.png
 }
 }
 \description{

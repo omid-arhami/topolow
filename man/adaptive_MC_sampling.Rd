@@ -37,7 +37,9 @@ adaptive_MC_sampling(
 
 \item{scenario_name}{Name for output files}
 
-\item{output_dir}{Directory for output files. If NULL, uses current directory}
+\item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+
+\item{verbose}{Logical. Whether to print progress messages. Default: FALSE}
 }
 \value{
 Data frame of samples with evaluated likelihoods

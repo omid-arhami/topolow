@@ -30,8 +30,6 @@ run_topolow_slurm(
 \item{fold}{Integer fold number}
 
 \item{cider}{Logical; whether to use cider queue}
-
-\item{output_dir}{Character output directory}
 }
 \value{
 List of performance metrics

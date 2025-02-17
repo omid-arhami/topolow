@@ -13,8 +13,8 @@ Description: An implementation of the TopoLow algorithm for antigenic cartograph
     * Network structure analysis
     The algorithm uses a physics-inspired approach combining spring forces and 
     repulsive interactions to find optimal point configurations.
-    Methods are described in Arhami and Rohani (2025) <doi:pending>.
-License: MIT + file LICENSE
+    Methods are described in Arhami and Rohani (2025) <doi:https://doi.org/10.1101/2025.02.09.637307>.
+License: file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
