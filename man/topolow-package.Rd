@@ -138,7 +138,9 @@ The following subdirectories may be created:
 \section{Citation}{
 
 If you use this package, please cite:
-\link{Citation information to be added}
+Arhami O, Rohani P (2025).
+Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assay results.
+\emph{https://doi.org/10.1101/2025.02.09.637307}.
 }
 
 \seealso{

@@ -23,6 +23,10 @@
 
 \item{height}{Numeric height of output plot in inches (default: 3.5)}
 
+\item{save_plot}{Logical. Whether to save plot to file. Default: TRUE}
+
+\item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+
 \item{...}{Additional arguments passed to plot}
 }
 \value{

@@ -1,5 +1,6 @@
 # Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
-# Licensed under MIT License
+# License: free of charge access granted to any academic researcher to use this software for non-commercial, academic research purposes **only**.  Nobody may modify, distribute, sublicense, or publicly share the Software or any derivative works, until the paper is published by the original authors.  The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.  In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the Software or the use or other dealings in the Software.
+
 # R/topolow-package.R
 
 #' @title Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assay results
@@ -49,7 +50,9 @@
 #'
 #' @section Citation:
 #' If you use this package, please cite:
-#' [Citation information to be added]
+#' Arhami O, Rohani P (2025).
+#' Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assay results.
+#' \emph{https://doi.org/10.1101/2025.02.09.637307}.
 #'
 #' @keywords internal
 "_PACKAGE"

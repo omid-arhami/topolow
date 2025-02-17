@@ -1,5 +1,6 @@
 # Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
-# Licensed under MIT License
+# License: free of charge access granted to any academic researcher to use this software for non-commercial, academic research purposes **only**.  Nobody may modify, distribute, sublicense, or publicly share the Software or any derivative works, until the paper is published by the original authors.  The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.  In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the Software or the use or other dealings in the Software.
+
 # R/visualization.R
 
 #' Visualization functions for the topolow package
@@ -1221,7 +1222,7 @@ make_interactive <- function(plot, tooltip_vars = NULL) {
 #' methods and arrangements. Supports combining temporal, cluster, and 3D 
 #' visualizations in flexible layouts.
 #'
-#' @param df Data frame containing:
+#' @param df_coords Data frame containing:
 #'        - V1, V2, ... Vn: Coordinate columns
 #'        - antigen: Binary indicator for antigen points 
 #'        - antiserum: Binary indicator for antiserum points
@@ -1476,7 +1477,9 @@ plot_combined <- function(df_coords, ndim,
 #' @param chain_files Character vector of paths to CSV files containing chain data
 #' @param mutual_size Integer number of samples to use from end of each chain
 #' @param output_file Character path for saving plot
-#' @param width,height,res Plot dimensions and resolution
+#' @param output_dir Character. Directory for output files. If NULL, uses current directory
+#' @param save_plot Logical. Whether to save plots to files. Default: TRUE
+#' @param width,height,res Plot dimensions and resolution for saving
 #' @return Invisible NULL, saves plot to file
 #' @examples
 #' \dontrun{
@@ -1626,6 +1629,8 @@ plot_profile_likelihood <- function(LL_list_param, param_name, LL_max) {
 #' @param LL_max Numeric maximum log-likelihood value
 #' @param width Numeric width of output plot in inches (default: 3.5)
 #' @param height Numeric height of output plot in inches (default: 3.5)
+#' @param save_plot Logical. Whether to save plot to file. Default: TRUE
+#' @param output_dir Character. Directory for output files. If NULL, uses current directory
 #' @param ... Additional arguments passed to plot
 #' @return A ggplot object
 #' @examples
@@ -2288,9 +2293,11 @@ plot_distance_heatmap <- function(heatmap_data, scenario_name,
 #' @param scenario_name Character string for output file naming
 #' @param ndim Integer number of dimensions used in the model
 #' @param confidence_level Numeric confidence level for prediction intervals (default: 0.95)
+#' @param save_plot Logical. Whether to save plots to files. Default: TRUE
+#' @param output_dir Character. Directory for output files. If NULL, uses current directory
 #' @return Invisibly returns NULL, creates two plot files:
-#'   - "{scenario_name}_prediction_scatter_dim_{ndim}.png"
-#'   - "{scenario_name}_residuals_vs_fitted_dim_{ndim}.png"
+#'   - \{scenario_name\}_prediction_scatter_dim_\{ndim\}.png
+#'   - \{scenario_name\}_residuals_vs_fitted_dim_\{ndim\}.png
 #' @examples
 #' \dontrun{
 #' # Create scatter and residual plots

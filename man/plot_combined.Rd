@@ -16,6 +16,13 @@ plot_combined(
 )
 }
 \arguments{
+\item{df_coords}{Data frame containing:
+- V1, V2, ... Vn: Coordinate columns
+- antigen: Binary indicator for antigen points
+- antiserum: Binary indicator for antiserum points
+- cluster: (Optional) Factor or integer cluster assignments
+- year: (Optional) Numeric year values for temporal coloring}
+
 \item{ndim}{Number of dimensions in input coordinates}
 
 \item{plot_types}{Vector of plot types to create ("temporal", "cluster", "3d")}
@@ -29,13 +36,6 @@ plot_combined(
 \item{arrange}{How to arrange multiple plots ("grid", "vertical", "horizontal")}
 
 \item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
-
-\item{df}{Data frame containing:
-- V1, V2, ... Vn: Coordinate columns
-- antigen: Binary indicator for antigen points
-- antiserum: Binary indicator for antiserum points
-- cluster: (Optional) Factor or integer cluster assignments
-- year: (Optional) Numeric year values for temporal coloring}
 }
 \value{
 Combined plot object (grid arrangement of plots)

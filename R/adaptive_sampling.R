@@ -1,5 +1,6 @@
 # Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
-# Licensed under MIT License
+# License: free of charge access granted to any academic researcher to use this software for non-commercial, academic research purposes **only**.  Nobody may modify, distribute, sublicense, or publicly share the Software or any derivative works, until the paper is published by the original authors.  The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.  In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the Software or the use or other dealings in the Software.
+
 # R/adaptive_sampling.R
 
 #' Latin Hypercube and Adaptive Monte Carlo Sampling Functions
@@ -75,7 +76,7 @@
 #'   \item{NLL}{Negative log likelihood}
 #'
 #' If write_files=TRUE, results are saved to CSV files in the format:
-#' "{scenario_name}_model_parameters.csv"
+#' \{scenario_name\}_model_parameters.csv
 #'
 #' @examples
 #' \dontrun{
@@ -643,13 +644,14 @@ submit_parameter_jobs <- function(matrix_list_file,
 #'
 #' @details
 #' The function looks for CSV files in the init_param_optimization directory that match 
-#' the pattern "params_{scenario_name}.csv". It combines all results into a 
+#' the pattern params_\{scenario_name\}.csv. It combines all results into a 
 #' single dataset, computes median values across folds, and optionally writes the 
 #' aggregated results to a file.
 #'
 #' The output file is saved as:
-#' "model_parameters/{scenario_name}_model_parameters.csv"
+#' model_parameters/\{scenario_name\}_model_parameters.csv
 #'
+#' @param output_dir Character. Directory for output files. If NULL, uses current directory
 #' @param scenario_name Character. Name used in parameter optimization jobs.
 #' @param write_files Logical. Whether to save combined results (default: TRUE).
 #' @return Data frame of aggregated results containing median values across folds:
@@ -763,7 +765,7 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #' 4. Can distribute computation via SLURM for large-scale sampling
 #'
 #' Both local and SLURM executions append results to the same output file:
-#' "model_parameters/{scenario_name}_model_parameters.csv"
+#' model_parameters/\{scenario_name\}_model_parameters.csv
 #'
 #' @param initial_samples_file Character. Path to CSV file containing initial samples.
 #'        Must contain columns: log_N, log_k0, log_cooling_rate, log_c_repulsion, NLL
@@ -778,9 +780,11 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #' @param batch_size Integer. Samples per iteration (default: 1).
 #' @param use_slurm Logical. Whether to use SLURM (default: FALSE).
 #' @param cider Logical. Whether to use cider queue (default: FALSE).
+#' @param output_dir Character. Directory for output files. If NULL, uses current directory
+#' @param verbose Logical. Whether to print progress messages. Default: FALSE
 #'
 #' @return Invisible NULL. Results are appended to:
-#'         "model_parameters/{scenario_name}_model_parameters.csv"
+#'         model_parameters/\{scenario_name\}_model_parameters.csv
 #'
 #' @examples
 #' \dontrun{
@@ -1529,7 +1533,9 @@ adaptive_MC_sampling_legacy <- function(samples_file, distance_matrix,
 #' @param folds Number of CV folds
 #' @param num_cores Number of cores for parallel processing
 #' @param scenario_name Name for output files
-#' @param output_dir Directory for output files. If NULL, uses current directory
+#' @param verbose Logical. Whether to print progress messages. Default: FALSE
+#' @param output_dir Character. Directory for output files. If NULL, uses current directory
+
 #' @return Data frame of samples with evaluated likelihoods
 #' @export
 adaptive_MC_sampling <- function(samples_file, 

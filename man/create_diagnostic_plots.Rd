@@ -22,7 +22,11 @@ create_diagnostic_plots(
 
 \item{output_file}{Character path for saving plot}
 
-\item{width, height, res}{Plot dimensions and resolution}
+\item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+
+\item{save_plot}{Logical. Whether to save plots to files. Default: TRUE}
+
+\item{width, height, res}{Plot dimensions and resolution for saving}
 }
 \value{
 Invisible NULL, saves plot to file

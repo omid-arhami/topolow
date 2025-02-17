@@ -13,13 +13,13 @@ detect_outliers_mad(data, k = 3, take_log = FALSE)
 k MADs from median are considered outliers.}
 }
 \value{
-List containing:
+A list containing:
 \item{outlier_mask}{Logical vector indicating outliers}
-\item{stats}{List with:
+\item{stats}{List containing:
 \itemize{
-\item{median}{Median of data}
-\item{mad}{Median absolute deviation}
-\item{n_outliers}{Number of outliers detected}
+\item median: Median of data
+\item mad: Median absolute deviation
+\item n_outliers: Number of outliers detected
 }
 }
 }

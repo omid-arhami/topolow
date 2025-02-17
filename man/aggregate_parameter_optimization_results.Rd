@@ -14,6 +14,8 @@ aggregate_parameter_optimization_results(
 \item{scenario_name}{Character. Name used in parameter optimization jobs.}
 
 \item{write_files}{Logical. Whether to save combined results (default: TRUE).}
+
+\item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
 }
 \value{
 Data frame of aggregated results containing median values across folds:
@@ -31,12 +33,12 @@ into a single dataset. This function processes results from jobs submitted by
 }
 \details{
 The function looks for CSV files in the init_param_optimization directory that match
-the pattern "params_{scenario_name}.csv". It combines all results into a
+the pattern params_\{scenario_name\}.csv. It combines all results into a
 single dataset, computes median values across folds, and optionally writes the
 aggregated results to a file.
 
 The output file is saved as:
-"model_parameters/{scenario_name}_model_parameters.csv"
+model_parameters/\{scenario_name\}_model_parameters.csv
 }
 \examples{
 \dontrun{
