@@ -54,7 +54,9 @@ plot(result)
 
 ## Documentation
 
-For detailed documentation of functions in Topolow package:
+See the full documentation of the package and all functionalities in https://github.com/omid-arhami/topolow/blob/main/build/topolow-manual.pdf
+
+For detailed documentation of a specific function in Topolow package:
 
 ```r
 # View documentation
