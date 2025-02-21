@@ -111,7 +111,7 @@ process_distance_matrix <- function(reported_distance, distance) {
 #' * ndim: Positive integer, typically 2-20.
 #' * k0: Initial spring constant, positive numeric > 0. Typical range: 0.1-30
 #'      Controls initial force strength
-#' * cooling_rate: Spring decay rate, numeric between 0 and 1. Typical range: 0.0001-0.1
+#' * cooling_rate: Spring and repulsion decay rate, numeric between 0 and 1. Typical range: 0.0001-0.1
 #'          Controls how quickly spring forces weaken
 #' * c_repulsion: Repulsion constant, positive numeric > 0. Typical range: 0.00001-0.1
 #'      Controls strength of repulsive forces
@@ -138,7 +138,6 @@ process_distance_matrix <- function(reported_distance, distance) {
 #' @param write_positions_to_csv Logical. Whether to save point positions to CSV file.
 #'        Default is TRUE.
 #' @param verbose Logical. Whether to print progress messages. Default is TRUE.
-#' @param trace_sse Logical. Whether to track sum of squared errors. Default is TRUE.
 #'
 #' @return A list with class "topolow" containing:
 #' \itemize{
@@ -147,7 +146,6 @@ process_distance_matrix <- function(reported_distance, distance) {
 #'   \item mae: Mean absolute error between target and optimized distances
 #'   \item r: Pearson correlation between target and optimized distances
 #'   \item iter: Number of iterations performed
-#'   \item trace_convergence_error_df: Data frame tracking convergence
 #'   \item parameters: List of input parameters used
 #'   \item convergence: List with convergence status and final error
 #' }
@@ -177,8 +175,7 @@ topolow_full <- function(distance_matrix,
                          convergence_counter = 5,
                          initial_positions = NULL,
                          write_positions_to_csv = TRUE,
-                         verbose = FALSE,
-                         trace_sse = TRUE) {
+                         verbose = FALSE) {
   
   # Input validation with informative messages
   if (!is.matrix(distance_matrix)) {
@@ -226,17 +223,20 @@ topolow_full <- function(distance_matrix,
       stop("initial_positions must have ndim columns")
     }
   }
-
-  # Sort input matrix
-  #distance_matrix <- sort_matrix_by_year(distance_matrix)
   
   # Initialize variables
   n <- nrow(distance_matrix)
-  node_degrees <- rowSums(!is.na(distance_matrix))
-  node_degrees_1 <- node_degrees + 1
-  distances <- ifelse(is.na(distance_matrix), Inf, distance_matrix)
   
-  # Initialize positions
+  # OPTIMIZATION 1: Pre-compute NA status once
+  is_na_matrix <- is.na(distance_matrix)
+  node_degrees <- rowSums(!is_na_matrix)
+  node_degrees_1 <- node_degrees + 1
+  
+  # OPTIMIZATION 2: Replace ifelse with direct indexing
+  distances <- matrix(Inf, n, n)
+  distances[!is_na_matrix] <- distance_matrix[!is_na_matrix]
+  
+  # Initialize positions (unchanged)
   positions <- if(is.null(initial_positions)) {
     distance_matrix_numeric <- suppressWarnings(as.numeric(as.character(distance_matrix)))
     distance_matrix_numeric[is.na(distance_matrix_numeric)] <- NA
@@ -256,22 +256,24 @@ topolow_full <- function(distance_matrix,
   convergence_error0 <- 1e12
   prev_convergence_error <- convergence_error0
   k <- k0
-  
-  trace_convergence_error_df <- data.table::data.table(
-    iteration = numeric(max_iter), 
-    convergence_error = NULL
-  )
 
-  # Create a list of all valid (i,j) pairs maintaining i < j
-  point_pairs <- list()
+  # OPTIMIZATION 3: Create point pairs once
+  point_pairs <- matrix(0, n*(n-1)/2, 2)
+  pair_idx <- 1
   for(i in 1:(n-1)) {
     for(j in (i+1):n) {
-      point_pairs[[length(point_pairs) + 1]] <- c(i,j)
+      point_pairs[pair_idx, ] <- c(i, j)
+      pair_idx <- pair_idx + 1
     }
   }
   
-  # Convert to matrix
-  point_pairs <- do.call(rbind, point_pairs)
+  # OPTIMIZATION 4: Pre-compute which pairs have measured distances
+  has_measurement <- matrix(FALSE, nrow(point_pairs), 1)
+  for(idx in 1:nrow(point_pairs)) {
+    i <- point_pairs[idx, 1]
+    j <- point_pairs[idx, 2]
+    has_measurement[idx] <- distances[i, j] != Inf
+  }
   
   ################## Main optimization loop
   for(iter in 1:max_iter) {
@@ -281,20 +283,22 @@ topolow_full <- function(distance_matrix,
     # Randomize point pair ordering for this iteration
     random_order <- sample(nrow(point_pairs))
     shuffled_pairs <- point_pairs[random_order,]
+    shuffled_has_measurement <- has_measurement[random_order]
     
     # Calculate forces between pairs in random order
     for(pair_idx in 1:nrow(shuffled_pairs)) {
       i <- shuffled_pairs[pair_idx, 1]
       j <- shuffled_pairs[pair_idx, 2]
 
-      ideal_distance <- distances[i, j]
       delta <- positions[j,] - positions[i,]
       distance <- sqrt(sum(delta^2))
       distance_01 <- distance + 0.01
       
-      # Spring forces for measured distances
-      if(ideal_distance != Inf) {
+      # OPTIMIZATION 6: Use pre-computed measurement status
+      if(shuffled_has_measurement[pair_idx]) {
+        ideal_distance <- distances[i, j]
         ideal_distance_processed <- process_ideal_distance(ideal_distance, distance)
+        
         if (!is.null(ideal_distance_processed)) {
           # Spring force
           adjustment_factor <- 2*k*(ideal_distance_processed-distance)*delta/distance_01
@@ -312,14 +316,16 @@ topolow_full <- function(distance_matrix,
         positions[i,] <- positions[i,] - force/node_degrees_1[i]
         positions[j,] <- positions[j,] + force/node_degrees_1[j]
       }
-      
-      # Check for numerical stability
+    }
+    
+    # OPTIMIZATION 8: Check for numerical stability less frequently
+    if(iter %% 5 == 0) {
+      # Vectorized check for NA/Inf values
       if(any(is.na(positions)) || any(is.infinite(positions))) {
         warning("Numerical instability detected at iteration ", iter)
         stop <- TRUE
         break
       }
-      if(stop) break
     }
     
     if(stop) break
@@ -338,33 +344,18 @@ topolow_full <- function(distance_matrix,
       nrow = nrow(distance_matrix)
     )
     
-    # Calculate convergence error
-    convergence_error_df <- data.table::data.table(
-      distance_matrix_convergence_error = suppressWarnings(
-        as.vector(as.numeric(distance_matrix_convergence_error))
-      ),
-      p_dist_mat = as.vector(p_dist_mat)
-    )
-    convergence_error_df <- na.omit(convergence_error_df)
+    # OPTIMIZATION 9: Vectorized convergence error calculation
+    distance_vec <- as.vector(as.numeric(distance_matrix_convergence_error))
+    p_dist_vec <- as.vector(p_dist_mat)
+    valid_indices <- !is.na(distance_vec)
     convergence_error <- mean(
-      abs(convergence_error_df$distance_matrix_convergence_error - 
-            convergence_error_df$p_dist_mat), 
-      na.rm = TRUE
+      abs(distance_vec[valid_indices] - p_dist_vec[valid_indices])
     )
     
-    # Calculate evaluation metrics
-    evaldf <- data.table::data.table(
-      distance_matrix = suppressWarnings(
-        as.vector(as.numeric(distance_matrix))
-      ),
-      p_dist_mat = as.vector(p_dist_mat)
-    )
-    evaldf <- na.omit(evaldf)
-    mae <- mean(abs(evaldf$distance_matrix - evaldf$p_dist_mat), na.rm = TRUE)
-    
-    # Record trace
-    trace_convergence_error_df[iter, "iteration"] <- iter
-    trace_convergence_error_df[iter, "convergence_error"] <- convergence_error
+    # Calculate evaluation metrics similarly
+    distance_vec_raw <- suppressWarnings(as.vector(as.numeric(distance_matrix)))
+    valid_indices_raw <- !is.na(distance_vec_raw)
+    mae <- mean(abs(distance_vec_raw[valid_indices_raw] - p_dist_vec[valid_indices_raw]))
     
     if (verbose) {
       cat(sprintf(
@@ -373,7 +364,7 @@ topolow_full <- function(distance_matrix,
       ))
     }
     
-    # Check convergence
+    # Check convergence (relatively unchanged)
     if (iter > 1) {
       if (is.na(prev_convergence_error) || 
           is.na(convergence_error) || 
@@ -383,10 +374,10 @@ topolow_full <- function(distance_matrix,
         if (verbose) {
           cat(paste(
             "! Skipping convergence check for this iteration.",
-            "Please check model parameters k, decay, and c_repulsion.\n"
+            "Please check model parameters k, cooling_rate, and c_repulsion.\n"
           ))
           cat(sprintf(
-            "dim=%d, k0=%.4f, decay=%.4f, c_repulsion=%.4f, MAE=%.4f, convergence_error=%.4f\n",
+            "ndim=%d, k0=%.4f, cooling_rate=%.4f, c_repulsion=%.4f, MAE=%.4f, convergence_error=%.4f\n",
             ndim, k0, cooling_rate, c_repulsion, mae, convergence_error
           ))
         }
@@ -407,31 +398,22 @@ topolow_full <- function(distance_matrix,
     k <- k * (1 - cooling_rate)
   }
   
-  # Save positions if requested
+  # Save positions if requested (unchanged)
   if(write_positions_to_csv) {
     csv_filename <- sprintf(
-      "Positions_dim_%d_k0_%.4f_decay_%.4f_c_repulsion_%.4f.csv",
+      "Positions_dim_%d_k0_%.4f_cooling_%.4f_c_repulsion_%.4f.csv",
       ndim, k0, cooling_rate, c_repulsion
     )
     utils::write.csv(positions, file = csv_filename, row.names = TRUE)
   }
   
-  # Calculate final correlation
-  pearson_corr <- stats::cor(
-    evaldf$p_dist_mat, 
-    evaldf$distance_matrix, 
-    method = "pearson"
-  )
-  
-  # Create result object
+  # Create result object (unchanged)
   result <- structure(
     list(
       positions = positions,
       est_distances = p_dist_mat,
       mae = mae,
-      r = pearson_corr,
       iter = iter,
-      trace_convergence_error_df = trace_convergence_error_df,
       parameters = list(
         ndim = ndim,
         k0 = k0,
@@ -469,7 +451,6 @@ print.topolow <- function(x, ...) {
   cat(sprintf("Dimensions: %d\n", x$parameters$ndim))
   cat(sprintf("Iterations: %d\n", x$iter))
   cat(sprintf("MAE: %.4f\n", x$mae))
-  cat(sprintf("Correlation: %.4f\n", x$r))
   cat(sprintf("Convergence achieved: %s\n", x$convergence$achieved))
   cat(sprintf("Final convergence error: %.4f\n", x$convergence$error))
 }
@@ -478,7 +459,7 @@ print.topolow <- function(x, ...) {
 #' Summary method for topolow objects
 #' 
 #' Provides a detailed summary of the optimization results including parameters,
-#' convergence trace, and performance metrics.
+#' convergence and performance metrics.
 #' 
 #' @param object A topolow object returned by topolow_full() or topolow_Smith_obj()
 #' @param ... Additional arguments passed to summary (not used)
@@ -495,14 +476,6 @@ summary.topolow <- function(object, ...) {
   cat(sprintf("k0: %.4f\n", object$parameters$k0))
   cat(sprintf("cooling_rate: %.4f\n", object$parameters$cooling_rate))
   cat(sprintf("c_repulsion: %.4f\n", object$parameters$c_repulsion))
-  
-  # Add convergence trace summary
-  trace <- object$trace_convergence_error_df
-  cat("\nConvergence trace summary:\n")
-  cat(sprintf("Initial error: %.4f\n", trace$convergence_error[1]))
-  cat(sprintf("Final error: %.4f\n", tail(trace$convergence_error, 1)))
-  cat(sprintf("Error reduction: %.2f%%\n", 
-              100 * (1 - tail(trace$convergence_error, 1) / trace$convergence_error[1])))
 }
 
 
@@ -543,7 +516,7 @@ gmultiple <- function(x) {
 #' * ndim: Positive integer, typically 2-20. Higher dimensions increase computational cost
 #' * k0: Initial spring constant, positive numeric > 0. Typical range: 0.1-30
 #'      Controls initial force strength
-#' * cooling_rate: Spring decay rate, numeric between 0 and 1. Typical range: 0.0001-0.1
+#' * cooling_rate: Spring and repulsion decay rate, numeric between 0 and 1. Typical range: 0.0001-0.1
 #'          Controls how quickly spring forces weaken
 #' * c_repulsion: Repulsion constant, positive numeric > 0. Typical range: 0.00001-0.2
 #'      Controls repulsive force strength
@@ -590,7 +563,6 @@ topolow_Smith_obj <- function(distance_matrix,
                               initial_positions = NULL,
                               write_positions_to_csv = TRUE,
                               verbose = TRUE,
-                              trace_sse = TRUE,
                               ofs = 1) {
   
   # Input validation
@@ -642,11 +614,6 @@ topolow_Smith_obj <- function(distance_matrix,
   convergence_error0 <- 1e12
   prev_convergence_error <- convergence_error0
   k <- k0
-  
-  trace_convergence_error_df <- data.table::data.table(
-    iteration = numeric(max_iter), 
-    convergence_error = NULL
-  )
   
   # Main optimization loop
   for(iter in 1:max_iter) {
@@ -721,10 +688,6 @@ topolow_Smith_obj <- function(distance_matrix,
     evaldf <- na.omit(evaldf)
     mae <- mean(abs(evaldf$distance_matrix - evaldf$p_dist_mat), na.rm = TRUE)
     
-    # Record trace
-    trace_convergence_error_df[iter, "iteration"] <- iter
-    trace_convergence_error_df[iter, "convergence_error"] <- convergence_error
-    
     if (verbose) {
       cat(sprintf(
         "Iteration=%d, MAE=%.4f, convergence_error=%.4f\n", 
@@ -742,7 +705,7 @@ topolow_Smith_obj <- function(distance_matrix,
         if (verbose) {
           cat("! Skipping convergence check for this iteration.\n")
           cat(sprintf(
-            "dim=%d, k0=%.4f, decay=%.4f, c_repulsion=%.4f, MAE=%.4f, convergence_error=%.4f\n",
+            "ndim=%d, k0=%.4f, cooling_rate=%.4f, c_repulsion=%.4f, MAE=%.4f, convergence_error=%.4f\n",
             ndim, k0, cooling_rate, c_repulsion, mae, convergence_error
           ))
         }
@@ -766,7 +729,7 @@ topolow_Smith_obj <- function(distance_matrix,
   # Save positions if requested
   if(write_positions_to_csv) {
     csv_filename <- sprintf(
-      "Positions_dim_%d_k0_%.4f_decay_%.4f_c_repulsion_%.4f.csv",
+      "Positions_dim_%d_k0_%.4f_cooling_rate_%.4f_c_repulsion_%.4f.csv",
       ndim, k0, cooling_rate, c_repulsion
     )
     utils::write.csv(positions, file = csv_filename, row.names = TRUE)
@@ -787,7 +750,6 @@ topolow_Smith_obj <- function(distance_matrix,
       mae = mae,
       r = pearson_corr,
       iter = iter,
-      trace_convergence_error_df = trace_convergence_error_df,
       parameters = list(
         ndim = ndim,
         k0 = k0,

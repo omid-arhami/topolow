@@ -12,6 +12,8 @@ run_topolow_slurm(
   scenario_name,
   fold,
   cider,
+  time = "8:00:00",
+  memory = "18G",
   matrix_dir,
   results_dir
 )

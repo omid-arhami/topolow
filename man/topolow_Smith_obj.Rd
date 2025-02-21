@@ -16,7 +16,6 @@ topolow_Smith_obj(
   initial_positions = NULL,
   write_positions_to_csv = TRUE,
   verbose = TRUE,
-  trace_sse = TRUE,
   ofs = 1
 )
 }
@@ -49,8 +48,6 @@ and ncol = ndim.}
 Default is TRUE.}
 
 \item{verbose}{Logical. Whether to print progress messages. Default is TRUE.}
-
-\item{trace_sse}{Logical. Whether to track sum of squared errors. Default is TRUE.}
 
 \item{ofs}{Numeric. Offset parameter for threshold calculations. Default is 1.}
 }
@@ -86,7 +83,7 @@ Valid parameter ranges and constraints:
 \item ndim: Positive integer, typically 2-20. Higher dimensions increase computational cost
 \item k0: Initial spring constant, positive numeric > 0. Typical range: 0.1-30
 Controls initial force strength
-\item cooling_rate: Spring decay rate, numeric between 0 and 1. Typical range: 0.0001-0.1
+\item cooling_rate: Spring and repulsion decay rate, numeric between 0 and 1. Typical range: 0.0001-0.1
 Controls how quickly spring forces weaken
 \item c_repulsion: Repulsion constant, positive numeric > 0. Typical range: 0.00001-0.2
 Controls repulsive force strength

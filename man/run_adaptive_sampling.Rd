@@ -14,6 +14,8 @@ run_adaptive_sampling(
   relative_epsilon = 1e-04,
   folds = 20,
   num_cores = 1,
+  time = "8:00:00",
+  memory = "10G",
   scenario_name,
   output_dir = NULL,
   use_slurm = FALSE,

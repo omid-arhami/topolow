@@ -24,6 +24,8 @@ run_parameter_optimization(
   write_files = TRUE,
   output_dir = NULL,
   num_cores = 1,
+  time = "8:00:00",
+  memory = "10G",
   use_slurm = FALSE,
   cider = FALSE
 )

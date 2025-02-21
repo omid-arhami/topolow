@@ -99,11 +99,6 @@ test_that("topolow_full convergence behavior works correctly", {
   expect_true(!is.null(result$convergence))
   expect_true(is.logical(result$convergence$achieved))
   expect_true(is.numeric(result$convergence$error))
-  
-  # Check trace data frame
-  expect_true(is.data.frame(result$trace_convergence_error_df))
-  expect_equal(names(result$trace_convergence_error_df),
-              c("iteration", "convergence_error"))
 })
 
 test_that("topolow_full force calculations preserve distance relationships", {
@@ -144,11 +139,9 @@ test_that("topolow_full returns correct object structure", {
   result <- topolow_full(create_test_matrix(), ndim=2, max_iter=10,
                         k0=1.0, cooling_rate=0.01, c_repulsion=0.01)
   
-  expected_elements <- c("positions", "est_distances", "mae", "r", "iter",
-                        "trace_convergence_error_df", "parameters", "convergence")
+  expected_elements <- c("positions", "est_distances", "mae", "iter",
+                         "parameters", "convergence")
   expect_true(all(expected_elements %in% names(result)))
   expect_s3_class(result, "topolow")
   expect_true(is.numeric(result$mae))
-  expect_true(is.numeric(result$r))
-  expect_true(abs(result$r) <= 1)  # Correlation should be in [-1,1]
 })

@@ -13,6 +13,8 @@ submit_parameter_jobs(
   scenario_name,
   folds,
   num_cores,
+  time = "8:00:00",
+  memory = "10G",
   output_dir = NULL,
   cider = FALSE
 )
