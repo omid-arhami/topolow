@@ -127,6 +127,8 @@ for(i in seq_along(results$matrices)) { #
       num_samples = opt_params$num_samples,
       folds = opt_params$folds,
       num_cores = opt_params$num_cores,
+      time = "8:00:00",
+      memory = "3G",
       write_files = TRUE,
       use_slurm = opt_params$use_slurm,
       cider = FALSE,
@@ -208,6 +210,8 @@ for(ndim in results$metadata$dimension) {
       relative_epsilon = amc_params$relative_epsilon,
       folds = opt_params$folds,
       num_cores = min(opt_params$num_cores, amc_params$batch_size * opt_params$folds + 1),
+      time = "8:00:00",
+      memory = "5G",
       use_slurm = opt_params$use_slurm,
       cider = FALSE,
       verbose = TRUE

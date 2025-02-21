@@ -29,6 +29,7 @@
 #' @keywords internal
 run_topolow_slurm <- function(truth_matrix, input_matrix, best_params,
                               opt_params, scenario_name, fold, cider,
+                              time = "8:00:00", memory = "18G",
                               matrix_dir, results_dir) {
   
   # Save matrices for this fold
@@ -59,6 +60,8 @@ run_topolow_slurm <- function(truth_matrix, input_matrix, best_params,
                               package = "topolow"),
     args = args_list,
     num_cores = 1,
+    time = time,
+    memory = memory,
     output_file = file.path(results_dir,
                             sprintf("%s_fold%d.out", scenario_name, fold)),
     error_file = file.path(results_dir,

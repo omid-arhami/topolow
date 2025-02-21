@@ -532,6 +532,8 @@ results <- run_parameter_optimization(
   num_samples = opt_params$num_samples,
   folds = opt_params$folds,
   num_cores = opt_params$num_cores,
+  time = "6:00:00",
+  memory = "4G",
   write_files = TRUE,
   use_slurm = opt_params$use_slurm,
   cider = FALSE,
@@ -579,6 +581,8 @@ run_adaptive_sampling(
   relative_epsilon = amc_params$relative_epsilon,
   folds = opt_params$folds,
   num_cores = opt_params$num_cores,
+  time = "6:00:00",
+  memory = "10G",
   use_slurm = FALSE,
   cider = FALSE,
   verbose = TRUE
