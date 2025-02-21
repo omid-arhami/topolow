@@ -26,7 +26,7 @@ sampling or optimization procedure that produces chain-like output.
 chain_files <- c("chain1.csv", "chain2.csv", "chain3.csv")
 diag <- calculate_diagnostics(chain_files, mutual_size = 1000)
 print(diag)  # Shows R-hat and ESS
-plot(diag)   # Creates trace and density plots
+plot(diag)   # Creates density plots
 print(diag$rhat) # Should be close to 1
 print(diag$ess)  # Should be large enough (>400) for reliable inference
 }

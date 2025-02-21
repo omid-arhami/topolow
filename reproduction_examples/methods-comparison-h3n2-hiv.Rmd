@@ -325,7 +325,6 @@ for (dataset_name in names(datasets)) {
       cooling_rate = params$cooling_rate,
       c_repulsion = params$c_repulsion,
       write_positions_to_csv = FALSE,
-      trace_sse = FALSE,
       verbose = TRUE
     )
   }, error = function(e) {

@@ -323,7 +323,6 @@ result <- topolow_full(
 )
 
 # Print performance metrics
-cat("Correlation:", round(result$r, 4), "\n")
 cat("MAE:", round(result$mae, 4), "\n")
 
 ```

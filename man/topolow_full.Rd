@@ -15,8 +15,7 @@ topolow_full(
   convergence_counter = 5,
   initial_positions = NULL,
   write_positions_to_csv = TRUE,
-  verbose = FALSE,
-  trace_sse = TRUE
+  verbose = FALSE
 )
 }
 \arguments{
@@ -48,8 +47,6 @@ and ncol = ndim.}
 Default is TRUE.}
 
 \item{verbose}{Logical. Whether to print progress messages. Default is TRUE.}
-
-\item{trace_sse}{Logical. Whether to track sum of squared errors. Default is TRUE.}
 }
 \value{
 A list with class "topolow" containing:
@@ -59,7 +56,6 @@ A list with class "topolow" containing:
 \item mae: Mean absolute error between target and optimized distances
 \item r: Pearson correlation between target and optimized distances
 \item iter: Number of iterations performed
-\item trace_convergence_error_df: Data frame tracking convergence
 \item parameters: List of input parameters used
 \item convergence: List with convergence status and final error
 }
@@ -85,7 +81,7 @@ Valid parameter ranges and constraints:
 \item ndim: Positive integer, typically 2-20.
 \item k0: Initial spring constant, positive numeric > 0. Typical range: 0.1-30
 Controls initial force strength
-\item cooling_rate: Spring decay rate, numeric between 0 and 1. Typical range: 0.0001-0.1
+\item cooling_rate: Spring and repulsion decay rate, numeric between 0 and 1. Typical range: 0.0001-0.1
 Controls how quickly spring forces weaken
 \item c_repulsion: Repulsion constant, positive numeric > 0. Typical range: 0.00001-0.1
 Controls strength of repulsive forces

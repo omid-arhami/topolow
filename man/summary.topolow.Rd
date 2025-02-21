@@ -13,7 +13,7 @@
 }
 \description{
 Provides a detailed summary of the optimization results including parameters,
-convergence trace, and performance metrics.
+convergence and performance metrics.
 }
 \examples{
 dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
