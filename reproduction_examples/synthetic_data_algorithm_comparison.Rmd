@@ -289,6 +289,8 @@ for (ndim in results$metadata$dimension) {
                                     package = "topolow"),
           args = args_list,
           num_cores = 1,
+          time = "8:00:00",
+          memory = "18G",
           output_file = file.path(results_dir,
                                   sprintf("%s_fold%d.out", scenario_name, i)),
           error_file = file.path(results_dir,

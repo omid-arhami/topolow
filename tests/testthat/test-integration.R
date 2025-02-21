@@ -88,7 +88,9 @@ test_that("parameter optimization workflow works", {
     num_samples = 5, # Reduced for testing
     folds = 3,      # Reduced for testing
     write_files = FALSE,
-    num_cores = 1   # Force single core for testing
+    num_cores = 1,   # Force single core for testing
+    memory = "1G",  # Reduce memory for testing
+    time = "00:03:00" # Reduce time for testing
   )
   
   expect_true(is.data.frame(results))

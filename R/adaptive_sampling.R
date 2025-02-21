@@ -137,6 +137,8 @@ run_parameter_optimization <- function(distance_matrix,
                                      write_files = TRUE,
                                      output_dir = NULL,
                                      num_cores = 1,
+                                     time = "8:00:00",
+                                      memory = "10G",
                                      use_slurm = FALSE,
                                      cider = FALSE) {
   # Input validation
@@ -348,6 +350,8 @@ run_parameter_optimization <- function(distance_matrix,
       scenario_name = scenario_name,
       folds = folds,
       num_cores = num_cores,
+      time = time,
+      memory = memory,
       output_dir = output_dir,
       cider = cider
     )
@@ -553,6 +557,8 @@ submit_parameter_jobs <- function(matrix_list_file,
                                 scenario_name,
                                 folds,
                                 num_cores,
+                                time = "8:00:00",
+                                memory = "10G",
                                 output_dir = NULL,
                                 cider=FALSE) {
   
@@ -623,6 +629,8 @@ submit_parameter_jobs <- function(matrix_list_file,
       script_path = script_path,
       args = args,
       num_cores = num_cores,
+      time = time,
+      memory = memory,
       output_file = output_file,
       error_file = error_file
     )
@@ -829,6 +837,8 @@ run_adaptive_sampling <- function(initial_samples_file,
                                   relative_epsilon = 1e-4,
                                   folds = 20, 
                                   num_cores = 1,
+                                  time = "8:00:00",
+                                  memory = "10G",
                                   scenario_name,
                                   output_dir = NULL,
                                   use_slurm = FALSE,
@@ -939,6 +949,8 @@ run_adaptive_sampling <- function(initial_samples_file,
                                   package = "topolow"),
         args = args,
         num_cores = num_cores,
+        time = time,
+        memory = memory,
         output_file = output_file,
         error_file = error_file
       )
