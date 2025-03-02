@@ -49,7 +49,7 @@ result <- topolow_full(dist_mat, ndim=2, max_iter=100,
 
 # Visualize results
 
-plot(result)
+plot(result$positions)
 ```
 
 ## Documentation
@@ -73,7 +73,7 @@ Additional vignettes with detailed computational studies are available in the `r
 - `synthetic-parameter-fitting.Rmd`
 - `synthetic_data_algorithm_comparison.Rmd`
 
-To run these studies:
+To run these studies download them individually or:
 
 ```r
 # Clone the repository
