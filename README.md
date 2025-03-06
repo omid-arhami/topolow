@@ -47,9 +47,9 @@ rownames(dist_mat) <- colnames(dist_mat) <- c("V/1", "V/2", "S/1")
 result <- topolow_full(dist_mat, ndim=2, max_iter=100, 
                       k0=1.0, cooling_rate=0.01, c_repulsion=0.01)
 
-# Visualize results
-
-plot(result$positions)
+# Investigate the results
+print(dist_mat)
+print(result$est_distances)
 ```
 
 ## Documentation
