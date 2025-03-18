@@ -8,7 +8,8 @@ create_and_optimize_RACMACS_map(
   titer_table,
   dim = 2,
   optimization_number = 400,
-  scenario_name
+  scenario_name,
+  num_cores = 1
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ create_and_optimize_RACMACS_map(
 \item{optimization_number}{Integer number of optimization runs (default: 400)}
 
 \item{scenario_name}{Character string for output file naming}
+
+\item{num_cores}{Integer number of cores to use for optimization (default: 1)}
 }
 \value{
 RACMACS map object containing optimized coordinates

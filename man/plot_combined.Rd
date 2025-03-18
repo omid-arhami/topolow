@@ -53,7 +53,7 @@ Plot Types:
 \itemize{
 \item temporal: Time-based color gradients
 \item cluster: Cluster-based discrete colors
-\item 3d: Three-dimensional interactive or static views
+\item 3d: Three-dimensional interactive or static views (requires rgl package)
 }
 
 Arrangement Options:
@@ -70,6 +70,9 @@ All plots share consistent:
 \item Axis scales
 \item Theme elements
 }
+
+Note: If "3d" is specified but the rgl package is not available, the function
+will skip the 3D plot and display a message.
 }
 \examples{
 \dontrun{
