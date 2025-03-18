@@ -35,7 +35,8 @@ plot_3d_mapping(
 \item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
 }
 \value{
-Invisibly returns rgl scene ID for further manipulation
+Invisibly returns rgl scene ID for further manipulation if rgl is available,
+or a 2D ggplot object as a fallback.
 }
 \description{
 Creates an interactive or static 3D visualization using rgl. Supports both
@@ -57,6 +58,10 @@ Color schemes are automatically selected based on available data:
 }
 
 For data with more than 3 dimensions, dimension reduction is applied first.
+
+Note: This function requires the rgl package and OpenGL support. If rgl is not
+available, the function will return a 2D plot with a message explaining how to
+enable 3D visualization.
 }
 \examples{
 \dontrun{
