@@ -159,10 +159,19 @@ results <- run_parameter_optimization(
 
 Using the initial results as a starting point, we'll now perform adaptive sampling to refine our parameter estimates:
 
+
 ```{r eval=FALSE}
 # Transform samples (with previous code's path)
+scenario_name = "H3N2_2003_data_AMC4"
 samples <- log_transform_parameters(
   "model_parameters/H3N2_2003_data_AMC4_model_parameters.csv"
+)
+
+# Setup optimization parameters
+opt_params <- list(
+  folds = 20,         # Number of CV folds
+  num_cores = max(1, parallel::detectCores() - 1),
+  use_slurm = FALSE
 )
 
 # Setup adaptive sampling parameters
@@ -170,7 +179,7 @@ amc_params <- list(
   num_samples = 2,  # Total samples to collect
   n_iter = 1,        # Number of consecutive iterations at each parallel job
   batch_size = 1,     # Samples per iteration
-  max_iter = 2000,    # Maximum iterations per optimization
+  max_iter = 1000,    # Maximum iterations per optimization
   relative_epsilon = 1e-4
 )
 
@@ -179,7 +188,7 @@ run_adaptive_sampling(
   initial_samples_file = "model_parameters/H3N2_2003_data_AMC4_model_parameters.csv",
   distance_matrix = h3n2_distance_matrix,
   max_iter = amc_params$max_iter,
-  scenario_name = "H3N2_2003_data_AMC4",
+  scenario_name = scenario_name,
   num_samples = amc_params$num_samples,
   n_iter = amc_params$n_iter,
   batch_size = amc_params$batch_size,
@@ -206,6 +215,8 @@ Let's run the previous parts twice and check if our chains have converged:
 chain_files <- c(
   "model_parameters/H3N2_2003_data_AMC2_model_parameters.csv",
   "model_parameters/H3N2_2003_data_AMC3_model_parameters.csv"
+  #"model_parameters/H3N2_2003_data_MC7_model_parameters.csv",
+  #"model_parameters/H3N2_2003_data_MC8_model_parameters.csv"
 )
 
 # Calculate diagnostics
@@ -269,6 +280,22 @@ for (param in params) {
 }
 ```
 
+```{r}
+# Analyze parameter sensitivity
+for (param in params) {
+  sensitivity <- parameter_sensitivity_analysis(
+    param = param,
+    samples = samples,
+    bins = 30
+  )
+  
+  # Plot results
+  sens_plot <- plot(sensitivity, reference_error = 0.939)
+  #ggsave(paste0("parameter_sensitivity_", param, ".pdf"), sens_plot)
+  print(sens_plot)
+}
+```
+
 ## Finding Optimal Parameters
 
 Based on our analysis, we can extract optimal parameter values. Modes of marginal sampling probability distributions are maximum likelihood estimators.
@@ -319,6 +346,7 @@ result <- topolow_full(
   c_repulsion = optimal_params$c_repulsion,
   relative_epsilon = 1e-10,
   convergence_counter = 5,
+  write_positions_to_csv = FALSE,
   verbose = TRUE
 )
 

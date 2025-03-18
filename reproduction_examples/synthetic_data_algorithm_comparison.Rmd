@@ -40,25 +40,24 @@ library(parallel)
 library(ggplot2)
 library(tidyr)
 library(gridExtra)
+library(cowplot)
 
 # Parameters
-#random_seed <- 6711  # For reproducibility 
 
 # Setup optimization parameters
 opt_params <- list(
   n_folds = 20,
-  max_topolow_iter = 2000, # Cutoff of one optimization
-  topolow_opt_rounds = 1,
-  racmacs_opt_rounds = 200,  # Optimization rounds for RACMACS (You needs to do many optimizations and pick the best result)
-  topolow_opt_rounds = 1,  # Optimization rounds for Topolow
-  final_params = read.csv("optimal_parameters_250points.csv"),  # From parameter fitting
+  max_topolow_iter = 1000, # Cutoff of one optimization
+  topolow_opt_rounds = 1, # Optimization rounds for Topolow
+  racmacs_opt_rounds = 20,  # Optimization rounds for RACMACS (You needs to do many optimizations and pick the best result)
+  topolow_params = read.csv("optimal_parameters_250points.csv"),  # From parameter fitting
   use_slurm = FALSE
 )
 
 # Get absolute path for output directory
 output_dir <- NULL
 if (is.null(output_dir)) {
-  output_dir <- getwd()
+  output_dir <- file.path(getwd(), "synthetic_data")
 }
 output_dir <- normalizePath(output_dir, mustWork = FALSE)
 
@@ -69,8 +68,8 @@ if (!dir.exists(output_dir)) {
 
 # Create subdirectories
 matrix_dir <- file.path(output_dir, "matrices")
-results_dir <- file.path(output_dir, "results")
-for (dir in c(matrix_dir, results_dir)) {
+topolow_results_dir <- file.path(output_dir, "topolow_results")
+for (dir in c(matrix_dir, topolow_results_dir)) {
   if (!dir.exists(dir)) {
     dir.create(dir, recursive = TRUE)
   }
@@ -83,7 +82,7 @@ First, let's create synthetic datasets with different dimensionalities. We'll us
 
 ```{r}
 # Generate datasets in 2, 5, and 10 dimensions
-results <- generate_synthetic_datasets(
+sim_data <- generate_synthetic_datasets(
   n_dims_list = c(2, 5, 10), 
   seeds = c(123450, 903450 , 13450), 
   n_points = 250,
@@ -91,13 +90,445 @@ results <- generate_synthetic_datasets(
 )
 
 # Print dataset properties
-print(results$metadata)
+print(sim_data$metadata)
 
 # Get matrix variants to analyze
 matrix_variants <- c("S_missing", "M_missing", "L_missing", "S_noise1", "M_noise1", "L_noise1", "S_noise_bias", "M_noise_bias", "L_noise_bias")
 print("Matrix variants to analyze:")
 print(matrix_variants)
 ```
+
+
+## Find RACMACS optimal dimensions (semi-manual)
+```{r}
+#' Find Optimal Dimensionality for RACMACS with Early Stopping
+#' 
+#' Analyzes each simulated dataset with increasing dimensionality until coverage
+#' falls below 95% or max dimension is reached.
+#'
+#' @param sim_data The sim_data from generate_synthetic_datasets 
+#' @param matrix_variants Vector of matrix variant names to test
+#' @param opt_setting List of optimization settings
+#' @param output_dir Directory of the outputs
+#' @return Data table with dimension results across all variants
+
+find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setting, output_dir) {
+  # Initialize results storage
+  dim_results <- data.table(
+    Dimension = integer(),
+    MAE = numeric(),
+    Completeness = numeric(),
+    OriginalDimension = integer(),
+    Variant = character(),
+    Algorithm = character(),
+    stringsAsFactors = FALSE
+  )
+  
+  # Create output directories if they don't exist
+  coords_dir <- file.path(output_dir, "coordinates")  
+  plots_dir <- file.path(output_dir, "plots")
+  for (dir in c(coords_dir, plots_dir)) {
+    if (!dir.exists(dir)) {
+      dir.create(dir, recursive = TRUE)
+    }
+  }
+  
+  # Maximum dimension to test before forcing early stop
+  max_test_dimension <- 12
+  
+  # Process each original dataset dimension
+  for(dim_idx in seq_along(sim_data$metadata$dimension)) {
+    orig_dim <- sim_data$metadata$dimension[dim_idx]
+    cat(sprintf("\nProcessing original %dD dataset\n", orig_dim))
+    
+    # Process each matrix variant
+    for(variant in matrix_variants) {
+      cat(sprintf("  Analyzing variant: %s\n", variant))
+      
+      # Get the distance matrix for this dimension and variant
+      distance_matrix <- sim_data$matrices[[dim_idx]][[variant]]
+      
+      # Create CV folds
+      matrix_list <- create_cv_folds(
+        truth_matrix = distance_matrix,
+        n_folds = opt_setting$n_folds
+      )
+      
+      # Test dimensions starting from 2, incrementing until coverage < 95%
+      continue_testing <- TRUE
+      test_dim <- 2  # Start with 2D
+      
+      while(continue_testing && test_dim <= max_test_dimension) {
+        cat(sprintf("    Testing dimension %d\n", test_dim))
+        
+        # Storage for this dimension's folds
+        fold_mae <- numeric(opt_setting$n_folds)
+        fold_coverage <- numeric(opt_setting$n_folds)
+        
+        # Run each fold
+        for(i in seq_len(opt_setting$n_folds)) {
+          # Get matrices for this fold
+          truth_matrix <- matrix_list[[i]][[1]]
+          input_matrix <- matrix_list[[i]][[2]]
+          
+          # Convert to titer format
+          titer_table <- dist_to_titer_table(input_matrix, base=exp(1), tens=1)
+          
+          # Create scenario name for this run
+          scenario_name <- sprintf("dim%d_%s_fold%d", orig_dim, variant, i)
+          
+          # Run RACMACS optimization
+          map <- create_and_optimize_RACMACS_map(
+            titer_table = titer_table,
+            dim = test_dim,
+            optimization_number = opt_setting$racmacs_opt_rounds,
+            scenario_name = scenario_name
+          )
+          
+          # Process RACMACS results
+          coords_file <- file.path(coords_dir, 
+                                  paste0("RACMACS_", scenario_name, ".csv"))
+          positions_racmacs <- read.csv(coords_file)
+          positions_racmacs$name <- ifelse(
+            positions_racmacs$type == "antigen",
+            paste0("V/", positions_racmacs$name),
+            paste0("S/", positions_racmacs$name)
+          )
+          
+          rownames(positions_racmacs) <- positions_racmacs$name
+          positions_racmacs <- positions_racmacs[,3:ncol(positions_racmacs)]
+          
+          # Calculate distances
+          p_dist_mat <- coordinates_to_matrix(as.matrix(positions_racmacs))
+          
+          # Calculate errors
+          racmacs_errors <- error_calculator_comparison(
+            p_dist_mat = p_dist_mat,
+            truth_matrix = truth_matrix,
+            input_matrix = input_matrix
+          )
+          
+          # Store this fold's metrics
+          fold_mae[i] <- mean(abs(racmacs_errors$report_df$OutSampleError), na.rm = TRUE)
+          fold_coverage[i] <- racmacs_errors$coverage
+        }
+        
+        # Calculate averages across folds
+        mean_mae <- mean(fold_mae, na.rm = TRUE)
+        mean_coverage <- mean(fold_coverage, na.rm = TRUE)
+        
+        # Store dimension results
+        dim_results <- rbind(
+          dim_results,
+          data.table(
+            Dimension = test_dim,
+            MAE = mean_mae,
+            Completeness = mean_coverage * 100,  # Convert to percentage
+            OriginalDimension = orig_dim,
+            Variant = variant,
+            Algorithm = "MDS"
+          )
+        )
+        
+        # Check stopping condition - stop when coverage falls below 95%
+        if(mean_coverage < 0.95) {
+          cat(sprintf("    Completeness below 95%% (%.2f%%) - stopping dimension testing\n", 
+                    mean_coverage * 100))
+          continue_testing <- FALSE
+        } else {
+          test_dim <- test_dim + 1  # Test next dimension
+        }
+      }
+    }
+  }
+  
+  # Save dimension results
+  results_file <- file.path(output_dir, "racmacs_dimensions_sim_data.csv")
+  write.csv(dim_results, results_file, row.names = FALSE)
+  cat(sprintf("\nResults saved to %s\n", results_file))
+  
+  return(dim_results)
+}
+
+
+
+#' Plot Individual Dimension Results for Each Dataset Variant
+#'
+#' @param results The dimension results dataframe
+#' @param output_dir Directory to save 
+#' @return The combined grid plot of all individual plots
+
+plot_dimension_results <- function(results, output_dir) {
+  plots_dir <- file.path(output_dir, "plots")
+  if (!dir.exists(plots_dir)) {
+    dir.create(plots_dir, recursive = TRUE)
+  }
+  
+  # Get all unique combinations of original dimension and variant
+  orig_dims <- sort(unique(results$OriginalDimension))
+  variants <- sort(unique(results$Variant))
+  
+  # Create a list to store all individual plots
+  individual_plots <- list()
+  
+  # Create plots for each combination
+  for(orig_dim in orig_dims) {
+    for(variant in variants) {
+      # Get data for this specific dataset
+      dataset_data <- results[results$OriginalDimension == orig_dim & 
+                               results$Variant == variant, ]
+      
+      if(nrow(dataset_data) == 0) next
+      
+      # Calculate the scaled position for 95% coverage
+      max_mae <- max(dataset_data$MAE)
+      scaled_95_percent <- 95/max(dataset_data$Completeness)*max_mae
+      
+      # Create plot with dual y-axes for this dataset
+      p <- ggplot(dataset_data, aes(x = Dimension)) +
+        # MAE line
+        geom_line(aes(y = MAE, color = "Validation MAE"), size = 0.8) +
+        geom_point(aes(y = MAE, color = "Validation MAE"), size = 1.5) +
+        # Completeness line (scaled to match MAE range for dual axis)
+        geom_line(aes(y = Completeness/max(Completeness)*max_mae, color = "Completeness"), size = 0.8) +
+        geom_point(aes(y = Completeness/max(Completeness)*max_mae, color = "Completeness"), size = 1.5) +
+        # Add horizontal line at 95% coverage
+        geom_hline(yintercept = scaled_95_percent, linetype = "dashed", color = "blue", alpha = 0.7) +
+        # Set up axes
+        scale_y_continuous(
+          name = "Validation MAE",
+          sec.axis = sec_axis(~ . * max(dataset_data$Completeness)/max_mae, name = "Completeness (%)")) +
+        scale_color_manual(values = c("Validation MAE" = "red", "Completeness" = "blue"),
+                         name = "Metric") +
+        labs(x = "Dimension") +
+        theme_minimal() +
+        theme(
+          panel.grid.minor = element_blank(),
+          legend.position = "none",
+          plot.title = element_text(size = 7, hjust = 0.5),
+          axis.title = element_text(size = 6),
+          axis.text = element_text(size = 6),
+          plot.margin = margin(2, 2, 2, 2, "mm")
+        )
+      
+      # Store the plot
+      plot_key <- paste0("dim", orig_dim, "_", variant)
+      individual_plots[[plot_key]] <- p
+      
+      # Save individual plot if needed
+      individual_file <- file.path(plots_dir, paste0(plot_key, ".pdf"))
+      ggsave(individual_file, p, width = 2.5, height = 2, units = "in")
+    }
+  }
+  
+  # Arrange all plots into a grid (dimensions as rows, variants as columns)
+  # First, create a matrix of the plots in the right order
+  plot_matrix <- matrix(list(), nrow = length(orig_dims), ncol = length(variants))
+  rownames(plot_matrix) <- paste0(orig_dims, "D")
+  colnames(plot_matrix) <- variants
+  
+  # Fill the matrix with plots
+  for(i in seq_along(orig_dims)) {
+    for(j in seq_along(variants)) {
+      plot_key <- paste0("dim", orig_dims[i], "_", variants[j])
+      if(plot_key %in% names(individual_plots)) {
+        plot_matrix[i, j] <- individual_plots[[plot_key]]
+      } else {
+        # Create empty plot if this combination wasn't analyzed
+        plot_matrix[i, j] <- list(ggplot() + theme_void())
+      }
+    }
+  }
+  
+  # Create variant type labels for the top of the grid
+  variant_types <- list(
+    "Missing" = grep("missing", variants, value = TRUE),
+    "Noise" = grep("noise1$", variants, value = TRUE),
+    "Noise+Bias" = grep("noise_bias", variants, value = TRUE)
+  )
+  
+  # Create plot titles with dimension and variant
+  titles <- sapply(variants, function(v) {
+    if(grepl("S_", v)) return("Low")
+    if(grepl("M_", v)) return("Medium")
+    if(grepl("L_", v)) return("High")
+  })
+  
+  # Reorganize variants into proper order for grid
+  # Define the variant order groups
+  missing_variants <- grep("missing", variants, value = TRUE)
+  noise_variants <- grep("noise1$", variants, value = TRUE)
+  bias_variants <- grep("noise_bias", variants, value = TRUE)
+  
+  # Sort within each group by S, M, L
+  sort_by_level <- function(vars) {
+    vars[order(factor(gsub("_.*", "", vars), levels = c("S", "M", "L")))]
+  }
+  
+  missing_variants <- sort_by_level(missing_variants)
+  noise_variants <- sort_by_level(noise_variants)
+  bias_variants <- sort_by_level(bias_variants)
+  
+  # Combine in the desired order
+  ordered_variants <- c(missing_variants, noise_variants, bias_variants)
+  
+  # Create a vector of column spans for the top annotation
+  col_spans <- c(length(missing_variants), length(noise_variants), length(bias_variants))
+  top_labels <- c("Missing Data", "Noise", "Noise+Bias")
+  
+  # Convert plot matrix to a list in column-major order for arranging
+  plot_list <- list()
+  title_list <- list()
+  
+  for(v in ordered_variants) {
+    for(d in orig_dims) {
+      plot_key <- paste0("dim", d, "_", v)
+      if(plot_key %in% names(individual_plots)) {
+        plot_list <- c(plot_list, individual_plots[[plot_key]])
+        
+        # Determine level from variant
+        level <- if(grepl("S_", v)) "Low" else if(grepl("M_", v)) "Medium" else "High"
+        title_list <- c(title_list, level)
+      }
+    }
+  }
+  
+  # Create the combined grid plot
+  # First arrange the plots in a grid
+  combined_plot <- grid.arrange(
+    grobs = plot_list,
+    ncol = length(ordered_variants),
+    nrow = length(orig_dims),
+    top = textGrob("RACMACS Dimensionality Analysis", gp = gpar(fontsize = 10, fontface = "bold")),
+    left = textGrob("Original Dimension", rot = 90, gp = gpar(fontsize = 8)),
+    bottom = textGrob("Test Dimension", gp = gpar(fontsize = 8)),
+    heights = unit(rep(1, length(orig_dims)), "null"),
+    widths = unit(rep(1, length(ordered_variants)), "null")
+  )
+  
+  # Save the combined plot
+  combined_file <- file.path(plots_dir, "all_dimension_analysis.pdf")
+  ggsave(combined_file, combined_plot, width = 9, height = 4, units = "in")
+  
+  # Create a nicer version with proper labels using ggplot
+  # Prepare data for faceted plot
+  plot_data <- results %>%
+    # Extract data severity level (S/M/L)
+    mutate(
+      Level = case_when(
+        grepl("^S_", Variant) ~ "Low",
+        grepl("^M_", Variant) ~ "Medium",
+        grepl("^L_", Variant) ~ "High"
+      ),
+      # Extract variant type
+      VariantType = case_when(
+        grepl("missing", Variant) ~ "Missing Data",
+        grepl("noise_bias", Variant) ~ "Noise+Bias",
+        grepl("noise1", Variant) ~ "Noise"
+      )
+    ) %>%
+    # Add dimension label for faceting
+    mutate(DimensionLabel = paste0(OriginalDimension, "D"))
+  
+  # Ensure proper ordering
+  plot_data$Level <- factor(plot_data$Level, levels = c("Low", "Medium", "High"))
+  plot_data$VariantType <- factor(plot_data$VariantType, 
+                                 levels = c("Missing Data", "Noise", "Noise+Bias"))
+  plot_data$DimensionLabel <- factor(plot_data$DimensionLabel,
+                                    levels = paste0(orig_dims, "D"))
+  
+  # Create a legend plot for the metrics
+  legend_data <- data.frame(
+    x = 1:2,
+    y = 1:2,
+    Metric = c("Validation MAE", "Completeness")
+  )
+  legend_plot <- ggplot(legend_data, aes(x = x, y = y, color = Metric)) +
+    geom_point() +
+    scale_color_manual(values = c("Validation MAE" = "red", "Completeness" = "blue")) +
+    theme_void() +
+    theme(legend.position = "bottom")
+  legend <- get_legend(legend_plot)
+  
+  # Create faceted plot for the grid
+  facet_plot <- ggplot(plot_data) +
+    # Create one panel per dimension x variant type x level
+    facet_grid(
+      DimensionLabel ~ VariantType + Level,
+      scales = "free_y",
+      switch = "y"
+    ) +
+    # MAE line
+    geom_line(aes(x = Dimension, y = MAE, color = "Validation MAE"), size = 0.6) +
+    geom_point(aes(x = Dimension, y = MAE, color = "Validation MAE"), size = 1.2) +
+    # Completeness line with secondary y-axis scaling done in annotation
+    geom_line(aes(x = Dimension, y = Completeness/100*max(MAE), color = "Completeness"), size = 0.6) +
+    geom_point(aes(x = Dimension, y = Completeness/100*max(MAE), color = "Completeness"), size = 1.2) +
+    # 95% coverage reference line
+    geom_hline(aes(yintercept = 0.95*max(MAE)), linetype = "dashed", color = "blue", alpha = 0.4) +
+    # Styling
+    scale_color_manual(values = c("Validation MAE" = "red", "Completeness" = "blue")) +
+    labs(
+      x = "Test Dimension",
+      y = "Validation MAE"
+    ) +
+    theme_minimal() +
+    theme(
+      strip.text = element_text(size = 7, face = "bold"),
+      strip.background = element_rect(fill = "gray95", color = NA),
+      axis.title = element_text(size = 8),
+      axis.text = element_text(size = 6),
+      panel.grid.minor = element_blank(),
+      panel.grid.major = element_line(color = "gray90", size = 0.2),
+      legend.position = "none",
+      panel.spacing = unit(1, "mm")
+    )
+  
+  # Save the faceted grid plot
+  facet_file <- file.path(plots_dir, "faceted_dimension_analysis.pdf")
+  facet_plot_with_legend <- grid.arrange(facet_plot, legend, nrow = 2, 
+                                        heights = unit(c(4, 0.3), "in"))
+  ggsave(facet_file, facet_plot_with_legend, width = 9, height = 4.5, units = "in")
+  
+  # Return both plot types
+  return(list(
+    individual_plots = individual_plots,
+    combined_plot = combined_plot,
+    faceted_plot = facet_plot_with_legend
+  ))
+}
+```
+
+```{r}
+# script to run RACMACS dimensionality analysis with early stopping
+
+# Run the analysis
+dim_results <- find_optimal_racmacs_dimensions(
+  sim_data = sim_data,  # The sim_data from generate_synthetic_datasets 
+  matrix_variants = matrix_variants,  # From the input setup
+  opt_setting = opt_params,  # From the input setup 
+  output_dir = output_dir  # From the input setup
+)
+
+# Generate plots
+all_plots <- plot_dimension_results(dim_results, output_dir)
+
+# Output a summary of findings
+cat("\n----- Summary of Optimal Dimensions -----\n")
+# Group by original dimension and variant, find where coverage drops below 95%
+summary_table <- dim_results %>%
+  group_by(OriginalDimension, Variant) %>%
+  arrange(OriginalDimension, Variant, Dimension) %>%
+  filter(Completeness < 95) %>%
+  slice(1) %>%
+  mutate(LastGoodDimension = Dimension - 1) %>%
+  select(OriginalDimension, Variant, LastGoodDimension, Completeness) %>%
+  arrange(OriginalDimension, Variant)
+
+print(summary_table)
+
+```
+
 
 
 ##Setup Result Collection:
@@ -214,8 +645,8 @@ Now we'll run both algorithms for each fold:
 ```{r eval=FALSE}
 cc=0 # scenario counter
 # Process each dimension
-for (ndim in results$metadata$dimension) {
-  dim_data <- results$matrices[[which(results$metadata$dimension == ndim)]]
+for (ndim in sim_data$metadata$dimension) {
+  dim_data <- sim_data$matrices[[which(sim_data$metadata$dimension == ndim)]]
   
   # Process each matrix variant
   for (matrix_type in matrix_variants) {
@@ -223,7 +654,7 @@ for (ndim in results$metadata$dimension) {
     scenario_name <- sprintf("dim%d_%s", ndim, matrix_type)
     
     # Get optimal parameters for this scenario
-    best_params <- opt_params$final_params %>%
+    best_params <- opt_params$topolow_params %>%
       filter(true_dim == ndim, matrix_type == !!matrix_type)
     
     if (nrow(best_params) == 0) {
@@ -280,7 +711,7 @@ for (ndim in results$metadata$dimension) {
           as.character(best_params$c_repulsion),
           scenario_name,
           as.character(i),
-          as.character(results_dir)
+          as.character(topolow_results_dir)
         )
 
         slurm_script <- create_slurm_script(
@@ -291,16 +722,16 @@ for (ndim in results$metadata$dimension) {
           num_cores = 1,
           time = "8:00:00",
           memory = "18G",
-          output_file = file.path(results_dir,
+          output_file = file.path(topolow_results_dir,
                                   sprintf("%s_fold%d.out", scenario_name, i)),
-          error_file = file.path(results_dir,
+          error_file = file.path(topolow_results_dir,
                                  sprintf("%s_fold%d.err", scenario_name, i))
         )
 
         submit_job(slurm_script, use_slurm = opt_params$use_slurm,
                    cider = TRUE)
       } else{
-        cat(sprintf("Scenario %d out of %d \n", cc, length(results$metadata$dimension)*length(matrix_variants)))
+        cat(sprintf("Scenario %d out of %d \n", cc, length(sim_data$metadata$dimension)*length(matrix_variants)))
         # Run Topolow locally and collect results in same format as RACMACS
         truth_matrix <- matrix_list[[i]][[1]]
         input_matrix <- matrix_list[[i]][[2]]
@@ -364,7 +795,7 @@ for (ndim in results$metadata$dimension) {
       
                 #################RACMACS 2D ######################
       
-      cat(sprintf("Scenario %d out of %d \n", cc, length(results$metadata$dimension)*length(matrix_variants)))
+      cat(sprintf("Scenario %d out of %d \n", cc, length(sim_data$metadata$dimension)*length(matrix_variants)))
 
       # Run RACMACS locally
       truth_matrix <- matrix_list[[i]][[1]]
@@ -581,7 +1012,7 @@ topolow_cor_df <- read.csv("Topolow_cor.csv")
 # topolow_errors_df <- rbindlist(lapply(csv_files, fread), 
 #                            use.names = TRUE, fill = TRUE)
 # 
-# # Coverage
+# # Completeness
 # pattern <- paste0("_coverage", "\\.csv$")
 # csv_files <- list.files(path = directory_path, pattern = pattern,
 #                        full.names = TRUE)
@@ -698,7 +1129,7 @@ p <- ggplot(all_mape_results, aes(x = Missing, y = MAPE, fill = Method)) +
   ) +
   labs(
     x = "Missing Data Level",
-    y = "Mean Absolute Percentage Error (±SD)"
+    y = "Validation Mean Absolute Percentage Error (±SD)"
   )
 
 # Save plot
@@ -949,10 +1380,10 @@ error_reduction <- data.frame(
 )
 
 # Calculate error reduction for each dimension and scenario
-for (ndim in results$metadata$dimension) {
+for (ndim in sim_data$metadata$dimension) {
   for (variant in noise_variants) {
-    topo <- error_reduction_analysis(ndim, variant, topolow_errors_df, results)
-    mds <- error_reduction_analysis(ndim, variant, racmacs_2D_errors_df, results)
+    topo <- error_reduction_analysis(ndim, variant, topolow_errors_df, sim_data)
+    mds <- error_reduction_analysis(ndim, variant, racmacs_2D_errors_df, sim_data)
     error_reduction <- rbind(error_reduction, 
                           data.frame(
                             Dimension = ndim,
@@ -1035,19 +1466,11 @@ layout_config <- new_layout_config(
 ```
 
 
-```{r}
-# Create output directories if they don't exist
-coords_dir <- file.path("results", "coordinates")
-plots_dir <- file.path("results", "plots")
-dir.create(coords_dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(plots_dir, recursive = TRUE, showWarnings = FALSE)
-```
-
 ### original data
 ```{r}
-for(ndim in results$metadata$dimension) {
+for(ndim in sim_data$metadata$dimension) {
   # Map the original coordinates
-  original_coords <- results$coordinates[[which(results$metadata$dimension == ndim)]]
+  original_coords <- sim_data$coordinates[[which(sim_data$metadata$dimension == ndim)]]
   original_coords$name <- original_coords$unique_id
   # Assign new column names to the first ndim columns
   col_names <- paste0("V", 1:ndim)
@@ -1095,10 +1518,10 @@ aesthetic_config_no_legend$legend_position <- "none"
 # Create plots
 plots <- list()
 for (i in 1:3) {
-  ndim <- results$metadata$dimension[i]
+  ndim <- sim_data$metadata$dimension[i]
   
   # Get coordinates for this dimension
-  original_coords <- results$coordinates[[which(results$metadata$dimension == ndim)]]
+  original_coords <- sim_data$coordinates[[which(sim_data$metadata$dimension == ndim)]]
   original_coords$name <- original_coords$unique_id
   
   # Assign column names
@@ -1151,12 +1574,12 @@ save_plot(
 Run this block after previous block.
 
 ```{r}
-ndim = results$metadata$dimension[3]
+ndim = sim_data$metadata$dimension[3]
 matrix_type = matrix_variants[9]
 # Get scenario names
 base_scenario <- sprintf("synthetic_dim%d_%s", ndim, matrix_type)
 # Get the matrices for this dimension
-dim_data <- results$matrices[[which(results$metadata$dimension == ndim)]][[14]]
+dim_data <- sim_data$matrices[[which(sim_data$metadata$dimension == ndim)]][[14]]
 
 
 # Topolow plot:
@@ -1279,9 +1702,9 @@ save_plot(
 ### Topolow
 Creating the maps by Topolow and their 2D projections
 ```{r}
-for(ndim in results$metadata$dimension) {
+for(ndim in sim_data$metadata$dimension) {
   # Get the matrices for this dimension
-  dim_data <- results$matrices[[which(results$metadata$dimension == ndim)]]
+  dim_data <- sim_data$matrices[[which(sim_data$metadata$dimension == ndim)]]
   
   for(matrix_type in matrix_variants) { # 
     # Get scenario names
@@ -1391,9 +1814,9 @@ Creating the maps by MDS and their 2D maps
 
 ```{r eval=FALSE}
 # 1- Creating the maps by MDS 
-for(ndim in results$metadata$dimension) {
+for(ndim in sim_data$metadata$dimension) {
   # Get the matrices for this dimension
-  dim_data <- results$matrices[[which(results$metadata$dimension == ndim)]]
+  dim_data <- sim_data$matrices[[which(sim_data$metadata$dimension == ndim)]]
   
   for(matrix_type in matrix_variants) { # 
     # Get scenario names
@@ -1429,9 +1852,9 @@ for(ndim in results$metadata$dimension) {
 
 ```{r eval=FALSE}
 # 2- plotting 2D maps
-for(ndim in results$metadata$dimension) {
+for(ndim in sim_data$metadata$dimension) {
   # Get the matrices for this dimension
-  dim_data <- results$matrices[[which(results$metadata$dimension == ndim)]]
+  dim_data <- sim_data$matrices[[which(sim_data$metadata$dimension == ndim)]]
   
   for(matrix_type in matrix_variants) {
     # Process RACMACS results

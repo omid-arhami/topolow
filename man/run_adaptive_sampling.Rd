@@ -43,6 +43,10 @@ Must contain columns: log_N, log_k0, log_cooling_rate, log_c_repulsion, NLL}
 
 \item{num_cores}{Integer. Cores per job (default: 1).}
 
+\item{time}{Character. Walltime for SLURM jobs in HH:MM:SS format. Default: "8:00:00".}
+
+\item{memory}{Character. Memory allocation for SLURM jobs. Default: "10G".}
+
 \item{scenario_name}{Character. Name for output files.}
 
 \item{output_dir}{Character. Directory for output files. If NULL, uses current directory}

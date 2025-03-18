@@ -64,6 +64,8 @@
 #'        uses current working directory. Directory will be created if it doesn't exist.
 #' @param num_cores Integer. Number of CPU cores to use for parallel processing.
 #'        Default: 1.
+#' @param time Character. Walltime for SLURM jobs in HH:MM:SS format. Default: "8:00:00".
+#' @param memory Character. Memory allocation for SLURM jobs. Default: "10G".
 #' @param use_slurm Logical. Whether to submit jobs via SLURM. Default: FALSE.
 #' @param cider Logical. Whether to use cider queue in SLURM. Default: FALSE.
 #'
@@ -138,7 +140,7 @@ run_parameter_optimization <- function(distance_matrix,
                                      output_dir = NULL,
                                      num_cores = 1,
                                      time = "8:00:00",
-                                      memory = "10G",
+                                     memory = "10G",
                                      use_slurm = FALSE,
                                      cider = FALSE) {
   # Input validation
@@ -790,6 +792,8 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #' @param cider Logical. Whether to use cider queue (default: FALSE).
 #' @param output_dir Character. Directory for output files. If NULL, uses current directory
 #' @param verbose Logical. Whether to print progress messages. Default: FALSE
+#' @param time Character. Walltime for SLURM jobs in HH:MM:SS format. Default: "8:00:00".
+#' @param memory Character. Memory allocation for SLURM jobs. Default: "10G".
 #'
 #' @return Invisible NULL. Results are appended to:
 #'         model_parameters/\{scenario_name\}_model_parameters.csv
@@ -1712,7 +1716,7 @@ adaptive_MC_sampling <- function(samples_file,
 }
 
 
-#' Calculate Weighted Marginal Distributions in Parallel
+#' Calculate Weighted Marginal Distributions
 #'
 #' @description
 #' Calculates marginal distributions for each parameter with weights derived from 
@@ -1742,7 +1746,7 @@ calculate_weighted_marginals <- function(samples) {
   if (!all(sapply(samples[required_cols], is.numeric))) {
     stop("All parameters must be numeric")
   }
-
+  
   # Validate NLL values
   if (all(is.infinite(samples$NLL))) {
     stop("All NLL values are infinite")
@@ -1767,17 +1771,38 @@ calculate_weighted_marginals <- function(samples) {
   
   # Define parameter columns to process
   vars <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
-  
-  # Define KDE calculation function
-  calculate_kde <- function(var, weights) {
-    weighted_kde(samples[[var]], weights = weights)
+
+  #  parallel processing:
+  if (Sys.info()["sysname"] == "Windows") {
+    # Define the worker function in global environment to ensure visibility
+    assign("temp_process_var", function(var, sample_data, weight_data) {
+      weighted_kde(sample_data[[var]], weights = weight_data)
+    }, envir = .GlobalEnv)
+
+    # Create cluster
+    cl <- parallel::makeCluster(min(parallel::detectCores(), 4))
+
+    # Export all needed objects
+    parallel::clusterExport(cl,
+                           c("samples", "weights", "weighted_kde", "temp_process_var"),
+                           envir = environment())
+
+    # Run parallel computation
+    marginals <- parallel::parLapply(cl, vars, function(v) {
+      temp_process_var(v, samples, weights)
+    })
+
+    parallel::stopCluster(cl)
+
+    # Clean up
+    rm("temp_process_var", envir = .GlobalEnv)
+  } else {
+    # For non-Windows, use sequential approach (safest for now)
+    marginals <- lapply(vars, function(var) {
+      weighted_kde(samples[[var]], weights = weights)
+    })
   }
-  
-  # Calculate marginals in parallel
-  marginals <- mclapply(vars, calculate_kde, 
-                       weights = weights, 
-                       mc.cores = detectCores())
-  
+
   # Set names and return
   names(marginals) <- vars
   return(marginals)
@@ -1877,7 +1902,9 @@ profile_likelihood_result <- function(param_values, ll_values, param_name,
 #' @description
 #' Calculates profile likelihood for a parameter by evaluating conditional maximum 
 #' likelihood across a grid of parameter values. Uses local sample windowing to
-#' estimate conditional likelihoods.
+#' estimate conditional likelihoods. This implementation is not a classical profile likelihood 
+#' calculation, but rather an "empirical profile likelihood" which estimates the profile 
+#' likelihood at each point based on the many observations previously sampled in Monte Carlo simulations.
 #'
 #' @details
 #' For each value in the parameter grid, the function:
@@ -1911,10 +1938,10 @@ profile_likelihood_result <- function(param_values, ll_values, param_name,
 #' @seealso 
 #' \code{\link{plot.profile_likelihood}} for visualization
 #' @export
-profile_likelihood <- function(param, samples, grid_size = 48, 
-                             bandwidth_factor = 0.03,
+profile_likelihood <- function(param, samples, grid_size = 40, 
+                             bandwidth_factor = 0.05,
                              start_factor = 0.5, end_factor = 1.5,
-                             min_samples = 10) {
+                             min_samples = 5) {
   
   # Input validation
   if (!is.character(param) || length(param) != 1) {
@@ -1985,6 +2012,102 @@ profile_likelihood <- function(param, samples, grid_size = 48,
   return(result)
 }
 
+
+#' Plot Method for Profile Likelihood Objects
+#'
+#' @description
+#' Creates a visualization of profile likelihood for a parameter showing maximum
+#' likelihood estimates and confidence intervals. Supports mathematical notation
+#' for parameter names and configurable output settings.
+#' 
+#' Confidence interval is found using the likelihood ratio test: 
+#' \eqn{LR(\theta_{ij}) = -2[log L_{max}(\theta_{ij}) - log L_{max}(\hat{\theta})]}
+#' where \eqn{\hat{\theta}} is the maximum likelihood estimate for all parameters.
+#' The 95% confidence interval is:
+#' \eqn{\{\theta_{ij} : LR(\theta_{ij}) \leq \chi^2_{1,0.05} = 3.84\}}
+#'
+#' @param x A profile_likelihood object
+#' @param LL_max Numeric maximum log-likelihood value
+#' @param width Numeric width of output plot in inches (default: 3.5)
+#' @param height Numeric height of output plot in inches (default: 3.5)
+#' @param save_plot Logical. Whether to save plot to file. Default: TRUE
+#' @param output_dir Character. Directory for output files. If NULL, uses current directory
+#' @param ... Additional arguments passed to plot
+#' @return A ggplot object
+#' @examples
+#' \dontrun{
+#' # Calculate profile likelihood
+#' pl_result <- profile_likelihood("log_N", mcmc_samples)
+#' 
+#' # Plot with maximum likelihood from samples
+#' LL_max <- max(-samples$NLL)
+#' plot(pl_result, LL_max, width = 4, height = 3)
+#' }
+#' @method plot profile_likelihood
+#' @export 
+plot.profile_likelihood <- function(x, LL_max, width = 3.5, height = 3.5,
+                                    save_plot = TRUE, output_dir = NULL, ...) {
+  # Convert profile likelihood object to data frame
+  LL_list_param <- data.frame(
+    param = x$param,
+    LL = x$ll
+  )
+  
+  # Convert parameter names to mathematical expressions
+  param_expr <- switch(x$param_name,
+                       "log_N" = expression(log(N)),
+                       "log_c_repulsion" = expression(log(c)),
+                       "log_cooling_rate" = expression(log(alpha)),
+                       "log_k0" = expression(log(k)),
+                       x$param_name)  # Default to original name if not matched
+  
+  # Create title expression
+  title_expr <- switch(x$param_name,
+                       "log_N" = expression(paste("Profile Likelihood: ", log(N))),
+                       "log_c_repulsion" = expression(paste("Profile Likelihood: ", log(c))),
+                       "log_cooling_rate" = expression(paste("Profile Likelihood: ", log(alpha))),
+                       "log_k0" = expression(paste("Profile Likelihood: ", log(k))),
+                       paste("Profile Likelihood:", x$param_name))
+  
+  CI_95_LL <- LL_max - 3.84 / 2
+  
+  p <- ggplot(LL_list_param, aes(x = param, y = LL)) +
+    geom_line(color = "steelblue", size = 0.5) +
+    geom_hline(yintercept = CI_95_LL, 
+               linetype = "dashed", color = "black", size = 0.4) +
+    geom_text(aes(x = min(param), y = CI_95_LL + 0.02, 
+                  label = "95% CI"),
+              color = "black", vjust = -0.5, hjust = -0.05, size = 6/ggplot2::.pt) +
+    labs(title = title_expr,
+         x = param_expr,
+         y = "Log Likelihood") +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 7, face = "bold", hjust = 0.5),
+      axis.title = element_text(size = 7),
+      axis.text = element_text(size = 6),
+      panel.grid.major = element_line(color = "gray90"),
+      panel.grid.minor = element_blank(),
+      panel.border = element_rect(color = "black", fill = NA),
+      plot.margin = margin(0.05, 0.05, 0.05, 0.05, "cm")
+    ) +
+    scale_y_continuous(labels = scales::comma)
+  
+  if(save_plot) {
+    if (is.null(output_dir)) {
+      output_dir <- getwd()
+    }
+    filename <- file.path(output_dir, 
+                          paste0("profile_likelihood_", x$param_name, ".pdf"))
+    
+    # Save as PDF with specified dimensions
+    ggsave(filename, p, width = width, height = height, 
+           device = cairo_pdf, units = "in")
+  }
+  
+  return(p)
+}
+
 #' Print Method for Profile Likelihood Objects
 #'
 #' @param x Profile likelihood object
@@ -1996,6 +2119,249 @@ print.profile_likelihood <- function(x, ...) {
   cat("Parameter:", x$param_name, "\n")
   cat("Grid points:", length(x$param), "\n")
   cat("Bandwidth:", round(x$bandwidth, 6), "\n")
+  cat("Sample counts (min/median/max):",
+      min(x$sample_counts), "/",
+      median(x$sample_counts), "/", 
+      max(x$sample_counts), "\n")
+}
+
+
+#' Parameter Sensitivity Analysis
+#'
+#' @description
+#' Analyzes the sensitivity of model performance (MAE) to changes in a parameter.
+#' Uses binning to identify the minimum MAE across parameter ranges and calculates
+#' thresholds for acceptable parameter values.
+#'
+#' @details
+#' The function performs these steps:
+#' 1. Cleans the input data using MAD-based outlier detection
+#' 2. Bins the parameter values into equal-width bins
+#' 3. Calculates the minimum MAE within each bin. Analogous to "poorman's likelihood" approach, 
+#' minimum MAE within each bin is an empirical estimate of the performance surface at this parameter
+#' value when other parameters are at their optimal values.
+#' 4. Identifies a threshold of acceptable performance (default: Topolow min. +5% MAE)
+#' 5. Returns an object for visualization and further analysis
+#'
+#' @param param Character name of parameter to analyze
+#' @param samples Data frame containing parameter samples and performance metrics
+#' @param bins Integer number of bins for parameter range (default: 40)
+#' @param mae_col Character name of column containing MAE values (default: "Holdout_MAE")
+#' @param threshold_pct Numeric percentage above minimum for threshold calculation (default: 5)
+#' @param min_samples Integer minimum number of samples required in a bin (default: 1)
+#' @return Object of class "parameter_sensitivity" containing:
+#'   \item{param_values}{Vector of parameter bin midpoints}
+#'   \item{min_mae}{Vector of minimum MAE values per bin}
+#'   \item{param_name}{Name of analyzed parameter}
+#'   \item{threshold}{Threshold value (default: Topolow min. +5%)}
+#'   \item{min_value}{Minimum MAE value across all bins}
+#'   \item{sample_counts}{Number of samples per bin}
+#' @export
+parameter_sensitivity_analysis <- function(param, samples, bins = 30, 
+                                          mae_col = "Holdout_MAE",
+                                          threshold_pct = 5,
+                                          min_samples = 1) {
+  # Validate inputs
+  if (!is.character(param) || length(param) != 1) {
+    stop("param must be a single character string")
+  }
+  if (!param %in% names(samples)) {
+    stop(sprintf("Parameter '%s' not found in samples", param))
+  }
+  if (!mae_col %in% names(samples)) {
+    stop(sprintf("MAE column '%s' not found in samples", mae_col))
+  }
+  if (bins < 2) {
+    stop("bins must be at least 2")
+  }
+  
+  # Clean the data
+  clean_samples <- as.data.frame(lapply(samples[, c(param, mae_col)], clean_data, k = 3))
+  clean_samples <- na.omit(clean_samples)
+  
+  # Check if we have enough data
+  if (nrow(clean_samples) < min_samples * 2) {
+    stop("Insufficient data after cleaning")
+  }
+  
+  # Find the range of parameter values to create bins
+  min_param <- min(clean_samples[[param]])
+  max_param <- max(clean_samples[[param]])
+  
+  # Create bins of equal width
+  bin_width <- (max_param - min_param) / bins
+  breaks <- seq(min_param, max_param + 1e-10, by = bin_width)  # Add a tiny amount to include max value
+  
+  # Use hist to get bin assignments (but don't plot)
+  h <- hist(clean_samples[[param]], breaks = breaks, plot = FALSE)
+  
+  # For each bin, find the minimum MAE if there are data points
+  bin_min_mae <- data.frame(
+    bin_midpoint = h$mids,
+    min_mae = NA,
+    sample_count = h$counts
+  )
+  
+  for (i in 1:bins) {
+    # Find data points in this bin
+    bin_data <- clean_samples[clean_samples[[param]] >= breaks[i] & 
+                              clean_samples[[param]] < breaks[i+1], ]
+    if (nrow(bin_data) >= min_samples) {
+      bin_min_mae$min_mae[i] <- min(bin_data[[mae_col]])
+    }
+  }
+  
+  # Remove bins with insufficient data for analysis
+  plot_data <- bin_min_mae[!is.na(bin_min_mae$min_mae), ]
+  
+  # Calculate min value and threshold
+  min_value <- min(plot_data$min_mae)
+  threshold_value <- min_value * (1 + threshold_pct/100)
+  
+  # Create result object
+  result <- structure(
+    list(
+      param_values = plot_data$bin_midpoint,
+      min_mae = plot_data$min_mae,
+      param_name = param,
+      threshold = threshold_value,
+      min_value = min_value,
+      sample_counts = plot_data$sample_count[!is.na(bin_min_mae$min_mae)]
+    ),
+    class = "parameter_sensitivity"
+  )
+  
+  return(result)
+}
+
+
+#' Plot Method for Parameter Sensitivity Analysis
+#'
+#' @description
+#' Creates a visualization of parameter sensitivity showing minimum MAE values
+#' across parameter ranges with trend lines and threshold indicators.
+#'
+#' @param x A parameter_sensitivity object
+#' @param reference_error Numeric reference error value for comparison (default: NULL)
+#' @param width Numeric width of output plot in inches (default: 3.5)
+#' @param height Numeric height of output plot in inches (default: 3.5)
+#' @param save_plot Logical. Whether to save plot to file. Default: TRUE
+#' @param output_dir Character. Directory for output files. If NULL, uses current directory
+#' @param ... Additional arguments passed to plot
+#' @return A ggplot object
+#' @method plot parameter_sensitivity
+#' @export
+plot.parameter_sensitivity <- function(x, reference_error = NULL, width = 3.5, height = 3.5,
+                                     save_plot = TRUE, output_dir = NULL, ...) {
+  # Convert to data frame for ggplot
+  plot_data <- data.frame(
+    param = x$param_values,
+    min_mae = x$min_mae
+  )
+  
+  # Convert parameter names to mathematical expressions
+  param_expr <- switch(x$param_name,
+                     "log_N" = expression(log(N)),
+                     "log_c_repulsion" = expression(log(c)),
+                     "log_cooling_rate" = expression(log(alpha)),
+                     "log_k0" = expression(log(k)),
+                     x$param_name)  # Default to original name if not matched
+  
+  # Create title expression
+  title_expr <- switch(x$param_name,
+                      "log_N" = expression(paste("Parameter Sensitivity: ", log(N))),
+                      "log_c_repulsion" = expression(paste("Parameter Sensitivity: ", log(c))),
+                      "log_cooling_rate" = expression(paste("Parameter Sensitivity: ", log(alpha))),
+                      "log_k0" = expression(paste("Parameter Sensitivity: ", log(k))),
+                      paste("Parameter Sensitivity:", x$param_name))
+  
+  # Prepare smoothed curve data
+  loess_fit <- loess(min_mae ~ param, data = plot_data)
+  smooth_data <- data.frame(
+    param = plot_data$param,
+    min_mae = predict(loess_fit, newdata = plot_data)
+  )
+  
+  # Create legend data frame
+  # Create a dummy data frame for the legend
+  legend_data <- data.frame(
+    param = rep(min(plot_data$param), 4),
+    min_mae = rep(mean(plot_data$min_mae), 4),
+    type = factor(c("Validation MAE", "Smoothed trend", "Topolow min. +5%", "MDS MAE"),
+                 levels = c("Validation MAE", "Smoothed trend", "Topolow min. +5%", "MDS MAE"))
+  )
+  
+  # Create the plot
+  p <- ggplot() +
+    # Main data line
+    geom_line(data = plot_data, 
+              aes(x = param, y = min_mae, color = "Validation MAE"),
+              size = 0.5) +
+    # Smoothed trend line  
+    geom_line(data = smooth_data,
+              aes(x = param, y = min_mae, color = "Smoothed trend"),
+              linetype = "dashed", size = 0.5) +
+    # Threshold line
+    geom_hline(aes(yintercept = x$threshold, color = "Topolow min. +5%"),
+               linetype = "dashed", size = 0.4) +
+    geom_hline(aes(yintercept = reference_error, color = "MDS MAE"),
+               linetype = "dashed", size = 0.4) +
+    # Set colors manually
+    scale_color_manual(values = c("Validation MAE" = "steelblue", 
+                                "Smoothed trend" = "red", 
+                                "Topolow min. +5%" = "black",
+                                "MDS MAE" = "#0cbe0c"),
+                      breaks = c("Validation MAE", "Smoothed trend", "Topolow min. +5%", "MDS MAE")) +
+    # Labels and theme
+    labs(title = title_expr,
+         x = param_expr,
+         y = "Validation MAE") +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 7, face = "bold", hjust = 0.5),
+      axis.title = element_text(size = 7),
+      axis.text = element_text(size = 6),
+      panel.grid.major = element_line(color = "gray90"),
+      panel.grid.minor = element_blank(),
+      panel.border = element_rect(color = "black", fill = NA),
+      plot.margin = margin(0.05, 0.05, 0.05, 0.05, "cm"),
+      legend.position = c(0.85, 0.85), # Position legend inside panel
+      legend.title = element_blank(),
+      legend.text = element_text(size = 5),
+      legend.key.size = unit(0.3, "cm"),
+      legend.background = element_rect(fill = "white", color = NA),
+      legend.margin = margin(1, 1, 1, 1),
+      legend.key = element_rect(fill = NA, color = NA)
+    ) +
+    scale_y_continuous(labels = scales::comma)
+  
+  if(save_plot) {
+    if (is.null(output_dir)) {
+      output_dir <- getwd()
+    }
+    filename <- file.path(output_dir, 
+                         paste0("parameter_sensitivity_", x$param_name, ".pdf"))
+    
+    # Save as PDF with specified dimensions
+    ggsave(filename, p, width = width, height = height, 
+          device = cairo_pdf, units = "in")
+  }
+  
+  return(p)
+}
+
+#' Print Method for Parameter Sensitivity Objects
+#'
+#' @param x A parameter_sensitivity object
+#' @param ... Additional arguments passed to print
+#' @method print parameter_sensitivity
+#' @export
+print.parameter_sensitivity <- function(x, ...) {
+  cat("Parameter Sensitivity Analysis\n")
+  cat("Parameter:", x$param_name, "\n")
+  cat("Number of bins:", length(x$param_values), "\n")
+  cat("Minimum MAE:", round(x$min_value, 6), "\n")
+  cat("Threshold value (5%):", round(x$threshold, 6), "\n")
   cat("Sample counts (min/median/max):",
       min(x$sample_counts), "/",
       median(x$sample_counts), "/", 

@@ -91,6 +91,44 @@ process_distance_matrix <- function(reported_distance, distance) {
   }
 }
 
+# Vectorized function to process distance matrix for convergence error calculations
+vectorized_process_distance_matrix <- function(distance_matrix, p_dist_mat) {
+  # Create result matrix
+  result <- matrix(NA, nrow = nrow(distance_matrix), ncol = ncol(distance_matrix))
+  
+  # Convert to character matrix for string operations
+  char_matrix <- matrix(as.character(distance_matrix), nrow = nrow(distance_matrix))
+  
+  # Process greater than cases (">x")
+  gt_mask <- grepl("^>", char_matrix)
+  if (any(gt_mask)) {
+    gt_indices <- which(gt_mask)
+    numeric_parts <- suppressWarnings(as.numeric(gsub("^>", "", char_matrix[gt_indices])))
+    valid <- !is.na(numeric_parts) & !is.na(p_dist_mat[gt_indices]) & 
+      p_dist_mat[gt_indices] < numeric_parts
+    result[gt_indices[valid]] <- numeric_parts[valid]
+  }
+  
+  # Process less than cases ("<x")
+  lt_mask <- grepl("^<", char_matrix)
+  if (any(lt_mask)) {
+    lt_indices <- which(lt_mask)
+    numeric_parts <- suppressWarnings(as.numeric(gsub("^<", "", char_matrix[lt_indices])))
+    valid <- !is.na(numeric_parts) & !is.na(p_dist_mat[lt_indices]) & 
+      p_dist_mat[lt_indices] > numeric_parts
+    result[lt_indices[valid]] <- numeric_parts[valid]
+  }
+  
+  # Process other values (convert to numeric)
+  other_mask <- !is.na(char_matrix) & !gt_mask & !lt_mask
+  if (any(other_mask)) {
+    other_indices <- which(other_mask)
+    result[other_indices] <- suppressWarnings(as.numeric(char_matrix[other_indices]))
+  }
+  
+  return(result)
+}
+
 
 #' Main TopoLow algorithm implementation
 #' 
@@ -334,11 +372,13 @@ topolow_full <- function(distance_matrix,
     p_dist_mat <- coordinates_to_matrix(positions)
     
     # Process thresholded elements for convergence error
-    distance_matrix_convergence_error <- mapply(
-      process_distance_matrix, 
-      distance_matrix, 
-      p_dist_mat
-    )
+    # distance_matrix_convergence_error <- mapply(
+    #   process_distance_matrix, 
+    #   distance_matrix, 
+    #   p_dist_mat
+    # )
+    distance_matrix_convergence_error <- vectorized_process_distance_matrix(distance_matrix, p_dist_mat)
+    
     distance_matrix_convergence_error <- matrix(
       distance_matrix_convergence_error, 
       nrow = nrow(distance_matrix)
@@ -654,11 +694,7 @@ topolow_Smith_obj <- function(distance_matrix,
     p_dist_mat <- coordinates_to_matrix(positions)
     
     # Process thresholded elements for convergence error
-    distance_matrix_convergence_error <- mapply(
-      process_distance_matrix, 
-      distance_matrix, 
-      p_dist_mat
-    )
+    distance_matrix_convergence_error <- vectorized_process_distance_matrix(distance_matrix, p_dist_mat)
     distance_matrix_convergence_error <- matrix(
       distance_matrix_convergence_error, 
       nrow = nrow(distance_matrix)
