@@ -24,7 +24,6 @@
 #' @importFrom dplyr %>% select filter
 #' @importFrom stats prcomp dist optimize
 #' @importFrom umap umap
-#' @importFrom rgl open3d plot3d axes3d rgl.snapshot rgl.close
 #' @importFrom gridExtra grid.arrange
 #' @importFrom scales comma
 #' @keywords internal
