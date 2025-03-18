@@ -171,10 +171,11 @@ create_and_optimize_RACMACS_map <- function(titer_table,
   
   # Save coordinates if scenario name provided
   if(!missing(scenario_name)) {
-    coords_file <- file.path("coordinates", 
-                              paste0("RACMACS_", scenario_name, ".csv"))
-    save.coords(map, filename = coords_file,
-                optimization_number = 1, antigens = TRUE, sera = TRUE)
+    save.coords(map, 
+               filename = paste0(scenario_name, "_RACMACS_coords.csv"),
+               optimization_number = 1,
+               antigens = TRUE, 
+               sera = TRUE)
   }
   
   return(map)
