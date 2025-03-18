@@ -876,7 +876,12 @@ plot_cluster_mapping <- function(df_coords, ndim,
 #'
 #' For data with more than 3 dimensions, dimension reduction is applied first.
 #'
-#' @return Invisibly returns rgl scene ID for further manipulation
+#' Note: This function requires the rgl package and OpenGL support. If rgl is not 
+#' available, the function will return a 2D plot with a message explaining how to
+#' enable 3D visualization.
+#'
+#' @return Invisibly returns rgl scene ID for further manipulation if rgl is available,
+#'         or a 2D ggplot object as a fallback.
 #'
 #' @examples
 #' \dontrun{
@@ -948,6 +953,18 @@ plot_3d_mapping <- function(df, ndim,
                             layout_config = new_layout_config(),
                             interactive = TRUE,
                             output_dir = NULL) {
+                              # Check if rgl package is available
+  has_rgl <- requireNamespace("rgl", quietly = TRUE)
+  
+  if (!has_rgl) {
+    message("3D visualization requires the 'rgl' package with OpenGL support.")
+    message("Install rgl with: install.packages('rgl')")
+    message("Falling back to 2D visualization.")
+    
+    # Create a 2D plot as fallback
+    return(plot_temporal_mapping(df, ndim, dim_config, aesthetic_config, layout_config, output_dir))
+  }
+
   # Validate input data and dimensions
   if(ndim < 3) {
     stop("3D visualization requires at least 3 dimensions in input data")
@@ -964,7 +981,7 @@ plot_3d_mapping <- function(df, ndim,
   
   # Set up RGL window
   if(interactive) {
-    open3d(windowRect = c(100, 100, 
+    rgl::open3d(windowRect = c(100, 100, 
                           100 + layout_config$width * 100,
                           100 + layout_config$height * 100))
   }
@@ -991,8 +1008,8 @@ plot_3d_mapping <- function(df, ndim,
   
   # Plot points
   # Open a new 3D plotting device with a larger window size
-  open3d(windowRect = c(100, 100, 1200, 1200))
-  plot3d(reduced_df$dim1, reduced_df$dim2, reduced_df$dim3,
+  rgl::open3d(windowRect = c(100, 100, 1200, 1200))
+  rgl::plot3d(reduced_df$dim1, reduced_df$dim2, reduced_df$dim3,
          col = point_colors,
          size = aesthetic_config$point_size * 0.8, # Adjust for 3D
          type = "s",  # spheres
@@ -1000,7 +1017,7 @@ plot_3d_mapping <- function(df, ndim,
   
   # Add axes and labels
   if(layout_config$show_axis) {
-    axes3d(edges = "bbox",
+    rgl::axes3d(edges = "bbox",
            labels = TRUE,
            tick = TRUE,
            box = TRUE)
@@ -1019,13 +1036,13 @@ plot_3d_mapping <- function(df, ndim,
                         ndim, layout_config$save_format)
     full_path <- file.path(output_dir, filename)
     
-    rgl.snapshot(filename = full_path)
-    close3d()
+    rgl::rgl.snapshot(filename = full_path)
+    rgl::rgl.close()
     return(invisible(full_path))
   }
   
   # Return scene ID invisibly
-  invisible(rgl.cur())
+  invisible(rgl::rgl.cur())
 }
 
 
@@ -1243,7 +1260,7 @@ make_interactive <- function(plot, tooltip_vars = NULL) {
 #' Plot Types:
 #' - temporal: Time-based color gradients
 #' - cluster: Cluster-based discrete colors
-#' - 3d: Three-dimensional interactive or static views
+#' - 3d: Three-dimensional interactive or static views (requires rgl package)
 #'
 #' Arrangement Options:
 #' - grid: Automatic square-like arrangement
@@ -1256,6 +1273,9 @@ make_interactive <- function(plot, tooltip_vars = NULL) {
 #' - Axis scales
 #' - Theme elements
 #'
+#' Note: If "3d" is specified but the rgl package is not available, the function
+#' will skip the 3D plot and display a message.
+#' 
 #' @return Combined plot object (grid arrangement of plots)
 #'
 #' @examples
@@ -1406,9 +1426,17 @@ plot_combined <- function(df_coords, ndim,
   }
   
   if("3d" %in% plot_types && ndim >= 3) {
-    plots$three_d <- plot_3d_mapping(df_coords, ndim, dim_config,
+    # Check if rgl is available
+    has_rgl <- requireNamespace("rgl", quietly = TRUE)
+    
+    if (has_rgl) {
+      plots$three_d <- plot_3d_mapping(df_coords, ndim, dim_config,
                                      aesthetic_config, layout_config,
                                      interactive = FALSE)
+    } else {
+      message("Skipping 3D plot as rgl package is not available.")
+      message("Install rgl with: install.packages('rgl')")
+    }
   }
   
   # Arrange plots

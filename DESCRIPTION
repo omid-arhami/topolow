@@ -26,7 +26,6 @@ Imports:
     stats,
     utils,
     plotly (>= 4.10.0),
-    rgl (>= 1.0.0),
     Racmacs (>= 1.1.2),
     parallel (>= 4.1.0),
     coda (>= 0.19-4),
@@ -40,6 +39,7 @@ Imports:
 Suggests:
     covr,
     Rtsne,
+    rgl (>= 1.0.0),
     knitr,
     rmarkdown,
     testthat (>= 3.0.0)
