@@ -65,7 +65,8 @@ opt_setting <- list(
   n_folds = 20,
   max_topolow_iter = 1000,
   topolow_opt_rounds = 1,
-  racmacs_opt_rounds = 300
+  racmacs_opt_rounds = 300,
+  num_cores = 59
 )
 
 # Setup output directory
@@ -378,6 +379,7 @@ for(dataset_name in names(datasets)) {
         titer_table = titer_table,
         dim = dim,  # Set the dimension
         optimization_number = opt_setting$racmacs_opt_rounds,
+        num_cores = opt_setting$num_cores,
         scenario_name = paste0(dataset_name, "_dim", dim, "_fold", i)
       )
       
@@ -592,6 +594,7 @@ for (dataset_name in names(datasets)) {
     titer_table = titer_table,
     dim = racmacs_dim,
     optimization_number = opt_setting$racmacs_opt_rounds,
+    num_cores = opt_setting$num_cores,
     scenario_name = dataset_name
   )
   
@@ -957,6 +960,7 @@ for(dataset_name in names(datasets)) {
       titer_table = titer_table,
       dim = racmacs_dim,
       optimization_number = opt_setting$racmacs_opt_rounds,
+      num_cores = opt_setting$num_cores,
       scenario_name = paste0(dataset_name, "_fold", i)
     )
     

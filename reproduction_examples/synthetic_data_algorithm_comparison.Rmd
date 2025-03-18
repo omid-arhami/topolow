@@ -51,7 +51,8 @@ opt_params <- list(
   topolow_opt_rounds = 1, # Optimization rounds for Topolow
   racmacs_opt_rounds = 20,  # Optimization rounds for RACMACS (You needs to do many optimizations and pick the best result)
   topolow_params = read.csv("optimal_parameters_250points.csv"),  # From parameter fitting
-  use_slurm = FALSE
+  use_slurm = FALSE,
+  num_cores = 59
 )
 
 # Get absolute path for output directory
@@ -182,6 +183,7 @@ find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setti
             titer_table = titer_table,
             dim = test_dim,
             optimization_number = opt_setting$racmacs_opt_rounds,
+            num_cores = opt_params$num_cores,
             scenario_name = scenario_name
           )
           
@@ -809,6 +811,7 @@ for (ndim in sim_data$metadata$dimension) {
         titer_table = titer_table,
         dim = 2,
         optimization_number = opt_params$racmacs_opt_rounds,
+        num_cores = opt_params$num_cores,
         scenario_name = scenario_name
       )
 
@@ -883,6 +886,7 @@ for (ndim in sim_data$metadata$dimension) {
       #   titer_table = titer_table,
       #   dim = best_params$N,
       #   optimization_number = opt_params$racmacs_opt_rounds,
+      #   num_cores = opt_params$num_cores,
       #   scenario_name = scenario_name
       # )
       # 
@@ -1836,6 +1840,7 @@ for(ndim in sim_data$metadata$dimension) {
       titer_table = titer_table,
       dim = 2,
       optimization_number = opt_params$racmacs_opt_rounds,
+      num_cores = opt_params$num_cores,
       scenario_name = base_scenario
     )
 

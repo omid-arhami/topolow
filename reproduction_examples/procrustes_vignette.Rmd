@@ -254,7 +254,8 @@ generate_racmacs_maps <- function(distance_matrix, dataset_name, n_maps = 15) {
   for(i in 1:n_maps) {
     map <- create_and_optimize_RACMACS_map(
       titer_table = titer_table,
-      optimization_number = 300
+      optimization_number = 300,
+      num_cores = 59
     )
     # Save coordinates
     save.coords(map, filename = "Procrustes_RACMACS_coords.csv",

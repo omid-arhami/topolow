@@ -128,6 +128,7 @@ create_cv_folds <- function(truth_matrix, no_noise_truth = NULL,
 #' @param dim Integer number of dimensions for the map (default: 2)
 #' @param optimization_number Integer number of optimization runs (default: 400)
 #' @param scenario_name Character string for output file naming
+#' @param num_cores Integer number of cores to use for optimization (default: 1)
 #' @return RACMACS map object containing optimized coordinates
 #' @examples
 #' \dontrun{
@@ -145,11 +146,13 @@ create_cv_folds <- function(truth_matrix, no_noise_truth = NULL,
 #' @importFrom Racmacs acmap optimizeMap keepBestOptimization
 #' @importFrom parallel detectCores
 #' @export
-create_and_optimize_RACMACS_map <- function(titer_table, dim = 2,
+create_and_optimize_RACMACS_map <- function(titer_table, 
+                                          dim = 2,
                                           optimization_number = 400,
-                                          scenario_name) {
+                                          scenario_name,
+                                          num_cores=1) {
   # Set number of cores for optimization
-  options(RacOptimizer.num_cores = detectCores() - 1)
+  options(RacOptimizer.num_cores = num_cores)
   
   # Create map object
   map <- acmap(titer_table = titer_table)
