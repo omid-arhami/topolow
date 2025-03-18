@@ -32,6 +32,19 @@ install.packages("path/to/topolow_0.1.1.zip", repos = NULL)
 install.packages("path/to/topolow_0.1.1.tar.gz", repos = NULL, type = "source")
 ```
 
+### Optional Dependencies
+
+For 3D visualization capabilities, install the `rgl` package:
+
+```r
+install.packages("rgl")
+```
+
+Note for macOS users: The `rgl` package requires XQuartz to be installed for proper OpenGL support. You can download it from [https://www.xquartz.org/](https://www.xquartz.org/), then install the downloaded package and restart your computer.
+
+Even without rgl, you can use all core functionality of topolow. The package will automatically fall back to 2D visualizations.
+
+
 ## Quick Start
 
 Here's a basic example:
