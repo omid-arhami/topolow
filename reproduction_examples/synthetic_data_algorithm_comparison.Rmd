@@ -52,7 +52,7 @@ opt_params <- list(
   racmacs_opt_rounds = 20,  # Optimization rounds for RACMACS (You needs to do many optimizations and pick the best result)
   topolow_params = read.csv("optimal_parameters_250points.csv"),  # From parameter fitting
   use_slurm = FALSE,
-  num_cores = 59
+  num_cores = 7
 )
 
 # Get absolute path for output directory
@@ -187,9 +187,13 @@ find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setti
             scenario_name = scenario_name
           )
           
-          # Process RACMACS results
+          # Save coordinates
           coords_file <- file.path(coords_dir, 
                                   paste0("RACMACS_", scenario_name, ".csv"))
+          save.coords(map, filename = coords_file,
+                     optimization_number = 1, antigens = TRUE, sera = TRUE)
+          
+          # Process RACMACS results
           positions_racmacs <- read.csv(coords_file)
           positions_racmacs$name <- ifelse(
             positions_racmacs$type == "antigen",
