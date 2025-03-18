@@ -2,7 +2,7 @@
 % Please edit documentation in R/adaptive_sampling.R
 \name{calculate_weighted_marginals}
 \alias{calculate_weighted_marginals}
-\title{Calculate Weighted Marginal Distributions in Parallel}
+\title{Calculate Weighted Marginal Distributions}
 \usage{
 calculate_weighted_marginals(samples)
 }

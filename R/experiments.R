@@ -149,7 +149,7 @@ create_and_optimize_RACMACS_map <- function(titer_table, dim = 2,
                                           optimization_number = 400,
                                           scenario_name) {
   # Set number of cores for optimization
-  options(RacOptimizer.num_cores = detectCores() - 4)
+  options(RacOptimizer.num_cores = detectCores() - 1)
   
   # Create map object
   map <- acmap(titer_table = titer_table)
@@ -168,11 +168,10 @@ create_and_optimize_RACMACS_map <- function(titer_table, dim = 2,
   
   # Save coordinates if scenario name provided
   if(!missing(scenario_name)) {
-    save.coords(map, 
-               filename = paste0(scenario_name, "_RACMACS_coords.csv"),
-               optimization_number = 1,
-               antigens = TRUE, 
-               sera = TRUE)
+    coords_file <- file.path("coordinates/", 
+                              paste0("RACMACS_", scenario_name, ".csv"))
+    save.coords(map, filename = coords_file,
+                optimization_number = 1, antigens = TRUE, sera = TRUE)
   }
   
   return(map)

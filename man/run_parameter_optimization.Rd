@@ -65,6 +65,10 @@ uses current working directory. Directory will be created if it doesn't exist.}
 \item{num_cores}{Integer. Number of CPU cores to use for parallel processing.
 Default: 1.}
 
+\item{time}{Character. Walltime for SLURM jobs in HH:MM:SS format. Default: "8:00:00".}
+
+\item{memory}{Character. Memory allocation for SLURM jobs. Default: "10G".}
+
 \item{use_slurm}{Logical. Whether to submit jobs via SLURM. Default: FALSE.}
 
 \item{cider}{Logical. Whether to use cider queue in SLURM. Default: FALSE.}

@@ -1,6 +1,6 @@
 Package: topolow
 Title: Antigenic Mapping Using TopoLow Algorithm
-Version: 0.1.2
+Version: 0.1.3
 Authors@R: 
     person("Omid", "Arhami", , "omid.arhami@uga.edu", role = c("aut", "cre"))
 Description: An implementation of the TopoLow algorithm for antigenic cartography 
@@ -31,16 +31,15 @@ Imports:
     parallel (>= 4.1.0),
     coda (>= 0.19-4),
     MASS,
-    grDevices,
     vegan,
     igraph,
     lhs,
     umap,
     gridExtra,
     scales,
-    colorspace
 Suggests:
     covr,
+    Rtsne,
     knitr,
     rmarkdown,
     testthat (>= 3.0.0)

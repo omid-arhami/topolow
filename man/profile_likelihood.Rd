@@ -7,11 +7,11 @@
 profile_likelihood(
   param,
   samples,
-  grid_size = 48,
-  bandwidth_factor = 0.03,
+  grid_size = 40,
+  bandwidth_factor = 0.05,
   start_factor = 0.5,
   end_factor = 1.5,
-  min_samples = 10
+  min_samples = 5
 )
 }
 \arguments{
@@ -38,7 +38,9 @@ Object of class "profile_likelihood" containing:
 \description{
 Calculates profile likelihood for a parameter by evaluating conditional maximum
 likelihood across a grid of parameter values. Uses local sample windowing to
-estimate conditional likelihoods.
+estimate conditional likelihoods. This implementation is not a classical profile likelihood
+calculation, but rather an "empirical profile likelihood" which estimates the profile
+likelihood at each point based on the many observations previously sampled in Monte Carlo simulations.
 }
 \details{
 For each value in the parameter grid, the function:

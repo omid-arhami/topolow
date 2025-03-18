@@ -49,6 +49,7 @@ library(topolow)
 library(ggplot2)
 library(dplyr)
 library(data.table)
+library(cowplot)
 ```
 
 ## Loading and Preprocessing Data
@@ -599,9 +600,9 @@ Let's run the previous parts twice and check if our chains have converged:
 ```{r}
 # List chain files
 chain_files <- c(
-  "model_parameters/HIV_BC_AMC1_model_parameters.csv",
-  "model_parameters/HIV_BC_AMC2_model_parameters.csv",
-  "model_parameters/HIV_BC_AMC3_model_parameters.csv",
+  #"model_parameters/HIV_BC_AMC1_model_parameters.csv",
+  #"model_parameters/HIV_BC_AMC2_model_parameters.csv",
+  #"model_parameters/HIV_BC_AMC3_model_parameters.csv",
   "model_parameters/HIV_BC_MC5_model_parameters.csv",
   "model_parameters/HIV_BC_MC6_model_parameters.csv",
   "model_parameters/HIV_BC_MC7_model_parameters.csv",
@@ -609,11 +610,12 @@ chain_files <- c(
   "model_parameters/HIV_BC_MC9_model_parameters.csv",
   "model_parameters/HIV_BC_MC80_model_parameters.csv"
 )
+mutual_size = 500
 
 # Calculate diagnostics
 diagnostics <- calculate_diagnostics(
   chain_files = chain_files,
-  mutual_size = 150  # Number of samples to use from end of chains
+  mutual_size = mutual_size  # Number of samples to use from end of chains
 )
 
 # Print results
@@ -622,7 +624,7 @@ print(diagnostics)
 # Create and display diagnostic plots
 diag_plots <- create_diagnostic_plots(
   chain_files = chain_files,
-  mutual_size = 150,
+  mutual_size = mutual_size,
   output_file = "output_figures/HIV_diagnostic_plots.png"
 )
 print(diag_plots)
@@ -648,7 +650,7 @@ samples <- samples[samples$log_N >= log(2),]
 samples <- as.data.frame(lapply(samples, clean_data, k = 4))
 samples <- na.omit(samples)
 
-# Calculate maximum likelihood (average over top n to smooth out any outlier situation)
+# Calculate maximum likelihood (Since we have too many samples close to the optimal point we can average over top n to smooth out any outlier situation)
 samples$LL <- -samples$NLL
 top_ll <- sort(samples$LL, decreasing = TRUE)[1:3]
 max_ll <- max(top_ll) + log(sum(exp(top_ll - max(top_ll)))) - log(3)
@@ -661,16 +663,33 @@ for(param in params) {
   pl_result <- profile_likelihood(
     param = param,
     samples = samples,
-    grid_size = 30,
+    grid_size = 50,
     bandwidth_factor = 0.07, #0.03
-    start_factor = 0.5, 
-    end_factor = 1.7
+    start_factor = 0.2, 
+    end_factor = 1.5
   )
   
   # Plot results
   pl_plot <- plot(pl_result, max_ll)
   #ggsave(paste0("profile_likelihood_HIV_", param, ".pdf"), pl_plot)
   print(pl_plot)
+}
+```
+
+
+```{r}
+# Analyze parameter sensitivity
+for (param in params) {
+  sensitivity <- parameter_sensitivity_analysis(
+    param = param,
+    samples = samples,
+    bins = 30
+  )
+  
+  # Plot results
+  sens_plot <- plot(sensitivity, reference_error = 2.231)
+  #ggsave(paste0("parameter_sensitivity_", param, ".pdf"), sens_plot)
+  print(sens_plot)
 }
 ```
 
@@ -711,6 +730,7 @@ result <- topolow_full(
   c_repulsion = optimal_params$c_repulsion,
   relative_epsilon = 1e-10,
   convergence_counter = 5,
+  write_positions_to_csv = FALSE,
   verbose = TRUE
 )
 
