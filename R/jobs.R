@@ -18,7 +18,7 @@
 #' @description
 #' Creates a SLURM batch script with specified parameters and resource requests.
 #'
-#' @param r_module Character. R module to load (default: "R/4.3.2-foss-2022b")
+#' @param r_module Character. R module to load (default: "R/4.4.1-foss-2022b")
 #' @param job_name Name of the job
 #' @param script_path Path to R script to execute
 #' @param args Vector of command line arguments
@@ -34,7 +34,7 @@ create_slurm_script <- function(job_name, script_path, args, num_cores,
                                 output_file, error_file,
                                 time = "8:00:00", memory = "14G",
                                 partition = "rohani_p", 
-                                r_module = "R/4.3.2-foss-2022b") {
+                                r_module = "R/4.4.1-foss-2022b") {
   if (!has_slurm()) {
     warning("SLURM appears to not be available on this system")
   }
