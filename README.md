@@ -71,7 +71,7 @@ When using topolow on HPC systems with SLURM, additional setup might be needed:
 
 1. Ensure the correct R version is loaded (4.3.2 or newer):
 ```bash
-module load R/4.3.2
+module load R/4.4.1
 ```
 
 2. Install required dependencies:
@@ -83,7 +83,7 @@ install.packages(c("reshape2", "data.table", "dplyr", "ggplot2"))
 ```r
 run_parameter_optimization(
   # ... other parameters ...
-  r_module = "R/4.3.2", # Set this to match your cluster's R module
+  r_module = "R/4.4.1", # Set this to match your cluster's R module
   use_slurm = TRUE
 )
 ```
