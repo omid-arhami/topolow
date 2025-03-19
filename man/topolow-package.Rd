@@ -140,7 +140,7 @@ The following subdirectories may be created:
 If you use this package, please cite:
 Arhami O, Rohani P (2025).
 Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assay results.
-\emph{https://doi.org/10.1101/2025.02.09.637307}.
+\emph{bioRxiv}. \doi{10.1101/2025.02.09.637307}.
 }
 
 \seealso{
@@ -229,7 +229,7 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Omid Arhami \email{omid.arhami@uga.edu}
+\strong{Maintainer}: Omid Arhami \email{omid.arhami@uga.edu} (\href{https://orcid.org/0009-0005-2681-6598}{ORCID})
 
 }
 \keyword{internal}

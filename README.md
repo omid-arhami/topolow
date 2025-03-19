@@ -26,10 +26,10 @@ Alternatively, you can install using the single source file:
 
 ```r
 # For Windows binary
-install.packages("path/to/topolow_0.1.1.zip", repos = NULL)
+install.packages("path/to/topolow_0.1.3.zip", repos = NULL)
 
 # For source package
-install.packages("path/to/topolow_0.1.1.tar.gz", repos = NULL, type = "source")
+install.packages("path/to/topolow_0.1.3.tar.gz", repos = NULL, type = "source")
 ```
 
 ### Optional Dependencies
@@ -63,6 +63,29 @@ result <- topolow_full(dist_mat, ndim=2, max_iter=100,
 # Investigate the results
 print(dist_mat)
 print(result$est_distances)
+```
+
+## Using on HPC or SLURM Clusters
+
+When using topolow on HPC systems with SLURM, additional setup might be needed:
+
+1. Ensure the correct R version is loaded (4.3.2 or newer):
+```bash
+module load R/4.3.2
+```
+
+2. Install required dependencies:
+```r
+install.packages(c("reshape2", "data.table", "dplyr", "ggplot2"))
+```
+
+3. When submitting SLURM jobs, set the correct R module in the script:
+```r
+run_parameter_optimization(
+  # ... other parameters ...
+  r_module = "R/4.3.2", # Set this to match your cluster's R module
+  use_slurm = TRUE
+)
 ```
 
 ## Documentation

@@ -1,5 +1,5 @@
-# Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
-# License: free of charge access granted to any academic researcher to use this software for non-commercial, academic research purposes **only**.  Nobody may modify, distribute, sublicense, or publicly share the Software or any derivative works, until the paper is published by the original authors.  The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.  In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the Software or the use or other dealings in the Software.
+# Copyright (c) 2024 Omid Arhami o.arhami@gmail.com
+# Licensed under MIT License
 
 # R/topolow-package.R
 
@@ -52,10 +52,25 @@
 #' If you use this package, please cite:
 #' Arhami O, Rohani P (2025).
 #' Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assay results.
-#' \emph{https://doi.org/10.1101/2025.02.09.637307}.
+#' \emph{bioRxiv}. \doi{10.1101/2025.02.09.637307}.
 #'
 #' @keywords internal
 "_PACKAGE"
+
+.onLoad <- function(libname, pkgname) {
+  # Check for required packages
+  required_pkgs <- c("reshape2", "data.table", "dplyr")
+  missing_pkgs <- required_pkgs[!sapply(required_pkgs, requireNamespace, quietly = TRUE)]
+  
+  if (length(missing_pkgs) > 0) {
+    warning(
+      "The following required packages are missing: ", 
+      paste(missing_pkgs, collapse = ", "), 
+      "\nPlease install them with: install.packages(c('", 
+      paste(missing_pkgs, collapse = "', '"), "'))"
+    )
+  }
+}
 
 #' @importFrom data.table data.table setDT fread
 #' @importFrom dplyr %>% select filter mutate group_by summarise ungroup

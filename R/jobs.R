@@ -1,5 +1,5 @@
-# Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
-# License: free of charge access granted to any academic researcher to use this software for non-commercial, academic research purposes **only**.  Nobody may modify, distribute, sublicense, or publicly share the Software or any derivative works, until the paper is published by the original authors.  The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.  In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the Software or the use or other dealings in the Software.
+# Copyright (c) 2024 Omid Arhami o.arhami@gmail.com
+# Licensed under MIT License
 
 # R/jobs.R
 
@@ -18,7 +18,7 @@
 #' @description
 #' Creates a SLURM batch script with specified parameters and resource requests.
 #'
-#' @param r_module Character. R module to load (default: "R/4.4.1-foss-2022b")
+#' @param r_module Character. R module to load (default: "R/4.3.2-foss-2022b")
 #' @param job_name Name of the job
 #' @param script_path Path to R script to execute
 #' @param args Vector of command line arguments
@@ -32,9 +32,9 @@
 #' @export
 create_slurm_script <- function(job_name, script_path, args, num_cores,
                                 output_file, error_file,
-                                time = "8:00:00", memory = "14G",
+                                time = "8:00:00", memory = "4G",
                                 partition = "rohani_p", 
-                                r_module = "R/4.4.1-foss-2022b") {
+                                r_module = "R/4.3.2-foss-2022b") {
   if (!has_slurm()) {
     warning("SLURM appears to not be available on this system")
   }
@@ -49,6 +49,15 @@ create_slurm_script <- function(job_name, script_path, args, num_cores,
   } else {
     ""  # No module loading if NULL
   }
+  
+  # Add package loading commands for required dependencies
+  package_cmds <- paste(
+    "# Load required packages",
+    "Rscript -e \"if(!require(reshape2)) install.packages('reshape2', repos='https://cloud.r-project.org')\"",
+    "Rscript -e \"if(!require(data.table)) install.packages('data.table', repos='https://cloud.r-project.org')\"",
+    "Rscript -e \"if(!require(dplyr)) install.packages('dplyr', repos='https://cloud.r-project.org')\"",
+    sep = "\n"
+  )
 
   slurm_script <- paste0(
     "#!/bin/bash\n",
@@ -61,6 +70,7 @@ create_slurm_script <- function(job_name, script_path, args, num_cores,
     "#SBATCH --time=", time, "\n",
     "#SBATCH --mem=", memory, "\n\n",
      module_cmd,  # Use configured module
+     package_cmds, "\n",
     "Rscript ", script_path, " ", paste(args, collapse = " "), "\n"
   )
 
@@ -116,7 +126,7 @@ has_slurm <- function() {
 #' @return Character job status or NA if not found
 #' @export
 check_job_status <- function(job_id) {
-  if (!has_slurm()$available) {
+  if (!has_slurm()) {
     warning("SLURM not available")
     return(NA)
   }
