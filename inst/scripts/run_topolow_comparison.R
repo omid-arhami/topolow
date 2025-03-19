@@ -34,7 +34,7 @@ matrix_list <- readRDS(matrix_list_file_name)
 truth_matrix <- matrix_list[[i]][[1]]
 input_matrix <- matrix_list[[i]][[2]]
 
-result <- topolow_full(distance_matrix=input_matrix, 
+result <- create_topolow_map(distance_matrix=input_matrix, 
                        ndim=N, 
                        max_iter=max_iter, 
                        k0=k0 , 

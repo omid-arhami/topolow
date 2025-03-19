@@ -109,7 +109,7 @@ run_topolow_slurm <- function(truth_matrix, input_matrix, best_params,
 #' @keywords internal
 run_topolow_local <- function(truth_matrix, input_matrix, best_params, opt_params) {
   # Run Topolow optimization
-  result <- topolow_full(
+  result <- create_topolow_map(
     distance_matrix = input_matrix,
     ndim = best_params$N,
     max_iter = opt_params$max_topolow_iter,

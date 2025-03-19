@@ -57,7 +57,7 @@
 #' @param c_repulsion_min,c_repulsion_max Numeric. Range for repulsion constant parameter.
 #' @param cooling_rate_min,cooling_rate_max Numeric. Range for spring decay parameter.
 #' @param num_samples Integer. Number of LHS parameter samples to evaluate.
-#' @param folds Integer. Number of cross-validation folds. Default: 10.
+#' @param folds Integer. Number of cross-validation folds. Default: 20.
 #' @param verbose Logical. Whether to print progress messages. Default: FALSE.
 #' @param write_files Logical. Whether to save results to CSV. Default: TRUE.
 #' @param output_dir Character. Directory where output and temporary files will be saved. If NULL,
@@ -114,7 +114,7 @@
 #' }
 #'
 #' @seealso
-#' \code{\link{topolow_full}} for the core optimization algorithm
+#' \code{\link{create_topolow_map}} for the core optimization algorithm
 #'
 #' @importFrom lhs maximinLHS
 #' @importFrom parallel mclapply detectCores
@@ -378,7 +378,7 @@ run_parameter_optimization <- function(distance_matrix,
       input_matrix <- matrix_list[[fold_idx]][[2]]
       
       tryCatch({
-        res_train <- topolow_full(
+        res_train <- create_topolow_map(
           distance_matrix = input_matrix,
           ndim = N,
           max_iter = max_iter,
@@ -1366,7 +1366,7 @@ likelihood_function <- function(distance_matrix, max_iter,
     truth_matrix <- matrix_list[[i]][[1]]
     input_matrix <- matrix_list[[i]][[2]]
     
-    res_train <- topolow_full(distance_matrix = input_matrix, 
+    res_train <- create_topolow_map(distance_matrix = input_matrix, 
                              ndim = N, 
                              max_iter = max_iter, 
                              k0 = k0, 

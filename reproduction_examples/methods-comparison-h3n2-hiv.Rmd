@@ -559,7 +559,7 @@ for (dataset_name in names(datasets)) {
   
   ######################## Run Topolow
   topo_result <- tryCatch({
-    topolow_full(
+    create_topolow_map(
       distance_matrix = distance_matrix,
       ndim = topolow_params$N,
       max_iter = opt_setting$max_topolow_iter,
@@ -892,7 +892,7 @@ for(dataset_name in names(datasets)) {
     
     ################# Run Topolow
     
-    res_train <- topolow_full(
+    res_train <- create_topolow_map(
       distance_matrix = input_matrix,
       ndim = topolow_params$N,
       max_iter = opt_setting$max_topolow_iter,

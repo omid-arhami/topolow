@@ -337,7 +337,7 @@ Finally, let's validate our optimal parameters:
 
 ```{r}
 # Run topolow with optimal parameters
-result <- topolow_full(
+result <- create_topolow_map(
   distance_matrix = h3n2_distance_matrix,
   ndim = optimal_params$N,
   max_iter = 3000,

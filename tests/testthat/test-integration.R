@@ -27,7 +27,7 @@ test_that("full workflow executes correctly", {
   )
   
   # Run optimization
-  topo_result <- topolow_full(
+  topo_result <- create_topolow_map(
     distance_matrix = results$matrix,
     ndim = 2,
     max_iter = 100,

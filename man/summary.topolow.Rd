@@ -7,7 +7,7 @@
 \method{summary}{topolow}(object, ...)
 }
 \arguments{
-\item{object}{A topolow object returned by topolow_full() or topolow_Smith_obj()}
+\item{object}{A topolow object returned by create_topolow_map()}
 
 \item{...}{Additional arguments passed to summary (not used)}
 }
@@ -17,7 +17,7 @@ convergence and performance metrics.
 }
 \examples{
 dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
-result <- topolow_full(dist_mat, ndim=2, max_iter=100, k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
+result <- create_topolow_map(dist_mat, ndim=2, max_iter=100, k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
 summary(result)
 
 }

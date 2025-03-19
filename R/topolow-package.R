@@ -26,8 +26,7 @@
 #'
 #' @section Main Functions:
 #' \itemize{
-#'   \item \code{\link{topolow_full}}: Core optimization algorithm
-#'   \item \code{\link{topolow_Smith_obj}}: Smith variant for HI assay data
+#'   \item \code{\link{create_topolow_map}}: Core optimization algorithm
 #'   \item \code{\link{process_antigenic_data}}: Process raw antigenic data
 #'   \item \code{\link{run_parameter_optimization}}: Optimize algorithm parameters
 #'   \item \code{\link{plot_temporal_mapping}}: Create temporal visualizations

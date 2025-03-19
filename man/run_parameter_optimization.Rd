@@ -53,7 +53,7 @@ declaring convergence.}
 
 \item{num_samples}{Integer. Number of LHS parameter samples to evaluate.}
 
-\item{folds}{Integer. Number of cross-validation folds. Default: 10.}
+\item{folds}{Integer. Number of cross-validation folds. Default: 20.}
 
 \item{verbose}{Logical. Whether to print progress messages. Default: FALSE.}
 
@@ -143,5 +143,5 @@ run_parameter_optimization(
 
 }
 \seealso{
-\code{\link{topolow_full}} for the core optimization algorithm
+\code{\link{create_topolow_map}} for the core optimization algorithm
 }
