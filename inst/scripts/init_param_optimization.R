@@ -59,7 +59,7 @@ truth_matrix <- matrix_list[[data_idx]][[1]]
 input_matrix <- matrix_list[[data_idx]][[2]]
 
 # Run optimization
-res_train <- topolow_full(
+res_train <- create_topolow_map(
   distance_matrix = input_matrix,
   ndim = N,
   max_iter = max_iter,

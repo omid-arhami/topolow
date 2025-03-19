@@ -188,22 +188,19 @@ vectorized_process_distance_matrix <- function(distance_matrix, p_dist_mat) {
 #'   \item convergence: List with convergence status and final error
 #' }
 #'
-#' @seealso 
-#' \code{\link{topolow_Smith_obj}} for a variant based on the squishing function in Smith et al 2004 for HI assay data
-#'
 #' @examples
 #' # Create a simple distance matrix
 #' dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
 #' 
 #' # Run TopoLow in 2D
-#' result <- topolow_full(dist_mat, ndim=2, max_iter=1000, 
+#' result <- create_topolow_map(dist_mat, ndim=2, max_iter=1000, 
 #'                       k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
 #'                       
 #' # Plot results
 #' plot(result$positions)
 #'
 #' @export
-topolow_full <- function(distance_matrix, 
+create_topolow_map <- function(distance_matrix, 
                          ndim, 
                          max_iter, 
                          k0, 
@@ -477,12 +474,12 @@ topolow_full <- function(distance_matrix,
 #' Provides a concise display of key optimization results including dimensions,
 #' iterations, error metrics and convergence status.
 #' 
-#' @param x A topolow object returned by topolow_full() or topolow_Smith_obj()
+#' @param x A topolow object returned by create_topolow_map()
 #' @param ... Additional arguments passed to print (not used)
 #' 
 #' @examples
 #' dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
-#' result <- topolow_full(dist_mat, ndim=2, max_iter=100, k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
+#' result <- create_topolow_map(dist_mat, ndim=2, max_iter=100, k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
 #' print(result)
 #' 
 #' @export
@@ -501,12 +498,12 @@ print.topolow <- function(x, ...) {
 #' Provides a detailed summary of the optimization results including parameters,
 #' convergence and performance metrics.
 #' 
-#' @param object A topolow object returned by topolow_full() or topolow_Smith_obj()
+#' @param object A topolow object returned by create_topolow_map()
 #' @param ... Additional arguments passed to summary (not used)
 #' 
 #' @examples
 #' dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
-#' result <- topolow_full(dist_mat, ndim=2, max_iter=100, k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
+#' result <- create_topolow_map(dist_mat, ndim=2, max_iter=100, k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
 #' summary(result)
 #' 
 #' @export
@@ -534,273 +531,3 @@ gmultiple <- function(x) {
   1/(1 + exp(-10*x))
 }
 
-
-#' Smith variant of TopoLow algorithm
-#' 
-#' A variant of the TopoLow algorithm specifically designed for HI assay data, using
-#' modified force calculations with sigmoid thresholding as described in Smith et al.
-#' This version handles threshold measurements differently from the standard algorithm.
-#'
-#' @details
-#' The key differences from topolow_full are:
-#' * Modified force calculation for threshold measurements using sigmoid function
-#' * Offset parameter for threshold calculations
-#' * Specialized handling of HI assay-style measurements
-#' 
-#' Like Topolow algorithm, this variant is particularly suited for data where:
-#' * Measurements represent binding affinities
-#' * Many measurements are thresholded (< or >)
-#' * True distances follow certain biological constraints
-#'
-#' Valid parameter ranges and constraints:
-#' * ndim: Positive integer, typically 2-20. Higher dimensions increase computational cost
-#' * k0: Initial spring constant, positive numeric > 0. Typical range: 0.1-30
-#'      Controls initial force strength
-#' * cooling_rate: Spring and repulsion decay rate, numeric between 0 and 1. Typical range: 0.0001-0.1
-#'          Controls how quickly spring forces weaken
-#' * c_repulsion: Repulsion constant, positive numeric > 0. Typical range: 0.00001-0.2
-#'      Controls repulsive force strength
-#' * relative_epsilon: Positive numeric, typically 1e-6 to 1e-2
-#'                    Smaller values require more iterations but give higher precision
-#' * convergence_counter: Positive integer, typically 5-20
-#'                     Higher values ensure more stable convergence
-#' * ofs: Numeric offset parameter > 0. Typical range: 0.5-2
-#'      Controls threshold sensitivity
-#'
-#' @inheritParams topolow_full
-#' @param ofs Numeric. Offset parameter for threshold calculations. Default is 1.
-#'
-#' @return A list of class "topolow" containing the same elements as topolow_full() plus:
-#' \itemize{
-#'   \item variant: Character string "smith" indicating the algorithm variant
-#'   \item parameters$ofs: The offset parameter used
-#' }
-#'
-#' @references 
-#' Smith, D. J., et al. (2004) "Mapping the Antigenic and Genetic Evolution of 
-#' Influenza Virus" Science, 305(5682), 371-376.
-#'
-#' @seealso 
-#' \code{\link{topolow_full}} for the standard algorithm version
-#'
-#' @examples
-#' # Create a simple distance matrix with thresholds
-#' dist_mat <- matrix(c(0, ">2", 3, ">2", 0, 4, 3, 4, 0), nrow=3)
-#' 
-#' # Run Smith variant
-#' result <- topolow_Smith_obj(dist_mat, ndim=2, max_iter=1000, 
-#'                            k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
-#'                            
-#' @export
-topolow_Smith_obj <- function(distance_matrix, 
-                              ndim, 
-                              max_iter, 
-                              k0, 
-                              cooling_rate, 
-                              c_repulsion, 
-                              relative_epsilon = 1e-4,
-                              convergence_counter = 10,
-                              initial_positions = NULL,
-                              write_positions_to_csv = TRUE,
-                              verbose = TRUE,
-                              ofs = 1) {
-  
-  # Input validation
-  if (!is.matrix(distance_matrix)) {
-    stop("distance_matrix must be a matrix")
-  }
-  if (nrow(distance_matrix) != ncol(distance_matrix)) {
-    stop("distance_matrix must be square")
-  }
-  if (!is.numeric(ndim) || ndim < 1 || ndim != round(ndim)) {
-    stop("ndim must be a positive integer")  
-  }
-  if (ndim > 20) {
-    warning("High dimensionality (ndim > 20) may lead to increased computational cost")
-  }
-  if (!is.numeric(max_iter) || max_iter < 1 || max_iter != round(max_iter)) {
-    stop("max_iter must be a positive integer")
-  }
-  if (!is.numeric(ofs) || ofs <= 0) {
-    stop("ofs must be a positive number")
-  }
-  if (ofs < 0.5 || ofs > 2) {
-    warning("ofs value outside typical range [0.5, 2] may affect threshold handling")
-  }
-  
-  # Initialize variables
-  n <- nrow(distance_matrix)
-  node_degrees <- rowSums(!is.na(distance_matrix))
-  node_degrees_1 <- node_degrees + 1
-  distances <- ifelse(is.na(distance_matrix), Inf, distance_matrix)
-  
-  # Initialize positions
-  positions <- if(is.null(initial_positions)) {
-    distance_matrix_numeric <- suppressWarnings(as.numeric(as.character(distance_matrix)))
-    distance_matrix_numeric[is.na(distance_matrix_numeric)] <- NA
-    init_step <- max(distance_matrix_numeric, na.rm=TRUE) / n
-    pos <- matrix(0, n, ndim)
-    for (i in 2:n) {
-      pos[i, ] <- pos[i-1, ] + stats::runif(ndim, 0, 2*init_step)
-    }
-    pos
-  } else {
-    initial_positions
-  }
-  
-  rownames(positions) <- rownames(distance_matrix)
-  
-  # Initialize convergence tracking
-  convergence_error0 <- 1e12
-  prev_convergence_error <- convergence_error0
-  k <- k0
-  
-  # Main optimization loop
-  for(iter in 1:max_iter) {
-    # Pre-compute invariant terms
-    k_2 <- k / 2
-    
-    # Calculate forces between all pairs of points
-    for(i in 1:(n-1)) {
-      for(j in (i+1):n) {
-        ideal_distance <- distances[i, j]
-        delta <- positions[j,] - positions[i,]
-        distance <- sqrt(sum(delta^2))
-        distance_01 <- distance + 0.01
-        
-        # Spring forces:
-        if(ideal_distance != Inf) {
-          if (is.character(ideal_distance) && startsWith(ideal_distance, ">")) {
-            threshold_value <- as.numeric(sub(">", "", ideal_distance))
-            # Key difference: Modified force calculation for thresholds
-            adjustment_factor <- 2*k*(threshold_value-distance+ofs)*delta/distance_01
-            adjustment_factor <- adjustment_factor * gmultiple(threshold_value-distance+ofs)
-          } else {
-            ideal_distance <- as.numeric(ideal_distance)
-            adjustment_factor <- 2*k*(ideal_distance-distance)*delta/distance_01
-          }
-          positions[i,] <- positions[i,] - adjustment_factor/(4*node_degrees_1[i]+k)
-          positions[j,] <- positions[j,] + adjustment_factor/(4*node_degrees_1[j]+k)
-        } else {
-          # Repulsive force for missing measurements
-          force <- c_repulsion/(2*distance_01^2)*(delta/distance_01)
-          positions[i,] <- positions[i,] - force/node_degrees_1[i]
-          positions[j,] <- positions[j,] + force/node_degrees_1[j]
-        }
-      }
-    }
-    
-    # Calculate current distances and convergence error
-    p_dist_mat <- coordinates_to_matrix(positions)
-    
-    # Process thresholded elements for convergence error
-    distance_matrix_convergence_error <- vectorized_process_distance_matrix(distance_matrix, p_dist_mat)
-    distance_matrix_convergence_error <- matrix(
-      distance_matrix_convergence_error, 
-      nrow = nrow(distance_matrix)
-    )
-    
-    # Calculate convergence error
-    convergence_error_df <- data.table::data.table(
-      distance_matrix_convergence_error = suppressWarnings(
-        as.vector(as.numeric(distance_matrix_convergence_error))
-      ),
-      p_dist_mat = as.vector(p_dist_mat)
-    )
-    convergence_error_df <- na.omit(convergence_error_df)
-    convergence_error <- mean(
-      abs(convergence_error_df$distance_matrix_convergence_error - 
-            convergence_error_df$p_dist_mat), 
-      na.rm = TRUE
-    )
-    
-    # Calculate evaluation metrics
-    evaldf <- data.table::data.table(
-      distance_matrix = suppressWarnings(
-        as.vector(as.numeric(distance_matrix))
-      ),
-      p_dist_mat = as.vector(p_dist_mat)
-    )
-    evaldf <- na.omit(evaldf)
-    mae <- mean(abs(evaldf$distance_matrix - evaldf$p_dist_mat), na.rm = TRUE)
-    
-    if (verbose) {
-      cat(sprintf(
-        "Iteration=%d, MAE=%.4f, convergence_error=%.4f\n", 
-        iter, mae, convergence_error
-      ))
-    }
-    
-    # Check convergence with the same criteria as topolow_full
-    if (iter > 1) {
-      if (is.na(prev_convergence_error) || 
-          is.na(convergence_error) || 
-          convergence_error > convergence_error0 || 
-          is.na((prev_convergence_error - convergence_error)/prev_convergence_error)) {
-        
-        if (verbose) {
-          cat("! Skipping convergence check for this iteration.\n")
-          cat(sprintf(
-            "ndim=%d, k0=%.4f, cooling_rate=%.4f, c_repulsion=%.4f, MAE=%.4f, convergence_error=%.4f\n",
-            ndim, k0, cooling_rate, c_repulsion, mae, convergence_error
-          ))
-        }
-      } else {
-        if ((prev_convergence_error - convergence_error)/prev_convergence_error < 
-            relative_epsilon) {
-          convergence_counter <- convergence_counter - 1
-          if(convergence_counter <= 0) {
-            if(verbose) cat("Convergence achieved\n")
-            break
-          }
-        }
-        prev_convergence_error <- convergence_error
-      }
-    }
-    
-    # Update spring constant
-    k <- k * (1 - cooling_rate)
-  }
-  
-  # Save positions if requested
-  if(write_positions_to_csv) {
-    csv_filename <- sprintf(
-      "Positions_dim_%d_k0_%.4f_cooling_rate_%.4f_c_repulsion_%.4f.csv",
-      ndim, k0, cooling_rate, c_repulsion
-    )
-    utils::write.csv(positions, file = csv_filename, row.names = TRUE)
-  }
-  
-  # Calculate final correlation
-  pearson_corr <- stats::cor(
-    evaldf$p_dist_mat, 
-    evaldf$distance_matrix, 
-    method = "pearson"
-  )
-  
-  # Create result object
-  result <- structure(
-    list(
-      positions = positions,
-      est_distances = p_dist_mat,
-      mae = mae,
-      r = pearson_corr,
-      iter = iter,
-      parameters = list(
-        ndim = ndim,
-        k0 = k0,
-        cooling_rate = cooling_rate,
-        c_repulsion = c_repulsion,
-        ofs = ofs
-      ),
-      convergence = list(
-        achieved = convergence_counter <= 0,
-        error = convergence_error
-      ),
-      variant = "smith"
-    ),
-    class = "topolow"
-  )
-  
-  return(result)
-}

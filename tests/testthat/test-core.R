@@ -21,17 +21,17 @@ create_test_matrix <- function(size=3, with_threshold=FALSE) {
   }
 }
 
-test_that("topolow_full handles input validation correctly", {
+test_that("create_topolow_map handles input validation correctly", {
   # Basic matrix validation
   expect_error(
-    topolow_full(distance_matrix = "not a matrix", ndim = 2, max_iter = 10,
+    create_topolow_map(distance_matrix = "not a matrix", ndim = 2, max_iter = 10,
                  k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01),
     "distance_matrix must be a matrix"
   )
   
   # Non-square matrix
   expect_error(
-    topolow_full(distance_matrix = matrix(1:6, nrow=2), ndim = 2, max_iter = 10,
+    create_topolow_map(distance_matrix = matrix(1:6, nrow=2), ndim = 2, max_iter = 10,
                  k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01),
     "distance_matrix must be square"
   )
@@ -54,18 +54,18 @@ test_that("topolow_full handles input validation correctly", {
       k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01
     )
     args[[names(param)[1]]] <- param[[1]]
-    expect_error(do.call(topolow_full, args), param$msg)
+    expect_error(do.call(create_topolow_map, args), param$msg)
   }
   
   # Test high k0 warning
   expect_warning(
-    topolow_full(distance_matrix = test_mat, ndim = 2, max_iter = 10,
+    create_topolow_map(distance_matrix = test_mat, ndim = 2, max_iter = 10,
                  k0 = 35, cooling_rate = 0.01, c_repulsion = 0.01),
     "High k0 value"
   )
 })
 
-test_that("topolow_full handles initial positions correctly", {
+test_that("create_topolow_map handles initial positions correctly", {
   test_mat <- create_test_matrix()
   n <- nrow(test_mat)
   ndim <- 2
@@ -73,7 +73,7 @@ test_that("topolow_full handles initial positions correctly", {
   # Test valid initial positions
   init_pos <- matrix(runif(n*ndim), nrow=n, ncol=ndim)
   rownames(init_pos) <- rownames(test_mat)
-  result <- topolow_full(test_mat, ndim=ndim, max_iter=10,
+  result <- create_topolow_map(test_mat, ndim=ndim, max_iter=10,
                         k0=1.0, cooling_rate=0.01, c_repulsion=0.01,
                         initial_positions=init_pos)
   expect_equal(dim(result$positions), c(n, ndim))
@@ -81,18 +81,18 @@ test_that("topolow_full handles initial positions correctly", {
   # Test invalid dimensions
   wrong_pos <- matrix(runif((n+1)*ndim), nrow=n+1, ncol=ndim)
   expect_error(
-    topolow_full(test_mat, ndim=ndim, max_iter=10,
+    create_topolow_map(test_mat, ndim=ndim, max_iter=10,
                  k0=1.0, cooling_rate=0.01, c_repulsion=0.01,
                  initial_positions=wrong_pos),
     "initial_positions must have same number of rows"
   )
 })
 
-test_that("topolow_full convergence behavior works correctly", {
+test_that("create_topolow_map convergence behavior works correctly", {
   test_mat <- create_test_matrix()
   
   # Test convergence tracking
-  result <- topolow_full(test_mat, ndim=2, max_iter=10,
+  result <- create_topolow_map(test_mat, ndim=2, max_iter=10,
                         k0=1.0, cooling_rate=0.01, c_repulsion=0.01,
                         relative_epsilon=1e-4, convergence_counter=5)
   
@@ -101,12 +101,12 @@ test_that("topolow_full convergence behavior works correctly", {
   expect_true(is.numeric(result$convergence$error))
 })
 
-test_that("topolow_full force calculations preserve distance relationships", {
+test_that("create_topolow_map force calculations preserve distance relationships", {
   # Create triangle with known properties
   test_mat <- matrix(c(0,1,2, 1,0,1, 2,1,0), nrow=3)
   colnames(test_mat) <- rownames(test_mat) <- c("A","B","C")
   
-  result <- topolow_full(test_mat, ndim=2, max_iter=10,
+  result <- create_topolow_map(test_mat, ndim=2, max_iter=10,
                         k0=1.0, cooling_rate=0.01, c_repulsion=0.01)
   
   # Get pairwise distances from result
@@ -123,11 +123,11 @@ test_that("topolow_full force calculations preserve distance relationships", {
   expect_true(d_ac < (d_ab + d_bc))  # Triangle inequality
 })
 
-test_that("topolow_full handles missing values appropriately", {
+test_that("create_topolow_map handles missing values appropriately", {
   test_mat <- create_test_matrix()
   test_mat[1,2] <- test_mat[2,1] <- NA
   
-  result <- topolow_full(test_mat, ndim=2, max_iter=10,
+  result <- create_topolow_map(test_mat, ndim=2, max_iter=10,
                         k0=1.0, cooling_rate=0.01, c_repulsion=0.01)
   
   # Missing values should use repulsive forces
@@ -135,8 +135,8 @@ test_that("topolow_full handles missing values appropriately", {
   expect_equal(result$est_distances[1,2], result$est_distances[2,1])  # Symmetry
 })
 
-test_that("topolow_full returns correct object structure", {
-  result <- topolow_full(create_test_matrix(), ndim=2, max_iter=10,
+test_that("create_topolow_map returns correct object structure", {
+  result <- create_topolow_map(create_test_matrix(), ndim=2, max_iter=10,
                         k0=1.0, cooling_rate=0.01, c_repulsion=0.01)
   
   expected_elements <- c("positions", "est_distances", "mae", "iter",

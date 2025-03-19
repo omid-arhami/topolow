@@ -743,7 +743,7 @@ for (ndim in sim_data$metadata$dimension) {
         input_matrix <- matrix_list[[i]][[2]]
 
         # Run Topolow optimization
-        result <- topolow_full(
+        result <- create_topolow_map(
           distance_matrix = input_matrix,
           ndim = best_params$N,
           max_iter = opt_params$max_topolow_iter,
@@ -1758,7 +1758,7 @@ for(ndim in sim_data$metadata$dimension) {
     
     # Run topolow with error handling
     topo_result <- tryCatch({
-      topolow_full(
+      create_topolow_map(
         distance_matrix = distance_matrix,
         ndim = optimal_params$N,
         max_iter = 5000,
