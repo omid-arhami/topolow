@@ -12,9 +12,9 @@ create_slurm_script(
   output_file,
   error_file,
   time = "8:00:00",
-  memory = "14G",
+  memory = "4G",
   partition = "rohani_p",
-  r_module = "R/4.4.1-foss-2022b"
+  r_module = "R/4.3.2-foss-2022b"
 )
 }
 \arguments{
@@ -36,7 +36,7 @@ create_slurm_script(
 
 \item{partition}{SLURM partition (default: "rohani_p")}
 
-\item{r_module}{Character. R module to load (default: "R/4.4.1-foss-2022b")}
+\item{r_module}{Character. R module to load (default: "R/4.3.2-foss-2022b")}
 }
 \value{
 Path to created script file

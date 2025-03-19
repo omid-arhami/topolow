@@ -1,7 +1,8 @@
+# Copyright (c) 2024 Omid Arhami o.arhami@gmail.com
+# Licensed under MIT License
+
 # install_github.R
 # Installation script for topolow package
-# Copyright (c) 2024 Omid Arhami o.arhami@gmail.com
-# License: free of charge access granted to any academic researcher to use this software for non-commercial, academic research purposes **only**.  Nobody may modify, distribute, sublicense, or publicly share the Software or any derivative works, until the paper is published by the original authors.  The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.  In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the Software or the use or other dealings in the Software.
 
 # Install devtools if needed
 if (!require("devtools")) install.packages("devtools")
@@ -19,9 +20,18 @@ for(pkg in required_packages) {
   }
 }
 
+# Check if all packages are installed
+missing_pkgs <- required_packages[!sapply(required_packages, requireNamespace, quietly = TRUE)]
+if (length(missing_pkgs) > 0) {
+  stop("Failed to install the following packages: ", paste(missing_pkgs, collapse = ", "))
+}
+
 # Install topolow from GitHub
 devtools::install_github("omid-arhami/topolow")
 
 # Test installation
 library(topolow)
 ?topolow  # Should open package documentation
+
+# Print success message
+cat("topolow has been successfully installed with all required dependencies.\n")

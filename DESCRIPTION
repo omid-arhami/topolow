@@ -2,7 +2,8 @@ Package: topolow
 Title: Antigenic Mapping Using TopoLow Algorithm
 Version: 0.1.3
 Authors@R: 
-    person("Omid", "Arhami", , "omid.arhami@uga.edu", role = c("aut", "cre"))
+    person("Omid", "Arhami", , "omid.arhami@uga.edu", role = c("aut", "cre"),
+           comment = c(ORCID = "0009-0005-2681-6598"))
 Description: An implementation of the TopoLow algorithm for antigenic cartography 
     mapping and analysis. The package provides tools for:
     * Optimizing point configurations in high-dimensional spaces
@@ -14,7 +15,7 @@ Description: An implementation of the TopoLow algorithm for antigenic cartograph
     The algorithm uses a physics-inspired approach combining spring forces and 
     repulsive interactions to find optimal point configurations.
     Methods are described in Arhami and Rohani (2025) <doi:https://doi.org/10.1101/2025.02.09.637307>.
-License: file LICENSE
+License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
@@ -22,7 +23,7 @@ Imports:
     ggplot2 (>= 3.4.0),
     dplyr (>= 1.1.0),
     data.table (>= 1.14.0),
-    reshape2,
+    reshape2 (>= 1.4.4),
     stats,
     utils,
     plotly (>= 4.10.0),
@@ -35,7 +36,7 @@ Imports:
     lhs,
     umap,
     gridExtra,
-    scales,
+    scales
 Suggests:
     covr,
     Rtsne,

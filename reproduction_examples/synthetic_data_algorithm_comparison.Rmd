@@ -49,7 +49,7 @@ opt_params <- list(
   n_folds = 20,
   max_topolow_iter = 1000, # Cutoff of one optimization
   topolow_opt_rounds = 1, # Optimization rounds for Topolow
-  racmacs_opt_rounds = 20,  # Optimization rounds for RACMACS (You needs to do many optimizations and pick the best result)
+  racmacs_opt_rounds = 200,  # Optimization rounds for RACMACS (You needs to do many optimizations and pick the best result)
   topolow_params = read.csv("optimal_parameters_250points.csv"),  # From parameter fitting
   use_slurm = FALSE,
   num_cores = 7
@@ -126,9 +126,9 @@ find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setti
   )
   
   # Create output directories if they don't exist
-  coords_dir <- file.path(output_dir, "coordinates")  
+  racmacs_coords_dir <- file.path(output_dir, "racmacs_coordinates")  
   plots_dir <- file.path(output_dir, "plots")
-  for (dir in c(coords_dir, plots_dir)) {
+  for (dir in c(racmacs_coords_dir, plots_dir)) {
     if (!dir.exists(dir)) {
       dir.create(dir, recursive = TRUE)
     }
@@ -188,7 +188,7 @@ find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setti
           )
           
           # Save coordinates
-          coords_file <- file.path(coords_dir, 
+          coords_file <- file.path(racmacs_coords_dir, 
                                   paste0("RACMACS_", scenario_name, ".csv"))
           save.coords(map, filename = coords_file,
                      optimization_number = 1, antigens = TRUE, sera = TRUE)
