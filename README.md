@@ -106,7 +106,7 @@ directory. These examples demonstrate complete use cases in the paper but requir
 
 To access these examples after installation:
 ```r
-example_path <- system.file("examples/reproduction_examples", package="topolow")
+example_path <- system.file("examples", package="topolow")
 # View available examples
 list.files(example_path)
 ```
@@ -131,7 +131,7 @@ file.edit(example_rmd)
 
 Then read through the markdown notebooks and choose which parts you wish to run. There are usually options to use the provided parameters to bypass some parts of the simulations.
 
-To generate supplementary figure S-1, the pairwise distances in the original space (10D) versus the pairwise distances after reducing the dimensions to 2, use file `reproduction_examples/10d_2d_pairwise_distance_comparison_plot.R`
+To generate supplementary figure S-1, the pairwise distances in the original space (10D) versus the pairwise distances after reducing the dimensions to 2, use file `inst/examples/10d_2d_pairwise_distance_comparison_plot.R`
 
 Note: Results of time-intensive sections are provided and explained at the beginning of each Rmd file. 
 
