@@ -121,6 +121,7 @@ list.files(example_path)
 To run these studies after installing Topolow, you can copy all associated files, subdirectories, and the Rmd files to your machine by calling function below:
 
 ```r
+library(topolow)
 copy_reproduction_examples()
 # Or to a specific location:
 copy_reproduction_examples("path/to/my/examples")
