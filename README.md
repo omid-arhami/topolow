@@ -101,26 +101,39 @@ For detailed documentation of a specific function in Topolow package:
 
 ## Reproduction Studies
 
-Additional vignettes with detailed computational studies are available in the `reproduction_examples/` directory:
+This package includes computationally intensive examples in the `inst/examples` 
+directory. These examples demonstrate complete use cases in the paper but require computational time and resources.
+
+To access these examples after installation:
+```r
+example_path <- system.file("examples/reproduction_examples", package="topolow")
+# View available examples
+list.files(example_path)
+```
 
 - `parameter-fitting-h3n2.Rmd`
 - `assay_data_analysis_HIV_Subtype.Rmd`
 - `methods-comparison-h3n2-hiv.Rmd`
 - `synthetic-parameter-fitting.Rmd`
 - `synthetic_data_algorithm_comparison.Rmd`
+- `procrustes_vignette.Rmd`
 
-To run these studies download them individually or:
+To run these studies after installing Topolow:
 
 ```r
-# Clone the repository
-git clone https://github.com/omid-arhami/topolow.git
+# Choose a specific Rmd file
+example_rmd <- system.file("examples/methods-comparison-h3n2-hiv.Rmd", 
+                           package="topolow")
+
+# Open it in RStudio
+file.edit(example_rmd)
 ```
 
-Then read through the markdown notebooks in `reproduction_examples/` and choose which parts you wish to run. There are usually options to use the provided parameters to bypass some parts of the simulations.
+Then read through the markdown notebooks and choose which parts you wish to run. There are usually options to use the provided parameters to bypass some parts of the simulations.
 
 To generate supplementary figure S-1, the pairwise distances in the original space (10D) versus the pairwise distances after reducing the dimensions to 2, use file `reproduction_examples/10d_2d_pairwise_distance_comparison_plot.R`
 
-Note: These studies may take several hours to complete and require significant computational resources. Therefore, results of time-intensive sections are provided and explained at the beginning of each Rmd file. 
+Note: Results of time-intensive sections are provided and explained at the beginning of each Rmd file. 
 
 ## Features
 

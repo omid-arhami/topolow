@@ -49,7 +49,7 @@ First, let's create synthetic datasets with different dimensionalities:
 results <- generate_synthetic_datasets(
   n_dims_list = c(2, 5, 10),
   seeds = c(123450, 903450, 13450),
-  n_points = 80,
+  n_points = 250,
   output_dir = "synthetic_data"
 )
 
@@ -71,7 +71,7 @@ Define consistent parameter ranges and optimization settings:
 param_ranges <- list(
   N_min = 2,          # Minimum dimensions 
   N_max = 30,         # Maximum dimensions
-  k0_min = 1,         # Minimum spring constant
+  k0_min = 0.5,         # Minimum spring constant
   k0_max = 30,        # Maximum spring constant 
   cooling_rate_min = 1e-4, # Minimum decay rate
   cooling_rate_max = 0.05, # Maximum decay rate
@@ -81,11 +81,11 @@ param_ranges <- list(
 
 # Setup optimization parameters
 opt_params <- list(
-  max_iter = 2000,    # Maximum optimization iterations
-  num_samples = 2,   # Number of LHS samples
+  max_iter = 1000,    # Maximum optimization iterations
+  num_samples = 40,   # Number of LHS samples
   folds = 20,         # Number of CV folds
-  num_cores = max(1, parallel::detectCores() - 1),
-  use_slurm = FALSE
+  num_cores = 1,     # Number of cores to use. If using SLURM: 1 core per LHS sampling job. Can try parallel::detectCores() on local machines
+  use_slurm = TRUE
 )
 ```
 
@@ -95,16 +95,16 @@ We'll run some optimization trials for each dimension and matrix variant to buil
 
 ```{r eval=FALSE}
 # Run optimization for each dimensionality and matrix variant
-for(i in seq_along(results$matrices)) { #
+for(i in seq_along(results$matrices)) { 
   dim_data <- results$matrices[[i]]
   ndim <- results$metadata$dimension[i]
   
-  for(matrix_type in matrix_variants) { #
+  for(matrix_type in matrix_variants) { 
     # Get current matrix
     distance_matrix <- dim_data[[matrix_type]]
     
     # Create scenario name incorporating dimension and matrix type
-    scenario_name <- sprintf("synthetic_AMC3_dim%d_%s", ndim, matrix_type)
+    scenario_name <- sprintf("synthetic_AMC101_dim%d_%s", ndim, matrix_type)
     
     message(sprintf("\nOptimizing for %d dimensions, matrix type: %s", 
                    ndim, matrix_type))
@@ -128,10 +128,10 @@ for(i in seq_along(results$matrices)) { #
       folds = opt_params$folds,
       num_cores = opt_params$num_cores,
       time = "8:00:00",
-      memory = "3G",
+      memory = "2G",
       write_files = TRUE,
       use_slurm = opt_params$use_slurm,
-      cider = FALSE,
+      cider = TRUE,
       verbose = TRUE
     )
   }
@@ -151,7 +151,7 @@ for(ndim in results$metadata$dimension) {
   dim_results <- list()
   
   for(matrix_type in matrix_variants) { #
-    scenario_name <- sprintf("synthetic_AMC3_dim%d_%s", ndim, matrix_type)
+    scenario_name <- sprintf("synthetic_AMC101_dim%d_%s", ndim, matrix_type)
     print(scenario_name)
     # Aggregate optimization results
     dim_results[[matrix_type]] <- aggregate_parameter_optimization_results(
@@ -171,11 +171,20 @@ Perform adaptive sampling for each case:
 ```{r eval=FALSE}
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_samples = 2,  # Total samples to collect
-  n_iter = 1,          # Number of consecutive iterations per job
-  batch_size = 1,      # Samples per iteration
-  max_iter = 2000,     # Maximum optimization iterations
+  num_samples = 600,  # Total samples to collect
+  n_iter = 3,          # Number of consecutive iterations per job
+  batch_size = 2,      # Samples per iteration
+  max_iter = 1000,     # Maximum optimization iterations
   relative_epsilon = 1e-4
+)
+
+# Setup optimization parameters
+opt_params <- list(
+  max_iter = 1000,    # Maximum optimization iterations
+  num_samples = 40,   # Number of LHS samples
+  folds = 20,         # Number of CV folds
+  num_cores = 20,     # Number of cores to use. Can try parallel::detectCores() on local machines. It would be best if num_cores is a multiple of batch_size*folds
+  use_slurm = TRUE
 )
 
 # Run adaptive sampling for each dimension and matrix type
@@ -184,7 +193,7 @@ for(ndim in results$metadata$dimension) {
   
   for(matrix_type in matrix_variants) { # 
     # Get scenario names
-    base_scenario <- sprintf("synthetic_AMC3_dim%d_%s", ndim, matrix_type)
+    base_scenario <- sprintf("synthetic_AMC101_dim%d_%s", ndim, matrix_type)
     amc_scenario <- base_scenario #sprintf("%s_amc", base_scenario)
     
     # Get result file path
@@ -198,7 +207,7 @@ for(ndim in results$metadata$dimension) {
     message(sprintf("\nRunning adaptive sampling for %d dimensions, matrix type: %s", 
                    ndim, matrix_type))
     
-    # Run adaptive sampling
+    # Run adaptive sampling for current scenario (K-fold cross-validation happens inside) 
     run_adaptive_sampling(
       initial_samples_file = result_file,
       distance_matrix = distance_matrix,
@@ -209,11 +218,11 @@ for(ndim in results$metadata$dimension) {
       batch_size = amc_params$batch_size,
       relative_epsilon = amc_params$relative_epsilon,
       folds = opt_params$folds,
-      num_cores = min(opt_params$num_cores, amc_params$batch_size * opt_params$folds + 1),
-      time = "8:00:00",
-      memory = "5G",
+      num_cores = min( opt_params$num_cores , amc_params$batch_size * opt_params$folds ), ###
+      time = "18:00:00",
+      memory = "30G",
       use_slurm = opt_params$use_slurm,
-      cider = FALSE,
+      cider = TRUE,
       verbose = TRUE
     )
   }
@@ -234,7 +243,7 @@ for(ndim in results$metadata$dimension) {
     # Read AMC results
     amc_files <- c(
                    file.path("model_parameters",
-                         sprintf("synthetic_AMC3_dim%d_%s_model_parameters.csv", 
+                         sprintf("synthetic_AMC101_dim%d_%s_model_parameters.csv", 
                                 ndim, matrix_type))
                    )
     # Combine chain results
@@ -257,7 +266,7 @@ for(ndim in results$metadata$dimension) {
   }
 }
 
-write.csv(final_params, "optimal_parameters_80points.csv")
+write.csv(final_params, "optimal_parameters_250points.csv")
 ```
 
 
@@ -270,7 +279,7 @@ Check convergence for each case:
 analyze_convergence <- function(ndim, matrix_type, mutual_size) {
   # Create the two specific file patterns we want to match
   file_patterns <- c(
-    sprintf("synthetic_AMC3_dim%d_%s_model_parameters.csv", ndim, matrix_type)
+    sprintf("synthetic_AMC101_dim%d_%s_model_parameters.csv", ndim, matrix_type)
   )
 
   # Get full paths for both files

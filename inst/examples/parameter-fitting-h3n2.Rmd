@@ -1,0 +1,432 @@
+---
+title: "Parameter Fitting with Topolow"
+author: "Omid Arhami"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Parameter Fitting with Topolow}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 8,
+  fig.height = 6,
+  warning = TRUE,
+ message = TRUE,    # Show messages
+  error = TRUE      # Continue on error
+)
+```
+
+## Introduction
+
+This vignette demonstrates how to fit parameters for the Topolow algorithm using a combination of initial Latin Hypercube Sampling (LHS) and Adaptive Monte Carlo (AMC) sampling.
+
+The output of all processes are provided as csv files in model_parameters directory, so, you can skip running samplings on your machine and use them to find the optimal parameter values. For this option, skip to section 'Convergence Diagnostics'.
+
+You can also use the optimal parameters:
+
+optimal_params <- list(
+    N = 4,
+    k0 = 14.76214,
+    cooling_rate = 0.03641074, 
+    c_repulsion = 0.002943064
+  )
+
+We'll cover:
+
+* Initial parameter space exploration with LHS
+* Adaptive sampling to refine parameter estimates
+* Convergence diagnostics and visualization
+* Profile likelihood analysis
+* Results interpretation
+
+The workflow combines several approaches to ensure robust parameter estimation:
+
+1. Initial exploration using LHS to efficiently sample parameter space
+2. K-fold cross-validation to assess prediction accuracy
+3. Adaptive sampling that focuses on high-likelihood regions
+4. Statistical diagnostics to verify convergence
+5. Profile likelihood analysis to assess parameter uncertainty
+
+## Setup
+
+First, let's load required packages:
+
+```{r}
+library(topolow)
+library(ggplot2)
+library(dplyr)
+library(data.table)
+library(foreach)
+library(doParallel)
+```
+
+## Data Loading and Preprocessing 
+
+We'll demonstrate using the Smith et al. 2004 influenza dataset included in topolow:
+
+```{r}
+# Load and process H3N2 data of Smith et al 2004
+data(h3n2_data)
+
+write.csv(h3n2_data, "data_files/h3n2_data.csv", row.names = FALSE)
+
+H3N2_2003_data_results <- process_antigenic_data(
+  file_path = "data_files/h3n2_data.csv",
+  antigen_col = "virusStrain",
+  serum_col = "serumStrain",
+  value_col = "titer", 
+  is_titer = TRUE,
+  metadata_cols = c("virusYear", "serumYear", "cluster", "color")
+)
+
+# Extract distance matrix
+h3n2_distance_matrix <- H3N2_2003_data_results$matrix
+# Quick look at the processed data
+head(H3N2_2003_data_results$long)
+```
+
+## Initial Parameter Optimization with LHS
+
+We'll first explore the parameter space using Latin Hypercube Sampling combined with leave 5% out (20-fold) cross-validation:
+
+```{r}
+# Define parameter ranges
+param_ranges <- list(
+  N_min = 2,          # Minimum dimensions 
+  N_max = 20,         # Maximum dimensions
+  k0_min = 1,         # Minimum spring constant
+  k0_max = 20,        # Maximum spring constant 
+  cooling_rate_min = 1e-3, # Minimum decay rate
+  cooling_rate_max = 0.05,  # Maximum decay rate
+  c_repulsion_min = 1e-4,     # Minimum repulsion constant
+  c_repulsion_max = 0.02       # Maximum repulsion constant
+)
+
+# Setup optimization parameters
+opt_params <- list(
+  max_iter = 1000,    # Maximum optimization iterations
+  num_samples = 50,   # Number of LHS samples
+  folds = 20,         # Number of CV folds
+  num_cores = 1,
+  use_slurm = TRUE
+)
+```
+
+
+```{r eval=FALSE}
+# Run initial parameter optimization
+results <- run_parameter_optimization(
+  distance_matrix = h3n2_distance_matrix,
+  max_iter = opt_params$max_iter,
+  relative_epsilon = 1e-4,
+  convergence_counter = 5,
+  scenario_name = "H3N2_2003_data_AMC10",
+  N_min = param_ranges$N_min, 
+  N_max = param_ranges$N_max,
+  k0_min = param_ranges$k0_min,
+  k0_max = param_ranges$k0_max,
+  c_repulsion_min = param_ranges$c_repulsion_min,
+  c_repulsion_max = param_ranges$c_repulsion_max,
+  cooling_rate_min = param_ranges$cooling_rate_min,
+  cooling_rate_max = param_ranges$cooling_rate_max,
+  num_samples = opt_params$num_samples,
+  folds = opt_params$folds,
+  num_cores = opt_params$num_cores,
+  time = "6:00:00",
+  memory = "2G",
+  write_files = TRUE,
+  use_slurm = opt_params$use_slurm,
+  cider = TRUE,
+  verbose = FALSE
+)
+```
+
+## Aggregate the results
+
+(Only if SLURM was used) Wait until the jobs are done.
+
+```{r eval=FALSE}
+scenario_name <- "H3N2_2003_data_AMC10"
+aggregate_parameter_optimization_results(scenario_name, write_files=TRUE)
+```
+
+## Adaptive Monte Carlo Sampling
+
+Using the initial results as a starting point, we'll now perform adaptive sampling to refine our parameter estimates:
+
+
+```{r eval=FALSE}
+# Transform samples (with previous code's path)
+scenario_name = "H3N2_2003_data_AMC9"
+samples_file = "model_parameters/H3N2_2003_data_AMC9_model_parameters.csv"
+samples <- log_transform_parameters(samples_file)
+
+# Setup adaptive sampling parameters
+amc_params <- list(
+  num_samples = 1000,  # Total samples to collect
+  n_iter = 3,        # Number of consecutive iterations at each parallel job
+  batch_size = 1,     # Samples per iteration
+  max_iter = 1000,    # Maximum iterations per optimization
+  relative_epsilon = 1e-4
+)
+
+# Setup optimization parameters
+opt_params <- list(
+  folds = 20,         # Number of CV folds
+  num_cores = 20,      # Number of cores to use. Can try parallel::detectCores() on local machines. It would be best if num_cores is a multiple of batch_size*folds
+  use_slurm = TRUE,
+  cider = TRUE
+)
+
+# Run adaptive sampling
+run_adaptive_sampling(
+  initial_samples_file = samples_file,
+  distance_matrix = h3n2_distance_matrix,
+  max_iter = amc_params$max_iter,
+  scenario_name = scenario_name,
+  num_samples = amc_params$num_samples,
+  n_iter = amc_params$n_iter,
+  batch_size = amc_params$batch_size,
+  relative_epsilon = amc_params$relative_epsilon,
+  folds = opt_params$folds,
+  num_cores = opt_params$num_cores, 
+  time = "15:00:00",
+  memory = "2G",
+  use_slurm = opt_params$use_slurm,
+  cider = opt_params$cider,
+  verbose = FALSE
+)
+```
+
+## Convergence Diagnostics
+
+We can run the AMC sampling more than once and compare the results to asses the convergence of the sampling probabilities. If they are close, 
+it indicates that all sampling attempts are moving toward the same optimom, which increases its likelihood of being the global optimum. 
+
+Let's run the previous parts twice and check if our chains have converged:
+
+```{r}
+# List chain files
+chain_files <- c(
+  "model_parameters/H3N2_2003_data_AMC2_model_parameters.csv",
+  "model_parameters/H3N2_2003_data_AMC3_model_parameters.csv"
+  #"model_parameters/H3N2_2003_data_MC7_model_parameters.csv",
+  #"model_parameters/H3N2_2003_data_MC8_model_parameters.csv"
+)
+
+# Calculate diagnostics
+diagnostics <- calculate_diagnostics(
+  chain_files = chain_files,
+  mutual_size = 150  # Number of samples to use from end of chains
+)
+
+# Print results
+print(diagnostics)
+
+# Create and display diagnostic plots
+diag_plots <- create_diagnostic_plots(
+  chain_files = chain_files,
+  mutual_size = 150,
+  output_file = "output_figures/H3N2_2003_data_diagnostic_plots.png"
+)
+print(diag_plots)
+```
+
+## Profile Likelihood Analysis
+
+Now we'll analyze parameter uncertainties using profile likelihood:
+
+```{r}
+# Combine chain results
+samples <- do.call(rbind, lapply(chain_files, read.csv))
+samples <- samples %>%
+  filter(!is.na(NLL) & !is.na(Holdout_MAE) & 
+           is.finite(NLL) & is.finite(Holdout_MAE)) %>%
+  na.omit()
+
+samples <- samples[samples$log_N >= log(2),]
+
+# Apply clean_data to all columns of the dataframe
+samples <- as.data.frame(lapply(samples, clean_data, k = 10))
+samples <- na.omit(samples)
+# Calculate maximum likelihood (average over top n to smooth out any outlier situation)
+samples$LL <- -samples$NLL
+top_ll <- sort(samples$LL, decreasing = TRUE)[1:5]
+max_ll <- max(top_ll) + log(sum(exp(top_ll - max(top_ll)))) - log(5)
+
+# Parameters to analyze
+params <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
+
+# Calculate profile likelihoods
+for (param in params) {
+  pl_result <- profile_likelihood(
+    param = param,
+    samples = samples,
+    grid_size = 20,
+    bandwidth_factor = 0.07,
+    start_factor = 0.3, 
+    end_factor = 1.5
+  )
+  
+  # Plot results
+  pl_plot <- plot(pl_result, max_ll)
+  #ggsave(paste0("profile_likelihood_H3N2_2003_data_", param, ".png"), pl_plot)
+  print(pl_plot)
+}
+```
+
+```{r}
+source("C:/Users/LibraryUser/OneDrive - University of Georgia/code/R package/topolow1/R/adaptive_sampling.R")
+
+# Analyze parameter sensitivity
+for (param in params) {
+  sensitivity <- parameter_sensitivity_analysis(
+    param = param,
+    samples = samples,
+    bins = 30
+  )
+  
+  # Plot results
+  sens_plot <- plot(sensitivity, reference_error = 0.939)
+  #ggsave(paste0("parameter_sensitivity_", param, ".pdf"), sens_plot)
+  print(sens_plot)
+}
+```
+
+## Finding Optimal Parameters
+
+Based on our analysis, we can extract optimal parameter values. Modes of marginal sampling probability distributions are maximum likelihood estimators.
+
+(If the Profile Likelihood surfaces are too ragged and the optimal point appeared as a sharp peak, choosing the parameters with the maximum likelihood is a better approach than using the mode.)
+
+```{r}
+# Case 1: Modes of marginal sampling probability distributions
+
+# Calculate weighted marginals
+weighted_marginals <- calculate_weighted_marginals(samples)
+# Extract optimal parameters
+optimal_params <- list(
+  N = round(exp(find_mode(weighted_marginals[['log_N']]))),
+  k0 = exp(find_mode(weighted_marginals[['log_k0']])),
+  cooling_rate = exp(find_mode(weighted_marginals[['log_cooling_rate']])),
+  c_repulsion = exp(find_mode(weighted_marginals[['log_c_repulsion']]))
+)
+
+# Case 2: Parameters with the maximum likelihood 
+
+best_params <- samples[which.min(samples$NLL),]
+optimal_params <- list(
+  N = round(exp(as.numeric(best_params$log_N))),
+  k0 = exp(as.numeric(best_params$log_k0)),
+  cooling_rate = exp(as.numeric(best_params$log_cooling_rate)),
+  c_repulsion = exp(as.numeric(best_params$log_c_repulsion))
+)
+
+# Print optimal parameters
+print(optimal_params)
+```
+
+## Validation Run
+
+Finally, let's validate our optimal parameters:
+
+(The internal variable convergence_error is the objective of the algorithm. It is slightly different from MAE. MAE is calculated between the predicted distances and measured distances in the assays wherever the measurement is reported as an exact number. However, convergence_error adds the thresholded measurements, only when the fitted distance does not satisfy the inequality.)
+
+```{r}
+# Run topolow with optimal parameters
+result <- topolow_full(
+  distance_matrix = h3n2_distance_matrix,
+  ndim = optimal_params$N,
+  max_iter = 3000,
+  k0 = optimal_params$k0,
+  cooling_rate = optimal_params$cooling_rate,
+  c_repulsion = optimal_params$c_repulsion,
+  relative_epsilon = 1e-10,
+  convergence_counter = 5,
+  verbose = TRUE
+)
+
+# Print performance metrics
+cat("MAE:", round(result$mae, 4), "\n")
+
+```
+
+```{r}
+# Convert positions matrix to data frame
+positions <- as.data.frame(result$positions)
+positions$name <- rownames(positions)
+
+# Add antigen/antiserum indicators based on rownames
+positions$antigen <- startsWith(positions$name, "V/")
+positions$antiserum <- startsWith(positions$name, "S/")
+
+# Extract year from rownames - assuming format like "V/strain/year" or "S/strain/year"
+positions$year <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", positions$name))
+
+# Clean names to match with metadata
+positions$name <- sub("^S/", "", positions$name)
+positions$name <- sub("^V/", "", positions$name)
+
+# Join with original data to get cluster and color information
+metadata <- H3N2_2003_data_results$long %>%
+  select(virusStrain, cluster, color) %>%
+  distinct()
+
+positions <- positions %>%
+  left_join(metadata, by = c("name" = "virusStrain"))
+
+# Remove any rows that didn't get metadata matched
+positions <- na.omit(positions)
+
+#write.csv(positions, "../data-raw/example_positions.csv", row.names=FALSE)
+```
+
+## The resulting map
+
+```{r}
+# Aesthetic configuration 
+aesthetic_config <- new_aesthetic_config(
+  point_size = 2.5,
+  point_alpha = 0.6,
+  point_shapes = c(antigen = 16, antiserum = 5),
+  color_palette = "c25", 
+  gradient_colors = list(
+    low = "blue",
+    high = "red"
+  ),
+  show_labels = FALSE,
+  title_size = 12,
+  axis_text_size = 10,
+  show_legend = TRUE,
+  legend_position = "right"
+)
+
+# To mirror the maps to make them comparable with other maps set the reverse parameter to -1
+layout_config <- new_layout_config(
+  save_format = "png",
+  reverse_x = -1,  # Reverse x-axis
+  reverse_y = -1   # Reverse y-axis
+)
+
+# Create and display temporal mapping
+cart_plot <- plot_temporal_mapping(positions, ndim = optimal_params$N,
+                                   aesthetic_config = aesthetic_config, 
+                                   layout_config=layout_config)
+print(cart_plot)
+
+# Cluster mapping
+p2 <- plot_cluster_mapping(positions, ndim = optimal_params$N, 
+                           layout_config = layout_config)
+print(p2)
+```
+
+## Session Info
+
+```{r}
+sessionInfo()
+```
