@@ -516,7 +516,12 @@ dim_results <- find_optimal_racmacs_dimensions(
   output_dir = output_dir  # From the input setup
 )
 
+```
+
+```{r}
 # Generate plots
+dim_results <- read.csv("racmacs_dimensions_sim_data.csv")
+
 all_plots <- plot_dimension_results(dim_results, output_dir)
 
 # Output a summary of findings
@@ -532,9 +537,7 @@ summary_table <- dim_results %>%
   arrange(OriginalDimension, Variant)
 
 print(summary_table)
-
 ```
-
 
 
 ##Setup Result Collection:

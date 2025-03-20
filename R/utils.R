@@ -474,6 +474,37 @@ add_noise_bias <- function(matrix_data) {
   ))
 }
 
+#' Copy Reproduction Examples to Working Directory
+#'
+#' Copies all reproduction examples, including data files and 
+#' supporting materials, to a specified directory.
+#'
+#' @param dest_dir Character. Destination directory (default: "reproduction_examples" 
+#'        in current working directory)
+#' @return Invisibly returns the path to the destination directory
+#' @export
+copy_reproduction_examples <- function(dest_dir = file.path(getwd(), "examples")) {
+  # Create destination directory if it doesn't exist
+  dir.create(dest_dir, showWarnings = FALSE, recursive = TRUE)
+  
+  # Get source directory from package
+  src_dir <- system.file("examples", package="topolow")
+  
+  if (src_dir == "") {
+    stop("Could not find reproduction examples directory in package")
+  }
+  
+  # Copy all files recursively
+  file.copy(list.files(src_dir, full.names = TRUE), 
+            dest_dir, 
+            recursive = TRUE, 
+            overwrite = TRUE)
+  
+  message("Reproduction examples copied to: ", dest_dir)
+  message("You can now work with them directly in this directory.")
+  
+  return(invisible(dest_dir))
+}
 
 #' Save ggplot with white background
 #' 
