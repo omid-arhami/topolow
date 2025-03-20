@@ -1644,7 +1644,7 @@ adaptive_MC_sampling <- function(samples_file,
         cooling_rate = exp(new_samples[i, "log_cooling_rate"]),
         c_repulsion = exp(new_samples[i, "log_c_repulsion"]),
         folds = folds,
-        num_cores = 1  # Use single core within parallel processes
+        num_cores = min(folds, num_cores)  # Use single core within parallel processes? or number of folds or num_cores?
       )
     }
     
