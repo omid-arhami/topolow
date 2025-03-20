@@ -84,8 +84,9 @@ opt_params <- list(
   max_iter = 1000,    # Maximum optimization iterations
   num_samples = 40,   # Number of LHS samples
   folds = 20,         # Number of CV folds
-  num_cores = 1,     # Number of cores to use. If using SLURM: 1 core per LHS sampling job. Can try parallel::detectCores() on local machines
-  use_slurm = TRUE
+  num_cores = 19,     # Number of cores to use. If using SLURM: 1 core per LHS sampling job. Can try parallel::detectCores() on local machines
+  use_slurm = FALSE,
+  cider = FALSE
 )
 ```
 
@@ -127,11 +128,11 @@ for(i in seq_along(results$matrices)) {
       num_samples = opt_params$num_samples,
       folds = opt_params$folds,
       num_cores = opt_params$num_cores,
-      time = "8:00:00",
-      memory = "2G",
       write_files = TRUE,
-      use_slurm = opt_params$use_slurm,
-      cider = TRUE,
+      # time = "8:00:00",
+      # memory = "2G",
+      # use_slurm = opt_params$use_slurm,
+      # cider = opt_params$cider,
       verbose = TRUE
     )
   }
