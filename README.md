@@ -118,22 +118,19 @@ list.files(example_path)
 - `synthetic_data_algorithm_comparison.Rmd`
 - `procrustes_vignette.Rmd`
 
-To run these studies after installing Topolow:
+To run these studies after installing Topolow, you can copy all associated files, subdirectories, and the Rmd files to your machine by calling function below:
 
 ```r
-# Choose a specific Rmd file
-example_rmd <- system.file("examples/methods-comparison-h3n2-hiv.Rmd", 
-                           package="topolow")
-
-# Open it in RStudio
-file.edit(example_rmd)
+copy_reproduction_examples()
+# Or to a specific location:
+copy_reproduction_examples("path/to/my/examples")
 ```
 
 Then read through the markdown notebooks and choose which parts you wish to run. There are usually options to use the provided parameters to bypass some parts of the simulations.
 
-To generate supplementary figure S-1, the pairwise distances in the original space (10D) versus the pairwise distances after reducing the dimensions to 2, use file `inst/examples/10d_2d_pairwise_distance_comparison_plot.R`
-
 Note: Results of time-intensive sections are provided and explained at the beginning of each Rmd file. 
+
+To generate supplementary figure S-1, the pairwise distances in the original space (10D) versus the pairwise distances after reducing the dimensions to 2, use file `inst/examples/10d_2d_pairwise_distance_comparison_plot.R`
 
 ## Features
 
