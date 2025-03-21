@@ -7,7 +7,7 @@
 create_topolow_map(
   distance_matrix,
   ndim,
-  max_iter,
+  mapping_max_iter,
   k0,
   cooling_rate,
   c_repulsion,
@@ -25,7 +25,7 @@ measurements.}
 
 \item{ndim}{Integer. Number of dimensions for the embedding space.}
 
-\item{max_iter}{Integer. Maximum number of optimization iterations.}
+\item{mapping_max_iter}{Integer. Maximum number of map optimization iterations.}
 
 \item{k0}{Numeric. Initial spring constant controlling spring forces.}
 
@@ -37,7 +37,7 @@ measurements.}
 Default is 1e-4.}
 
 \item{convergence_counter}{Integer. Number of iterations below threshold before declaring
-convergence. Default is 10.}
+convergence. Default is 5.}
 
 \item{initial_positions}{Matrix or NULL. Optional starting coordinates. If NULL,
 random initialization is used. Matrix should have nrow = nrow(distance_matrix)
@@ -96,7 +96,7 @@ Higher values do not necessarily lead to a better convergence
 dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
 
 # Run TopoLow in 2D
-result <- create_topolow_map(dist_mat, ndim=2, max_iter=1000, 
+result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=1000, 
                       k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
                       
 # Plot results

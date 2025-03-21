@@ -11,7 +11,7 @@ prune_distance_network_temporal(
   year_col,
   min_connections,
   min_per_year = 1,
-  max_iterations = 100
+  iterations = 100
 )
 }
 \arguments{
@@ -31,7 +31,7 @@ prune_distance_network_temporal(
 
 \item{min_per_year}{Integer minimum points to keep per year (default: 1)}
 
-\item{max_iterations}{Integer maximum pruning iterations (default 100)}
+\item{iterations}{Integer maximum pruning iterations (default 100)}
 }
 \value{
 List containing:

@@ -638,7 +638,7 @@ validate_antigenic_data <- function(data, antigen_col, serum_col, value_col,
 #' @param virus_col Character name of virus/antigen column
 #' @param antibody_col Character name of antibody/antiserum column 
 #' @param min_connections Integer minimum required connections per point
-#' @param max_iterations Integer maximum pruning iterations (default 100)
+#' @param iterations Integer maximum pruning iterations (default 100)
 #' @return List containing:
 #'   \item{pruned_data}{Data frame of pruned measurements}
 #'   \item{stats}{List of pruning statistics including:
@@ -662,7 +662,7 @@ validate_antigenic_data <- function(data, antigen_col, serum_col, value_col,
 #' }
 #' @export
 prune_distance_network <- function(data, virus_col, antibody_col,
-                                   min_connections, max_iterations = 100) {
+                                   min_connections, iterations = 100) {
   
   # Input validation
   if (!is.data.frame(data)) {
@@ -677,8 +677,8 @@ prune_distance_network <- function(data, virus_col, antibody_col,
     stop("min_connections must be a positive integer")
   }
   
-  if (!is.numeric(max_iterations) || max_iterations < 1) {
-    stop("max_iterations must be a positive integer")
+  if (!is.numeric(iterations) || iterations < 1) {
+    stop("iterations must be a positive integer")
   }
   
   # Keep track of original data size
@@ -689,7 +689,7 @@ prune_distance_network <- function(data, virus_col, antibody_col,
   iteration <- 0
   continue_pruning <- TRUE
   
-  while(continue_pruning && iteration < max_iterations) {
+  while(continue_pruning && iteration < iterations) {
     iteration <- iteration + 1
     
     # Count connections per point
@@ -780,7 +780,7 @@ prune_distance_network <- function(data, virus_col, antibody_col,
 #' @param year_col Character name of year column
 #' @param min_connections Target minimum connections (soft threshold)
 #' @param min_per_year Integer minimum points to keep per year (default: 1)
-#' @param max_iterations Integer maximum pruning iterations (default 100)
+#' @param iterations Integer maximum pruning iterations (default 100)
 #' @return List containing:
 #'   \item{pruned_data}{Data frame of pruned measurements}
 #'   \item{stats}{List of pruning statistics including:
@@ -805,7 +805,7 @@ prune_distance_network <- function(data, virus_col, antibody_col,
 #' @export
 prune_distance_network_temporal <- function(data, virus_col, antibody_col, year_col,
                                             min_connections, min_per_year = 1,
-                                            max_iterations = 100) {
+                                            iterations = 100) {
   # Input validation [same as before]
   
   # Process each year separately to maintain coverage

@@ -562,7 +562,7 @@ for (dataset_name in names(datasets)) {
     create_topolow_map(
       distance_matrix = distance_matrix,
       ndim = topolow_params$N,
-      max_iter = opt_setting$max_topolow_iter,
+      mapping_max_iter = opt_setting$max_topolow_iter,
       relative_epsilon = 1e-10,
       convergence_counter = 5,
       k0 = topolow_params$k0,
@@ -895,7 +895,7 @@ for(dataset_name in names(datasets)) {
     res_train <- create_topolow_map(
       distance_matrix = input_matrix,
       ndim = topolow_params$N,
-      max_iter = opt_setting$max_topolow_iter,
+      mapping_max_iter = opt_setting$max_topolow_iter,
       k0 = topolow_params$k0,
       cooling_rate = topolow_params$cooling_rate,
       c_repulsion = topolow_params$c_repulsion,

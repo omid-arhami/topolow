@@ -18,12 +18,12 @@ args <- commandArgs(trailingOnly = TRUE)
 
 samples_file <- as.character(args[1])
 distance_matrix_file <- as.character(args[2])
-max_iter <- as.integer(args[3])
+mapping_max_iter <- as.integer(args[3])
 relative_epsilon <- as.numeric(args[4])
 num_cores <- as.numeric(args[5]) # 1 but Still needed for internal implementation
 scenario_name <- as.character(args[6])
 i <- as.numeric(args[7])
-iterations <- as.numeric(args[8]) # Renamed from n_iter
+iterations <- as.numeric(args[8]) # = num_samples , always = 1 in jobs submitted to slurm
 output_dir <- as.character(args[9])  
 folds <- as.integer(args[10]) 
 
@@ -58,9 +58,9 @@ if (!all(required_cols %in% names(current_samples))) {
 adaptive_MC_sampling(
   samples_file = samples_file,
   distance_matrix = distance_matrix,
-  iterations = iterations, # Use renamed parameter
+  iterations = iterations, # Always set to 1
   batch_size = 1, # Always set to 1
-  max_iter = max_iter,
+  mapping_max_iter = mapping_max_iter,
   relative_epsilon = relative_epsilon,
   folds = folds,
   num_cores = num_cores, # Use 1 core per job (from script arg)

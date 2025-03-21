@@ -112,12 +112,12 @@ print(matrix_variants)
 #' @param opt_setting List of optimization settings
 #' @param output_dir Directory of the outputs
 #' @return Data table with dimension results across all variants
-
 find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setting, output_dir) {
   # Initialize results storage
   dim_results <- data.table(
     Dimension = integer(),
     MAE = numeric(),
+    MAPE = numeric(),     # Added MAPE column
     Completeness = numeric(),
     OriginalDimension = integer(),
     Variant = character(),
@@ -135,7 +135,7 @@ find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setti
   }
   
   # Maximum dimension to test before forcing early stop
-  max_test_dimension <- 12
+  max_test_dimension <- 8
   
   # Process each original dataset dimension
   for(dim_idx in seq_along(sim_data$metadata$dimension)) {
@@ -164,6 +164,7 @@ find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setti
         
         # Storage for this dimension's folds
         fold_mae <- numeric(opt_setting$n_folds)
+        fold_mape <- numeric(opt_setting$n_folds)  # Added for MAPE
         fold_coverage <- numeric(opt_setting$n_folds)
         
         # Run each fold
@@ -216,11 +217,13 @@ find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setti
           
           # Store this fold's metrics
           fold_mae[i] <- mean(abs(racmacs_errors$report_df$OutSampleError), na.rm = TRUE)
+          fold_mape[i] <- mean(abs(racmacs_errors$report_df$OutSamplePercentageError), na.rm = TRUE)  # Added MAPE calculation
           fold_coverage[i] <- racmacs_errors$coverage
         }
         
         # Calculate averages across folds
         mean_mae <- mean(fold_mae, na.rm = TRUE)
+        mean_mape <- mean(fold_mape, na.rm = TRUE)  # Added MAPE average
         mean_coverage <- mean(fold_coverage, na.rm = TRUE)
         
         # Store dimension results
@@ -229,6 +232,7 @@ find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setti
           data.table(
             Dimension = test_dim,
             MAE = mean_mae,
+            MAPE = mean_mape,  # Added MAPE to results
             Completeness = mean_coverage * 100,  # Convert to percentage
             OriginalDimension = orig_dim,
             Variant = variant,
@@ -255,7 +259,6 @@ find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setti
   
   return(dim_results)
 }
-
 
 
 #' Plot Individual Dimension Results for Each Dataset Variant
@@ -749,7 +752,7 @@ for (ndim in sim_data$metadata$dimension) {
         result <- create_topolow_map(
           distance_matrix = input_matrix,
           ndim = best_params$N,
-          max_iter = opt_params$max_topolow_iter,
+          mapping_max_iter = opt_params$max_topolow_iter,
           k0 = best_params$k0,
           cooling_rate = best_params$cooling_rate,
           c_repulsion = best_params$c_repulsion,
@@ -1764,7 +1767,7 @@ for(ndim in sim_data$metadata$dimension) {
       create_topolow_map(
         distance_matrix = distance_matrix,
         ndim = optimal_params$N,
-        max_iter = 5000,
+        mapping_max_iter = 5000,
         relative_epsilon = 1e-10,
         convergence_counter = 5,
         k0 = optimal_params$k0,

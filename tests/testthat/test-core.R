@@ -24,14 +24,14 @@ create_test_matrix <- function(size=3, with_threshold=FALSE) {
 test_that("create_topolow_map handles input validation correctly", {
   # Basic matrix validation
   expect_error(
-    create_topolow_map(distance_matrix = "not a matrix", ndim = 2, max_iter = 10,
+    create_topolow_map(distance_matrix = "not a matrix", ndim = 2, mapping_max_iter = 10,
                  k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01),
     "distance_matrix must be a matrix"
   )
   
   # Non-square matrix
   expect_error(
-    create_topolow_map(distance_matrix = matrix(1:6, nrow=2), ndim = 2, max_iter = 10,
+    create_topolow_map(distance_matrix = matrix(1:6, nrow=2), ndim = 2, mapping_max_iter = 10,
                  k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01),
     "distance_matrix must be square"
   )
@@ -50,7 +50,7 @@ test_that("create_topolow_map handles input validation correctly", {
   for(param in params_to_test) {
     args <- list(
       distance_matrix = test_mat,
-      ndim = 2, max_iter = 10,
+      ndim = 2, mapping_max_iter = 10,
       k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01
     )
     args[[names(param)[1]]] <- param[[1]]
@@ -59,7 +59,7 @@ test_that("create_topolow_map handles input validation correctly", {
   
   # Test high k0 warning
   expect_warning(
-    create_topolow_map(distance_matrix = test_mat, ndim = 2, max_iter = 10,
+    create_topolow_map(distance_matrix = test_mat, ndim = 2, mapping_max_iter = 10,
                  k0 = 35, cooling_rate = 0.01, c_repulsion = 0.01),
     "High k0 value"
   )
@@ -73,7 +73,7 @@ test_that("create_topolow_map handles initial positions correctly", {
   # Test valid initial positions
   init_pos <- matrix(runif(n*ndim), nrow=n, ncol=ndim)
   rownames(init_pos) <- rownames(test_mat)
-  result <- create_topolow_map(test_mat, ndim=ndim, max_iter=10,
+  result <- create_topolow_map(test_mat, ndim=ndim, mapping_max_iter=10,
                         k0=1.0, cooling_rate=0.01, c_repulsion=0.01,
                         initial_positions=init_pos)
   expect_equal(dim(result$positions), c(n, ndim))
@@ -81,7 +81,7 @@ test_that("create_topolow_map handles initial positions correctly", {
   # Test invalid dimensions
   wrong_pos <- matrix(runif((n+1)*ndim), nrow=n+1, ncol=ndim)
   expect_error(
-    create_topolow_map(test_mat, ndim=ndim, max_iter=10,
+    create_topolow_map(test_mat, ndim=ndim, mapping_max_iter=10,
                  k0=1.0, cooling_rate=0.01, c_repulsion=0.01,
                  initial_positions=wrong_pos),
     "initial_positions must have same number of rows"
@@ -92,7 +92,7 @@ test_that("create_topolow_map convergence behavior works correctly", {
   test_mat <- create_test_matrix()
   
   # Test convergence tracking
-  result <- create_topolow_map(test_mat, ndim=2, max_iter=10,
+  result <- create_topolow_map(test_mat, ndim=2, mapping_max_iter=10,
                         k0=1.0, cooling_rate=0.01, c_repulsion=0.01,
                         relative_epsilon=1e-4, convergence_counter=5)
   
@@ -106,7 +106,7 @@ test_that("create_topolow_map force calculations preserve distance relationships
   test_mat <- matrix(c(0,1,2, 1,0,1, 2,1,0), nrow=3)
   colnames(test_mat) <- rownames(test_mat) <- c("A","B","C")
   
-  result <- create_topolow_map(test_mat, ndim=2, max_iter=10,
+  result <- create_topolow_map(test_mat, ndim=2, mapping_max_iter=10,
                         k0=1.0, cooling_rate=0.01, c_repulsion=0.01)
   
   # Get pairwise distances from result
@@ -127,7 +127,7 @@ test_that("create_topolow_map handles missing values appropriately", {
   test_mat <- create_test_matrix()
   test_mat[1,2] <- test_mat[2,1] <- NA
   
-  result <- create_topolow_map(test_mat, ndim=2, max_iter=10,
+  result <- create_topolow_map(test_mat, ndim=2, mapping_max_iter=10,
                         k0=1.0, cooling_rate=0.01, c_repulsion=0.01)
   
   # Missing values should use repulsive forces
@@ -136,7 +136,7 @@ test_that("create_topolow_map handles missing values appropriately", {
 })
 
 test_that("create_topolow_map returns correct object structure", {
-  result <- create_topolow_map(create_test_matrix(), ndim=2, max_iter=10,
+  result <- create_topolow_map(create_test_matrix(), ndim=2, mapping_max_iter=10,
                         k0=1.0, cooling_rate=0.01, c_repulsion=0.01)
   
   expected_elements <- c("positions", "est_distances", "mae", "iter",

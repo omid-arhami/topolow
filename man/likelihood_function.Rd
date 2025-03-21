@@ -6,7 +6,7 @@
 \usage{
 likelihood_function(
   distance_matrix,
-  max_iter,
+  mapping_max_iter,
   relative_epsilon,
   N,
   k0,
@@ -19,7 +19,7 @@ likelihood_function(
 \arguments{
 \item{distance_matrix}{Distance matrix to fit}
 
-\item{max_iter}{Maximum optimization iterations}
+\item{mapping_max_iter}{Maximum map optimization iterations}
 
 \item{relative_epsilon}{Convergence threshold}
 

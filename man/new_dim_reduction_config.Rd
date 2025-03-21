@@ -12,7 +12,7 @@ new_dim_reduction_config(
   pca_params = list(tol = sqrt(.Machine$double.eps), rank. = NULL),
   umap_params = list(n_neighbors = 15, min_dist = 0.1, metric = "euclidean", n_epochs =
     200),
-  tsne_params = list(perplexity = 30, max_iter = 1000, theta = 0.5),
+  tsne_params = list(perplexity = 30, mapping_max_iter = 1000, theta = 0.5),
   compute_loadings = FALSE,
   random_state = NULL
 )

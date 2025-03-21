@@ -6,7 +6,7 @@
 \usage{
 initial_parameter_optimization(
   distance_matrix,
-  max_iter,
+  mapping_max_iter = NULL,
   relative_epsilon,
   convergence_counter,
   scenario_name,
@@ -18,13 +18,14 @@ initial_parameter_optimization(
   c_repulsion_max,
   cooling_rate_min,
   cooling_rate_max,
-  parallel_jobs = 5,
+  num_samples = 20,
+  max_cores = NULL,
   folds = 20,
   verbose = FALSE,
   write_files = TRUE,
   output_dir = NULL,
   time = "8:00:00",
-  memory = "10G",
+  memory = "3G",
   use_slurm = FALSE,
   cider = FALSE
 )
@@ -33,7 +34,7 @@ initial_parameter_optimization(
 \item{distance_matrix}{Matrix or data frame. Input distance matrix. Must be square
 and symmetric. Can contain NA values for missing measurements.}
 
-\item{max_iter}{Integer. Maximum number of optimization iterations.}
+\item{mapping_max_iter}{Integer. Maximum number of optimization iterations (also accepts 'mapping_max_iter').}
 
 \item{relative_epsilon}{Numeric. Convergence threshold for relative change in error.}
 
@@ -50,7 +51,10 @@ declaring convergence.}
 
 \item{cooling_rate_min, cooling_rate_max}{Numeric. Range for spring decay parameter.}
 
-\item{parallel_jobs}{Integer. Number of parallel jobs to run (cores on local machine or SLURM jobs).}
+\item{num_samples}{Integer. Number of LHS samples to generate (default: 20).}
+
+\item{max_cores}{Integer. Maximum number of cores to use for parallel processing. If NULL,
+uses all available cores minus 1 (default: NULL).}
 
 \item{folds}{Integer. Number of cross-validation folds. Default: 20.}
 
@@ -63,7 +67,7 @@ uses current working directory. Directory will be created if it doesn't exist.}
 
 \item{time}{Character. Walltime for SLURM jobs in HH:MM:SS format. Default: "8:00:00".}
 
-\item{memory}{Character. Memory allocation for SLURM jobs. Default: "10G".}
+\item{memory}{Character. Memory allocation for SLURM jobs. Default: "3G".}
 
 \item{use_slurm}{Logical. Whether to submit jobs via SLURM. Default: FALSE.}
 
@@ -111,10 +115,10 @@ dist_mat <- matrix(runif(100), 10, 10)
 dist_mat[lower.tri(dist_mat)] <- t(dist_mat)[lower.tri(dist_mat)]
 diag(dist_mat) <- 0
 
-# Run local optimization with 4 parallel jobs
+# Run local optimization with 50 samples
 results <- initial_parameter_optimization(
   distance_matrix = dist_mat,
-  max_iter = 1000,
+  mapping_max_iter = 1000,
   relative_epsilon = 1e-4,
   convergence_counter = 10,
   scenario_name = "test_opt",
@@ -122,16 +126,17 @@ results <- initial_parameter_optimization(
   k0_min = 1, k0_max = 30,
   c_repulsion_min = 0.00001, c_repulsion_max = 0.2,
   cooling_rate_min = 0.00001, cooling_rate_max = 0.2,
-  parallel_jobs = 4
+  num_samples = 50,
+  max_cores = 4  # Limit to 4 cores
 )
 
-# Run with SLURM using 50 parallel jobs
+# Run with SLURM using 100 samples
 initial_parameter_optimization(
   distance_matrix = dist_mat,
-  max_iter = 1000,
+  mapping_max_iter = 1000,
   scenario_name = "slurm_opt",
   N_min = 2, N_max = 10,
-  parallel_jobs = 50,
+  num_samples = 100,
   use_slurm = TRUE
 )
 }

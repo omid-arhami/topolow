@@ -9,7 +9,7 @@ adaptive_MC_sampling(
   distance_matrix,
   iterations = 1,
   batch_size = 1,
-  max_iter,
+  mapping_max_iter,
   relative_epsilon,
   folds = 20,
   num_cores = 1,
@@ -27,7 +27,7 @@ adaptive_MC_sampling(
 
 \item{batch_size}{Samples per iteration (fixed to 1)}
 
-\item{max_iter}{Maximum optimization iterations}
+\item{mapping_max_iter}{Maximum map optimization iterations}
 
 \item{relative_epsilon}{Convergence threshold}
 

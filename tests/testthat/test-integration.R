@@ -30,7 +30,7 @@ test_that("full workflow executes correctly", {
   topo_result <- create_topolow_map(
     distance_matrix = results$matrix,
     ndim = 2,
-    max_iter = 100,
+    mapping_max_iter = 100,
     k0 = 3.0,
     cooling_rate = 0.1,
     c_repulsion = 0.001
@@ -73,7 +73,7 @@ test_that("parameter optimization workflow works", {
   # Run parameter optimization with minimal settings for testing
   results <- initial_parameter_optimization(
     distance_matrix = test_mat,
-    max_iter = 100,
+    mapping_max_iter = 100,
     relative_epsilon = 1e-3,
     convergence_counter = 3,
     scenario_name = "test_opt",
@@ -85,11 +85,10 @@ test_that("parameter optimization workflow works", {
     c_repulsion_max = 0.01,
     cooling_rate_min = 0.001,
     cooling_rate_max = 0.05,
-    parallel_jobs = 3, # Reduced for testing
+    num_samples = 3, # Reduced for testing
     folds = 3,      # Reduced for testing
-    write_files = FALSE,
-    memory = "1G",  # Reduce memory for testing
-    time = "00:03:00" # Reduce time for testing
+    max_cores = 1,
+    write_files = FALSE
   )
   
   expect_true(is.data.frame(results))
@@ -127,7 +126,7 @@ test_that("adaptive sampling workflow executes", {
     samples_file = "test_samples.csv",
     distance_matrix = test_mat,
     iterations = 1,
-    max_iter = 10,
+    mapping_max_iter = 10,
     relative_epsilon = 1e-3,
     folds = 3,
     scenario_name = "test_amc"

@@ -162,14 +162,14 @@ vectorized_process_distance_matrix <- function(distance_matrix, p_dist_mat) {
 #'        for missing measurements and character strings with < or > prefixes for thresholded 
 #'        measurements.
 #' @param ndim Integer. Number of dimensions for the embedding space.
-#' @param max_iter Integer. Maximum number of optimization iterations.
+#' @param mapping_max_iter Integer. Maximum number of map optimization iterations.
 #' @param k0 Numeric. Initial spring constant controlling spring forces.
 #' @param cooling_rate Numeric. Rate of spring constant decay per iteration (0 < cooling_rate < 1).
 #' @param c_repulsion Numeric. Repulsion constant controlling repulsive forces.
 #' @param relative_epsilon Numeric. Convergence threshold for relative change in error.
 #'        Default is 1e-4.
 #' @param convergence_counter Integer. Number of iterations below threshold before declaring
-#'        convergence. Default is 10.
+#'        convergence. Default is 5.
 #' @param initial_positions Matrix or NULL. Optional starting coordinates. If NULL,
 #'        random initialization is used. Matrix should have nrow = nrow(distance_matrix)
 #'        and ncol = ndim.
@@ -193,7 +193,7 @@ vectorized_process_distance_matrix <- function(distance_matrix, p_dist_mat) {
 #' dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
 #' 
 #' # Run TopoLow in 2D
-#' result <- create_topolow_map(dist_mat, ndim=2, max_iter=1000, 
+#' result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=1000, 
 #'                       k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
 #'                       
 #' # Plot results
@@ -202,7 +202,7 @@ vectorized_process_distance_matrix <- function(distance_matrix, p_dist_mat) {
 #' @export
 create_topolow_map <- function(distance_matrix, 
                          ndim, 
-                         max_iter, 
+                         mapping_max_iter, 
                          k0, 
                          cooling_rate, 
                          c_repulsion, 
@@ -222,8 +222,8 @@ create_topolow_map <- function(distance_matrix,
   if (!is.numeric(ndim) || ndim < 1 || ndim != round(ndim)) {
     stop("ndim must be a positive integer")  
   }
-  if (!is.numeric(max_iter) || max_iter < 1 || max_iter != round(max_iter)) {
-    stop("max_iter must be a positive integer")
+  if (!is.numeric(mapping_max_iter) || mapping_max_iter < 1 || mapping_max_iter != round(mapping_max_iter)) {
+    stop("mapping_max_iter must be a positive integer")
   }
   if (!is.numeric(k0) || k0 <= 0) {
     stop("k0 must be a positive number")
@@ -311,7 +311,7 @@ create_topolow_map <- function(distance_matrix,
   }
   
   ################## Main optimization loop
-  for(iter in 1:max_iter) {
+  for(iter in 1:mapping_max_iter) {
     k_2 <- k / 2
     stop <- FALSE
     
@@ -479,7 +479,7 @@ create_topolow_map <- function(distance_matrix,
 #' 
 #' @examples
 #' dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
-#' result <- create_topolow_map(dist_mat, ndim=2, max_iter=100, k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
+#' result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=100, k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
 #' print(result)
 #' 
 #' @export
@@ -503,7 +503,7 @@ print.topolow <- function(x, ...) {
 #' 
 #' @examples
 #' dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
-#' result <- create_topolow_map(dist_mat, ndim=2, max_iter=100, k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
+#' result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=100, k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
 #' summary(result)
 #' 
 #' @export
