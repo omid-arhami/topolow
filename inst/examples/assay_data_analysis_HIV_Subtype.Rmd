@@ -505,8 +505,8 @@ param_ranges <- list(
 
 # Setup optimization parameters
 opt_params <- list(
-  max_iter = 2000,    # Maximum optimization iterations
-  num_samples = 30,   # Number of LHS samples
+  max_iter = 1000,    # Maximum optimization iterations
+  parallel_jobs = 30,   # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
   folds = 20,         # Number of CV folds
   num_cores = max(1, parallel::detectCores() - 1),
   use_slurm = FALSE
@@ -516,7 +516,7 @@ opt_params <- list(
 
 ```{r eval=FALSE}
 # Run initial parameter optimization
-results <- run_parameter_optimization(
+results <- initial_parameter_optimization(
   distance_matrix = hiv_distance_matrix,
   max_iter = opt_params$max_iter,
   relative_epsilon = 1e-4,
@@ -530,7 +530,7 @@ results <- run_parameter_optimization(
   c_repulsion_max = param_ranges$c_repulsion_max,
   cooling_rate_min = param_ranges$cooling_rate_min,
   cooling_rate_max = param_ranges$cooling_rate_max,
-  num_samples = opt_params$num_samples,
+  parallel_jobs = opt_params$parallel_jobs,
   folds = opt_params$folds,
   num_cores = opt_params$num_cores,
   time = "6:00:00",
@@ -558,34 +558,41 @@ Using the initial results as a starting point, we'll now perform adaptive sampli
 
 ```{r eval=FALSE}
 # Transform samples (with previous code's path)
-samples <- log_transform_parameters(
-  "model_parameters/HIV_BC_AMC1_model_parameters.csv")
+scenario_name = "HIV_BC_AMC1"
+samples_file = "model_parameters/HIV_BC_AMC1_model_parameters.csv"
+samples <- log_transform_parameters(samples_file)
 
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_samples = 50,  # Total samples to collect
-  n_iter = 5,        # Number of consecutive iterations at each parallel job
-  batch_size = 1,     # Samples per iteration
-  max_iter = 2000,    # Maximum iterations per optimization
+  parallel_jobs = 50,  # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
+  iterations = 5,        # Number of consecutive iterations at each parallel job (for refinement.) Can set = 1 for better for SLURM accounting.
+  max_iter = 1000,    # Maximum iterations per optimization
   relative_epsilon = 1e-4
+)
+
+# Setup optimization parameters
+opt_params <- list(
+  folds = 20,         # Number of CV folds
+  num_cores = 1,      # Number of cores on the local machine, or cores per job on SLURM. Can try parallel::detectCores() on local machines. It would be best if num_cores is a multiple of folds?
+  use_slurm = FALSE,
+  cider = FALSE
 )
 
 # Run adaptive sampling
 run_adaptive_sampling(
-  initial_samples_file = "model_parameters/HIV_BC_AMC1_model_parameters.csv",
+  initial_samples_file = samples_file,
   distance_matrix = hiv_distance_matrix,
   max_iter = amc_params$max_iter,
-  scenario_name = "HIV_BC_AMC1",
-  num_samples = amc_params$num_samples,
-  n_iter = amc_params$n_iter,
-  batch_size = amc_params$batch_size,
+  scenario_name = scenario_name,
+  parallel_jobs = amc_params$parallel_jobs,
+  iterations = amc_params$iterations,
   relative_epsilon = amc_params$relative_epsilon,
   folds = opt_params$folds,
   num_cores = opt_params$num_cores,
   time = "6:00:00",
-  memory = "10G",
-  use_slurm = FALSE,
-  cider = FALSE,
+  memory = "2G",
+  use_slurm = opt_params$use_slurm,
+  cider = opt_params$cider,
   verbose = TRUE
 )
 ```

@@ -8,7 +8,7 @@ authors:
   given-names: "Pejman"
   orcid: 0000-0002-7221-3801
 title: "TOPOLOW: A MAPPING ALGORITHM FOR ANTIGENIC CROSS-REACTIVITY AND BINDING AFFINITY ASSAY RESULTS"
-version: 0.1.1
+version: 0.2.1
 doi: https://doi.org/10.1101/2025.02.09.637307
 date-released: 2025
 url: "https://www.biorxiv.org/content/10.1101/2025.02.09.637307v1"

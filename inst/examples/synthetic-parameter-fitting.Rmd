@@ -47,8 +47,8 @@ First, let's create synthetic datasets with different dimensionalities:
 ```{r}
 # Generate datasets in 2, 5, and 10 dimensions
 results <- generate_synthetic_datasets(
-  n_dims_list = c(2, 5, 10),
-  seeds = c(123450, 903450, 13450),
+  n_dims_list = c(5, 10),
+  seeds = c(903450, 13450), # 123450, seed for dim 2
   n_points = 250,
   output_dir = "synthetic_data"
 )
@@ -82,7 +82,7 @@ param_ranges <- list(
 # Setup optimization parameters
 opt_params <- list(
   max_iter = 1000,    # Maximum optimization iterations
-  num_samples = 40,   # Number of LHS samples
+  parallel_jobs = 40,  # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
   folds = 20,         # Number of CV folds
   num_cores = 19,     # Number of cores to use. If using SLURM: 1 core per LHS sampling job. Can try parallel::detectCores() on local machines
   use_slurm = FALSE,
@@ -111,7 +111,7 @@ for(i in seq_along(results$matrices)) {
                    ndim, matrix_type))
     
     # Run optimization
-    opt_result <- run_parameter_optimization(
+    opt_result <- initial_parameter_optimization(
       distance_matrix = distance_matrix,
       max_iter = opt_params$max_iter,
       relative_epsilon = 1e-4,
@@ -125,11 +125,11 @@ for(i in seq_along(results$matrices)) {
       c_repulsion_max = param_ranges$c_repulsion_max,
       cooling_rate_min = param_ranges$cooling_rate_min,
       cooling_rate_max = param_ranges$cooling_rate_max,
-      num_samples = opt_params$num_samples,
+      parallel_jobs = opt_params$parallel_jobs,
       folds = opt_params$folds,
       num_cores = opt_params$num_cores,
       write_files = TRUE,
-      # time = "8:00:00",
+      # time = "3:00:00",
       # memory = "2G",
       # use_slurm = opt_params$use_slurm,
       # cider = opt_params$cider,
@@ -172,9 +172,8 @@ Perform adaptive sampling for each case:
 ```{r eval=FALSE}
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_samples = 600,  # Total samples to collect
-  n_iter = 3,          # Number of consecutive iterations per job
-  batch_size = 2,      # Samples per iteration
+  parallel_jobs = 600,  # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
+  iterations = 3,          # Number of consecutive iterations per job
   max_iter = 1000,     # Maximum optimization iterations
   relative_epsilon = 1e-4
 )
@@ -182,9 +181,9 @@ amc_params <- list(
 # Setup optimization parameters
 opt_params <- list(
   max_iter = 1000,    # Maximum optimization iterations
-  num_samples = 40,   # Number of LHS samples
+  parallel_jobs = 40,  # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
   folds = 20,         # Number of CV folds
-  num_cores = 20,     # Number of cores to use. Can try parallel::detectCores() on local machines. It would be best if num_cores is a multiple of batch_size*folds
+  num_cores = 20,     # Number of cores to use. Can try parallel::detectCores() on local machines. It would be best if num_cores is a multiple of folds?
   use_slurm = TRUE
 )
 
@@ -214,12 +213,11 @@ for(ndim in results$metadata$dimension) {
       distance_matrix = distance_matrix,
       max_iter = amc_params$max_iter,
       scenario_name = amc_scenario,
-      num_samples = amc_params$num_samples,
-      n_iter = amc_params$n_iter,
-      batch_size = amc_params$batch_size,
+      parallel_jobs = amc_params$parallel_jobs,
+      iterations = amc_params$iterations,
       relative_epsilon = amc_params$relative_epsilon,
       folds = opt_params$folds,
-      num_cores = min( opt_params$num_cores , amc_params$batch_size * opt_params$folds ), ###
+      num_cores = min( opt_params$num_cores , opt_params$folds ), ###
       time = "18:00:00",
       memory = "30G",
       use_slurm = opt_params$use_slurm,

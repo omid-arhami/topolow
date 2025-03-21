@@ -101,7 +101,7 @@ param_ranges <- list(
   N_max = 20,         # Maximum dimensions
   k0_min = 1,         # Minimum spring constant
   k0_max = 20,        # Maximum spring constant 
-  cooling_rate_min = 1e-3, # Minimum decay rate
+  cooling_rate_min = 1e-4, # Minimum decay rate
   cooling_rate_max = 0.05,  # Maximum decay rate
   c_repulsion_min = 1e-4,     # Minimum repulsion constant
   c_repulsion_max = 0.02       # Maximum repulsion constant
@@ -110,22 +110,23 @@ param_ranges <- list(
 # Setup optimization parameters
 opt_params <- list(
   max_iter = 1000,    # Maximum optimization iterations
-  num_samples = 50,   # Number of LHS samples
+  parallel_jobs = 50,   # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
   folds = 20,         # Number of CV folds
-  num_cores = 1,
-  use_slurm = TRUE
+  num_cores = 6, # Number of cores to use. Try parallel::detectCores() on local machines. If using SLURM: 1 core per LHS sampling job.
+  use_slurm = FALSE,
+  cider = FALSE
 )
 ```
 
 
 ```{r eval=FALSE}
 # Run initial parameter optimization
-results <- run_parameter_optimization(
+results <- initial_parameter_optimization(
   distance_matrix = h3n2_distance_matrix,
   max_iter = opt_params$max_iter,
   relative_epsilon = 1e-4,
   convergence_counter = 5,
-  scenario_name = "H3N2_2003_data_AMC10",
+  scenario_name = "H3N2_2003_data_AMC11",
   N_min = param_ranges$N_min, 
   N_max = param_ranges$N_max,
   k0_min = param_ranges$k0_min,
@@ -134,24 +135,24 @@ results <- run_parameter_optimization(
   c_repulsion_max = param_ranges$c_repulsion_max,
   cooling_rate_min = param_ranges$cooling_rate_min,
   cooling_rate_max = param_ranges$cooling_rate_max,
-  num_samples = opt_params$num_samples,
+  parallel_jobs = opt_params$parallel_jobs,
   folds = opt_params$folds,
   num_cores = opt_params$num_cores,
-  time = "6:00:00",
-  memory = "2G",
   write_files = TRUE,
-  use_slurm = opt_params$use_slurm,
-  cider = TRUE,
-  verbose = FALSE
+  # time = "6:00:00",
+  # memory = "2G",
+  # use_slurm = opt_params$use_slurm,
+  # cider = opt_params$cider,
+  verbose = TRUE
 )
 ```
 
 ## Aggregate the results
 
-(Only if SLURM was used) Wait until the jobs are done.
+ Wait until the jobs are done.
 
 ```{r eval=FALSE}
-scenario_name <- "H3N2_2003_data_AMC10"
+scenario_name <- "H3N2_2003_data_AMC11"
 aggregate_parameter_optimization_results(scenario_name, write_files=TRUE)
 ```
 
@@ -162,15 +163,14 @@ Using the initial results as a starting point, we'll now perform adaptive sampli
 
 ```{r eval=FALSE}
 # Transform samples (with previous code's path)
-scenario_name = "H3N2_2003_data_AMC9"
-samples_file = "model_parameters/H3N2_2003_data_AMC9_model_parameters.csv"
+scenario_name = "H3N2_2003_data_AMC11"
+samples_file = "model_parameters/H3N2_2003_data_AMC11_model_parameters.csv"
 samples <- log_transform_parameters(samples_file)
 
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_samples = 1000,  # Total samples to collect
-  n_iter = 3,        # Number of consecutive iterations at each parallel job
-  batch_size = 1,     # Samples per iteration
+  parallel_jobs = 100,  # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
+  iterations = 20,        # Number of times repeating the AMC sampling
   max_iter = 1000,    # Maximum iterations per optimization
   relative_epsilon = 1e-4
 )
@@ -178,9 +178,9 @@ amc_params <- list(
 # Setup optimization parameters
 opt_params <- list(
   folds = 20,         # Number of CV folds
-  num_cores = 20,      # Number of cores to use. Can try parallel::detectCores() on local machines. It would be best if num_cores is a multiple of batch_size*folds
-  use_slurm = TRUE,
-  cider = TRUE
+  num_cores = 1,      # Number of cores to use. Can try parallel::detectCores() on local machines. It would be best if num_cores is a multiple of folds
+  use_slurm = FALSE,
+  cider = FALSE
 )
 
 # Run adaptive sampling
@@ -189,17 +189,16 @@ run_adaptive_sampling(
   distance_matrix = h3n2_distance_matrix,
   max_iter = amc_params$max_iter,
   scenario_name = scenario_name,
-  num_samples = amc_params$num_samples,
-  n_iter = amc_params$n_iter,
-  batch_size = amc_params$batch_size,
+  parallel_jobs = amc_params$parallel_jobs,
+  iterations = amc_params$iterations,
   relative_epsilon = amc_params$relative_epsilon,
   folds = opt_params$folds,
   num_cores = opt_params$num_cores, 
-  time = "15:00:00",
-  memory = "2G",
-  use_slurm = opt_params$use_slurm,
-  cider = opt_params$cider,
-  verbose = FALSE
+  # time = "15:00:00",
+  # memory = "2G",
+  # use_slurm = opt_params$use_slurm,
+  # cider = opt_params$cider,
+  verbose = TRUE
 )
 ```
 

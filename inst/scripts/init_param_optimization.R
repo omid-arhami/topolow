@@ -1,7 +1,8 @@
 # Copyright (c) 2024 Omid Arhami o.arhami@gmail.com
-# Licensed under MIT License
+# Licensed under Pre-Publication Academic License https://github.com/omid-arhami/topolow/blob/main/LICENSE
 
 # inst/scripts/init_param_optimization.R
+# Script for running parameter optimization jobs submitted via SLURM
 
 # Check and install required packages if needed
 source(system.file("scripts", "check_dependencies.R", package = "topolow"))
@@ -10,7 +11,6 @@ source(system.file("scripts", "check_dependencies.R", package = "topolow"))
 library(topolow)
 library(data.table)
 library(dplyr)
-library(reshape2)
 
 # Get command line arguments
 args <- commandArgs(trailingOnly = TRUE)
@@ -29,7 +29,7 @@ verbose <- FALSE # args[11] is "FALSE"
 scenario_name <- args[12]
 i <- as.numeric(args[13])
 output_dir <- args[14]
-num_samples <- as.integer(args[15])
+parallel_jobs <- as.integer(args[15]) # Renamed from num_samples
 
 # Create output directories if they don't exist
 param_dir <- file.path(output_dir, "init_param_optimization")
@@ -46,7 +46,7 @@ matrix_list <- readRDS(matrix_list_file)
 cat("Length of matrix_list:", length(matrix_list), "\n")
 
 # Calculate fold index
-data_idx <- floor((i-1) / num_samples) + 1
+data_idx <- floor((i-1) / parallel_jobs) + 1
 
 # Validate data_idx before using it
 if (data_idx > length(matrix_list)) {

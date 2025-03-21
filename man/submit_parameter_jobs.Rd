@@ -12,7 +12,6 @@ submit_parameter_jobs(
   convergence_counter,
   scenario_name,
   folds,
-  num_cores,
   time = "8:00:00",
   memory = "10G",
   output_dir = NULL,
@@ -34,7 +33,9 @@ submit_parameter_jobs(
 
 \item{folds}{Number of CV folds}
 
-\item{num_cores}{Cores per job}
+\item{time}{Time limit for jobs (default: "8:00:00")}
+
+\item{memory}{Memory request for jobs (default: "10G")}
 
 \item{output_dir}{Directory for output files. If NULL, uses current directory}
 

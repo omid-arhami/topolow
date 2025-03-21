@@ -2,18 +2,16 @@
 % Please edit documentation in R/adaptive_sampling.R
 \name{run_adaptive_sampling}
 \alias{run_adaptive_sampling}
-\title{Submit Adaptive Monte Carlo Sampling Jobs}
+\title{Run Adaptive Monte Carlo Sampling}
 \usage{
 run_adaptive_sampling(
   initial_samples_file,
   distance_matrix,
-  num_samples = 5,
-  n_iter = 1,
-  batch_size = 1,
+  parallel_jobs = 5,
+  iterations = 5,
   max_iter,
   relative_epsilon = 1e-04,
   folds = 20,
-  num_cores = 1,
   time = "8:00:00",
   memory = "10G",
   scenario_name,
@@ -29,19 +27,15 @@ Must contain columns: log_N, log_k0, log_cooling_rate, log_c_repulsion, NLL}
 
 \item{distance_matrix}{Matrix. Distance matrix to optimize.}
 
-\item{num_samples}{Integer. Total number of jobs to submit.}
+\item{parallel_jobs}{Integer. Number of parallel jobs (cores on local machine or SLURM jobs).}
 
-\item{n_iter}{Integer. Number of sampling iterations per job.}
+\item{iterations}{Integer. Number of sampling iterations per job (default: 1).}
 
-\item{batch_size}{Integer. Samples per iteration (default: 1).}
-
-\item{max_iter}{Integer. Maximum iterations per sample evaluation.}
+\item{max_iter}{Integer. Maximum iterations per optimization.}
 
 \item{relative_epsilon}{Numeric. Convergence threshold.}
 
 \item{folds}{Integer. Number of CV folds (default: 10).}
-
-\item{num_cores}{Integer. Cores per job (default: 1).}
 
 \item{time}{Character. Walltime for SLURM jobs in HH:MM:SS format. Default: "8:00:00".}
 
@@ -49,13 +43,13 @@ Must contain columns: log_N, log_k0, log_cooling_rate, log_c_repulsion, NLL}
 
 \item{scenario_name}{Character. Name for output files.}
 
-\item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+\item{output_dir}{Character. Directory for output files. If NULL, uses current directory.}
 
 \item{use_slurm}{Logical. Whether to use SLURM (default: FALSE).}
 
 \item{cider}{Logical. Whether to use cider queue (default: FALSE).}
 
-\item{verbose}{Logical. Whether to print progress messages. Default: FALSE}
+\item{verbose}{Logical. Whether to print progress messages. Default: FALSE.}
 }
 \value{
 Invisible NULL. Results are appended to:
@@ -71,7 +65,7 @@ a single output file.
 The function:
 \enumerate{
 \item Takes initial parameter samples as starting points
-\item Creates n_iter batches of batch_size samples each
+\item Creates iterations of sampling for each parallel job
 \item Updates sampling distribution based on likelihoods
 \item Can distribute computation via SLURM for large-scale sampling
 }
@@ -89,22 +83,23 @@ dist_mat <- matrix(runif(100), 10, 10)
 dist_mat[lower.tri(dist_mat)] <- t(dist_mat)[lower.tri(dist_mat)]
 diag(dist_mat) <- 0
 
-# Run local sampling
+# Run local adaptive sampling with 4 parallel jobs
 run_adaptive_sampling(
   initial_samples_file = init_file,
   distance_matrix = dist_mat,
   max_iter = 1000,
   scenario_name = "test_sampling",
-  num_samples = 10,
-  n_iter = 5
+  parallel_jobs = 4,
+  iterations = 5,
+  verbose = TRUE
 )
 
-# Run with SLURM
+# Run with SLURM using 50 parallel jobs
 run_adaptive_sampling(
   initial_samples_file = init_file, 
   distance_matrix = dist_mat,
   scenario_name = "slurm_sampling",
-  num_samples = 50,
+  parallel_jobs = 50,
   use_slurm = TRUE
 )
 }

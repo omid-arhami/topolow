@@ -1,5 +1,5 @@
 # Copyright (c) 2024 Omid Arhami o.arhami@gmail.com
-# Licensed under MIT License
+# Licensed under Pre-Publication Academic License https://github.com/omid-arhami/topolow/blob/main/LICENSE
 
 # R/topolow-package.R
 
@@ -28,7 +28,7 @@
 #' \itemize{
 #'   \item \code{\link{create_topolow_map}}: Core optimization algorithm
 #'   \item \code{\link{process_antigenic_data}}: Process raw antigenic data
-#'   \item \code{\link{run_parameter_optimization}}: Optimize algorithm parameters
+#'   \item \code{\link{initial_parameter_optimization}}: Optimize algorithm parameters
 #'   \item \code{\link{plot_temporal_mapping}}: Create temporal visualizations
 #'   \item \code{\link{plot_cluster_mapping}}: Create cluster-based visualizations
 #' }

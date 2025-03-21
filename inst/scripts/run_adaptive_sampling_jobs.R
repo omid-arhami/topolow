@@ -1,7 +1,8 @@
 # Copyright (c) 2024 Omid Arhami o.arhami@gmail.com
-# Licensed under MIT License
+# Licensed under Pre-Publication Academic License https://github.com/omid-arhami/topolow/blob/main/LICENSE
 
 # inst/scripts/run_adaptive_sampling_jobs.R
+# Script for running adaptive Monte Carlo sampling jobs submitted via SLURM
 
 # Check and install required packages if needed
 source(system.file("scripts", "check_dependencies.R", package = "topolow"))
@@ -11,7 +12,6 @@ library(topolow)
 library(data.table)
 library(dplyr)
 library(parallel)
-library(reshape2)
 
 # Get command line arguments
 args <- commandArgs(trailingOnly = TRUE)
@@ -20,13 +20,12 @@ samples_file <- as.character(args[1])
 distance_matrix_file <- as.character(args[2])
 max_iter <- as.integer(args[3])
 relative_epsilon <- as.numeric(args[4])
-num_cores <- as.numeric(args[5])
+num_cores <- as.numeric(args[5]) # 1 but Still needed for internal implementation
 scenario_name <- as.character(args[6])
 i <- as.numeric(args[7])
-n_iter <- as.numeric(args[8])
-batch_size <- as.numeric(args[9])
-output_dir <- as.character(args[10])  
-folds <- as.integer(args[11]) 
+iterations <- as.numeric(args[8]) # Renamed from n_iter
+output_dir <- as.character(args[9])  
+folds <- as.integer(args[10]) 
 
 # Add debug output
 cat("Loading samples from:", samples_file, "\n")
@@ -55,17 +54,17 @@ if (!all(required_cols %in% names(current_samples))) {
        paste(setdiff(required_cols, names(current_samples)), collapse=", "))
 }
 
-# Run adaptive sampling
+# Run adaptive sampling - using original function call with batch_size=1
 adaptive_MC_sampling(
   samples_file = samples_file,
   distance_matrix = distance_matrix,
-  n_iter = n_iter,
-  batch_size = batch_size,
+  n_iter = iterations, # Use renamed parameter
+  batch_size = 1, # Always set to 1
   max_iter = max_iter,
   relative_epsilon = relative_epsilon,
   folds = folds,
-  num_cores = num_cores,
+  num_cores = num_cores, # Use 1 core per job (from script arg)
   scenario_name = scenario_name,
   output_dir = output_dir, 
-  verbose = TRUE
+  verbose = FALSE
 )

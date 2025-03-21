@@ -13,7 +13,7 @@ likelihood_function(
   cooling_rate,
   c_repulsion,
   folds = 20,
-  num_cores
+  num_cores = 1
 )
 }
 \arguments{

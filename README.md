@@ -26,10 +26,10 @@ Alternatively, you can install using the single source file:
 
 ```r
 # For Windows binary
-install.packages("path/to/topolow_0.1.3.zip", repos = NULL)
+install.packages("path/to/topolow_X.zip", repos = NULL)
 
 # For source package
-install.packages("path/to/topolow_0.1.3.tar.gz", repos = NULL, type = "source")
+install.packages("path/to/topolow_X.tar.gz", repos = NULL, type = "source")
 ```
 
 ### Optional Dependencies
@@ -81,7 +81,7 @@ install.packages(c("reshape2", "data.table", "dplyr", "ggplot2"))
 
 3. When submitting SLURM jobs, set the correct R module in the script:
 ```r
-run_parameter_optimization(
+initial_parameter_optimization(
   # ... other parameters ...
   r_module = "R/4.4.1", # Set this to match your cluster's R module
   use_slurm = TRUE

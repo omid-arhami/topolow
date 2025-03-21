@@ -48,6 +48,6 @@ results <- aggregate_parameter_optimization_results("optimization_run1")
 
 }
 \seealso{
-\code{\link{run_parameter_optimization}} for running the optimization
+\code{\link{initial_parameter_optimization}} for running the optimization
 \code{\link{submit_parameter_jobs}} for job submission
 }

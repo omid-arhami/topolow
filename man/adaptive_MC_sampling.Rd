@@ -7,7 +7,7 @@
 adaptive_MC_sampling(
   samples_file,
   distance_matrix,
-  n_iter = 1,
+  iterations = 1,
   batch_size = 1,
   max_iter,
   relative_epsilon,
@@ -23,9 +23,9 @@ adaptive_MC_sampling(
 
 \item{distance_matrix}{Distance matrix to fit}
 
-\item{n_iter}{Number of sampling iterations}
+\item{iterations}{Number of sampling iterations per job}
 
-\item{batch_size}{Samples per iteration}
+\item{batch_size}{Samples per iteration (fixed to 1)}
 
 \item{max_iter}{Maximum optimization iterations}
 
@@ -45,6 +45,6 @@ adaptive_MC_sampling(
 Data frame of samples with evaluated likelihoods
 }
 \description{
-Main function implementing adaptive Monte Carlo sampling (https://www.sciencedirect.com/science/article/pii/0167473088900203)
-to explore parameter space. Updates sampling distribution based on evaluated likelihoods.
+Main function implementing adaptive Monte Carlo sampling to explore parameter space.
+Updates sampling distribution based on evaluated likelihoods.
 }
