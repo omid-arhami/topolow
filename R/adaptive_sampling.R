@@ -749,6 +749,12 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 
 
 
+# Copyright (c) 2024 Omid Arhami o.arhami@gmail.com
+# Licensed under MIT License
+
+# R/adaptive_sampling.R
+# Fixed run_adaptive_sampling function to properly parallelize sample generation
+
 #' Run Adaptive Monte Carlo Sampling
 #'
 #' @description 
@@ -760,10 +766,16 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #' @details
 #' The function:
 #' 1. Takes initial parameter samples as starting points
-#' 2. Creates iterations of sampling for each parallel job
+#' 2. Creates `parallel_jobs` independent sampling processes, each running `iterations` iterations
 #' 3. Updates sampling distribution based on likelihoods
 #' 4. Can distribute computation via SLURM for large-scale sampling
 #'
+#' Workflow:
+#' 1. Runs/Submits 'parallel_jobs' independent single-core jobs
+#' 2. Each job runs for 'iterations' iterations
+#' 3. Each job adds samples to a common results file
+#' 4. Total: Adds parallel_jobs x iterations samples
+#' 
 #' Both local and SLURM executions append results to the same output file:
 #' model_parameters/\{scenario_name\}_model_parameters.csv
 #'
@@ -953,45 +965,148 @@ run_adaptive_sampling <- function(initial_samples_file,
     return(invisible(NULL))
     
   } else {
-    # Run sampling locally
-    # Determine number of cores for local processing
-    # For local execution, parallel_jobs is the number of cores to use
-    local_cores <- min(parallel_jobs, parallel::detectCores())
-    
+    # Run sampling locally with proper parallelization
     if(verbose) {
-      cat(sprintf("Running locally with %d cores and %d iterations per core\n", 
-                 local_cores, iterations))
+      cat(sprintf("Running locally with %d parallel jobs and %d iterations per job\n", 
+                 parallel_jobs, iterations))
     }
     
-    # Run with adaptive_MC_sampling
-    tryCatch({
-      results <- adaptive_MC_sampling(
-        samples_file = initial_samples_file,
-        distance_matrix = distance_matrix,
-        iterations = iterations,
-        max_iter = max_iter,
-        relative_epsilon = relative_epsilon,
-        folds = folds,
-        num_cores = local_cores,
-        scenario_name = scenario_name,
-        output_dir = output_dir,
-        verbose = verbose
-      )
+    # Define the worker function for each parallel job
+    worker_function <- function(job_id) {
+      tryCatch({
+        # Create a unique scenario name for this job
+        job_scenario_name <- paste0(scenario_name, "_job", job_id)
+        
+        # Run adaptive sampling for this job
+        result <- adaptive_MC_sampling(
+          samples_file = initial_samples_file,
+          distance_matrix = distance_matrix,
+          iterations = iterations,
+          batch_size = 1,
+          max_iter = max_iter,
+          relative_epsilon = relative_epsilon,
+          folds = folds,
+          num_cores = 1,  # Use 1 core within each job, as we're already parallelizing
+          scenario_name = job_scenario_name,
+          output_dir = output_dir,
+          verbose = if(verbose) TRUE else FALSE
+        )
+        
+        return(TRUE)  # Return success indicator
+      }, error = function(e) {
+        if(verbose) {
+          cat(sprintf("Error in job %d: %s\n", job_id, e$message))
+        }
+        return(FALSE)  # Return failure indicator
+      })
+    }
+    
+    # Run parallel jobs using appropriate method based on OS
+    if(.Platform$OS.type == "windows") {
+      if(verbose) cat("Using parallel cluster on Windows\n")
       
-      if(is.null(results) || nrow(results) == 0) {
-        warning("No valid results obtained from adaptive sampling")
-        return(NULL)
-      }
+      # Create cluster
+      cl <- parallel::makeCluster(parallel_jobs)
+      on.exit(parallel::stopCluster(cl))
       
-      return(results)
+      # Export required objects and functions
+      parallel::clusterExport(cl, c("initial_samples_file", "distance_matrix", 
+                                   "iterations", "max_iter", "relative_epsilon", 
+                                   "folds", "scenario_name", "output_dir", "verbose"),
+                             envir = environment())
       
-    }, error = function(e) {
-      warning("Error in adaptive sampling: ", e$message)
+      # Load packages on each node
+      parallel::clusterEvalQ(cl, {
+        library(topolow)
+      })
+      
+      # Run parallel jobs
+      job_results <- parallel::parLapply(cl, 1:parallel_jobs, worker_function)
+    } else {
+      # For Unix-like systems, use mclapply
+      job_results <- parallel::mclapply(1:parallel_jobs, worker_function, 
+                                      mc.cores = parallel_jobs)
+    }
+    
+    # Combine results from individual job files
+    combine_job_results(scenario_name, parallel_jobs, output_dir)
+    
+    # Return combined results
+    result_file <- file.path(param_dir, paste0(scenario_name, "_model_parameters.csv"))
+    if(file.exists(result_file)) {
+      final_samples <- read.csv(result_file)
+      return(final_samples)
+    } else {
+      warning("No results file created")
       return(NULL)
-    })
+    }
   }
 }
 
+
+#' Combine Results from Individual Job Files
+#'
+#' @description
+#' Helper function to combine results from multiple parallel job output files
+#' into a single consolidated file.
+#'
+#' @param scenario_name Character. Base scenario name used for all jobs.
+#' @param parallel_jobs Integer. Number of parallel jobs that were run.
+#' @param output_dir Character. Directory for output files. If NULL, uses current directory.
+#' @return Logical indicating success (TRUE) or failure (FALSE).
+#' @keywords internal
+combine_job_results <- function(scenario_name, parallel_jobs, output_dir = NULL) {
+  if (is.null(output_dir)) {
+    output_dir <- getwd()
+  }
+  
+  param_dir <- file.path(output_dir, "model_parameters")
+  
+  # Get all job result files
+  job_files <- character(0)
+  for(job_id in 1:parallel_jobs) {
+    job_file <- file.path(param_dir, paste0(scenario_name, "_job", job_id, "_model_parameters.csv"))
+    if(file.exists(job_file)) {
+      job_files <- c(job_files, job_file)
+    }
+  }
+  
+  if(length(job_files) == 0) {
+    warning("No job result files found to combine")
+    return(FALSE)
+  }
+  
+  # Combine all job files
+  combined_results <- NULL
+  for(file in job_files) {
+    tryCatch({
+      job_results <- read.csv(file)
+      if(is.null(combined_results)) {
+        combined_results <- job_results
+      } else {
+        combined_results <- rbind(combined_results, job_results)
+      }
+    }, error = function(e) {
+      warning("Error reading file ", file, ": ", e$message)
+    })
+  }
+  
+  if(is.null(combined_results) || nrow(combined_results) == 0) {
+    warning("No valid results found in job files")
+    return(FALSE)
+  }
+  
+  # Save combined results
+  combined_file <- file.path(param_dir, paste0(scenario_name, "_model_parameters.csv"))
+  write.csv(combined_results, combined_file, row.names = FALSE)
+  
+  # Clean up individual job files
+  for(file in job_files) {
+    file.remove(file)
+  }
+  
+  return(TRUE)
+}
 
 
 #' Check Status of Adaptive Sampling Jobs

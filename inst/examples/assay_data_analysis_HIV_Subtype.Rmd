@@ -579,6 +579,12 @@ opt_params <- list(
 )
 
 # Run adaptive sampling
+# Workflow:
+# 1. Runs/Submits 'parallel_jobs' independent single-core jobs
+# 2. Each job runs for 'iterations' iterations
+# 3. Each job adds samples to a common results file
+# 4. Total: Adds parallel_jobs x iterations samples
+
 run_adaptive_sampling(
   initial_samples_file = samples_file,
   distance_matrix = hiv_distance_matrix,
