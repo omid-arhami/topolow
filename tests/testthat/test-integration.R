@@ -71,7 +71,7 @@ test_that("parameter optimization workflow works", {
   rownames(test_mat) <- colnames(test_mat) <- paste0("Point", 1:4)
   
   # Run parameter optimization with minimal settings for testing
-  results <- run_parameter_optimization(
+  results <- initial_parameter_optimization(
     distance_matrix = test_mat,
     max_iter = 100,
     relative_epsilon = 1e-3,
@@ -85,10 +85,9 @@ test_that("parameter optimization workflow works", {
     c_repulsion_max = 0.01,
     cooling_rate_min = 0.001,
     cooling_rate_max = 0.05,
-    num_samples = 5, # Reduced for testing
+    parallel_jobs = 3, # Reduced for testing
     folds = 3,      # Reduced for testing
     write_files = FALSE,
-    num_cores = 1,   # Force single core for testing
     memory = "1G",  # Reduce memory for testing
     time = "00:03:00" # Reduce time for testing
   )
@@ -127,12 +126,10 @@ test_that("adaptive sampling workflow executes", {
   result <- adaptive_MC_sampling(
     samples_file = "test_samples.csv",
     distance_matrix = test_mat,
-    n_iter = 1,
-    batch_size = 1,
+    iterations = 1,
     max_iter = 10,
     relative_epsilon = 1e-3,
     folds = 3,
-    num_cores = 1,
     scenario_name = "test_amc"
   )
   

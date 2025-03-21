@@ -1,5 +1,5 @@
 # Copyright (c) 2024 Omid Arhami o.arhami@gmail.com
-# Licensed under MIT License
+# Licensed under Pre-Publication Academic License https://github.com/omid-arhami/topolow/blob/main/LICENSE
 
 # inst/scripts/run_topolow_comparison.R
 
