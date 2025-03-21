@@ -112,7 +112,7 @@ run_topolow_local <- function(truth_matrix, input_matrix, best_params, opt_param
   result <- create_topolow_map(
     distance_matrix = input_matrix,
     ndim = best_params$N,
-    max_iter = opt_params$max_topolow_iter,
+    mapping_max_iter = opt_params$max_topolow_iter,
     k0 = best_params$k0,
     cooling_rate = best_params$cooling_rate,
     c_repulsion = best_params$c_repulsion,

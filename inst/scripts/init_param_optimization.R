@@ -17,7 +17,7 @@ args <- commandArgs(trailingOnly = TRUE)
 
 matrix_list_file <- args[1]
 N <- as.integer(args[2])
-max_iter <- as.integer(args[3])
+mapping_max_iter <- as.integer(args[3])
 k0 <- as.numeric(args[4])
 cooling_rate <- as.numeric(args[5])
 c_repulsion <- as.numeric(args[6])
@@ -62,7 +62,7 @@ input_matrix <- matrix_list[[data_idx]][[2]]
 res_train <- create_topolow_map(
   distance_matrix = input_matrix,
   ndim = N,
-  max_iter = max_iter,
+  mapping_max_iter = mapping_max_iter,
   k0 = k0,
   cooling_rate = cooling_rate,
   c_repulsion = c_repulsion,

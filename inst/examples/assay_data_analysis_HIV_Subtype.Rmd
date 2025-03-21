@@ -505,7 +505,7 @@ param_ranges <- list(
 
 # Setup optimization parameters
 opt_params <- list(
-  max_iter = 1000,    # Maximum optimization iterations
+  mapping_max_iter = 1000,    # Maximum optimization iterations
   parallel_jobs = 30,   # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
   folds = 20,         # Number of CV folds
   num_cores = max(1, parallel::detectCores() - 1),
@@ -518,7 +518,7 @@ opt_params <- list(
 # Run initial parameter optimization
 results <- initial_parameter_optimization(
   distance_matrix = hiv_distance_matrix,
-  max_iter = opt_params$max_iter,
+  mapping_max_iter = opt_params$mapping_max_iter,
   relative_epsilon = 1e-4,
   convergence_counter = 5,
   scenario_name = "HIV_BC_AMC2",
@@ -564,9 +564,9 @@ samples <- log_transform_parameters(samples_file)
 
 # Setup adaptive sampling parameters
 amc_params <- list(
-  parallel_jobs = 50,  # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
-  iterations = 5,        # Number of consecutive iterations at each parallel job (for refinement.) Can set = 1 for better for SLURM accounting.
-  max_iter = 1000,    # Maximum iterations per optimization
+  num_parallel_jobs = 4,  # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
+  num_samples = 8,        # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
+  mapping_max_iter = 1000,    # Maximum iterations per map optimization
   relative_epsilon = 1e-4
 )
 
@@ -580,18 +580,18 @@ opt_params <- list(
 
 # Run adaptive sampling
 # Workflow:
-# 1. Runs/Submits 'parallel_jobs' independent single-core jobs
-# 2. Each job runs for 'iterations' iterations
+# 1. Runs/Submits 'num_parallel_jobs' independent single-core jobs
+# 2. Each job runs for num_samples/num_parallel_jobs iterations
 # 3. Each job adds samples to a common results file
-# 4. Total: Adds parallel_jobs x iterations samples
+# 4. Total: Adds num_samples samples
 
 run_adaptive_sampling(
   initial_samples_file = samples_file,
   distance_matrix = hiv_distance_matrix,
-  max_iter = amc_params$max_iter,
+  mapping_max_iter = amc_params$mapping_max_iter,
   scenario_name = scenario_name,
-  parallel_jobs = amc_params$parallel_jobs,
-  iterations = amc_params$iterations,
+  num_parallel_jobs = amc_params$num_parallel_jobs,
+  num_samples = amc_params$num_samples,
   relative_epsilon = amc_params$relative_epsilon,
   folds = opt_params$folds,
   num_cores = opt_params$num_cores,
@@ -737,7 +737,7 @@ Finally, let's validate our optimal parameters:
 result <- create_topolow_map(
   distance_matrix = hiv_distance_matrix,
   ndim = optimal_params$N,
-  max_iter = 1000,
+  mapping_max_iter = 1000,
   k0 = optimal_params$k0,
   cooling_rate = optimal_params$cooling_rate,
   c_repulsion = optimal_params$c_repulsion,

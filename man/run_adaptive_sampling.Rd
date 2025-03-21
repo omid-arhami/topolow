@@ -7,9 +7,10 @@
 run_adaptive_sampling(
   initial_samples_file,
   distance_matrix,
-  parallel_jobs = 5,
-  iterations = 5,
-  max_iter,
+  num_parallel_jobs = 5,
+  max_cores = NULL,
+  num_samples = 10,
+  mapping_max_iter,
   relative_epsilon = 1e-04,
   folds = 20,
   time = "8:00:00",
@@ -27,11 +28,14 @@ Must contain columns: log_N, log_k0, log_cooling_rate, log_c_repulsion, NLL}
 
 \item{distance_matrix}{Matrix. Distance matrix to optimize.}
 
-\item{parallel_jobs}{Integer. Number of parallel jobs (cores on local machine or SLURM jobs).}
+\item{num_parallel_jobs}{Integer. Number of parallel jobs (cores on local machine or SLURM jobs).}
 
-\item{iterations}{Integer. Number of sampling iterations per job (default: 1).}
+\item{max_cores}{Integer. Maximum number of cores to use for parallel processing. If NULL,
+uses all available cores minus 1 (default: NULL).}
 
-\item{max_iter}{Integer. Maximum iterations per optimization.}
+\item{num_samples}{Integer. Number of new samples to be added to the CSV file containing initial samples through Adaptive Monte Carlo sampling (default: 10).}
+
+\item{mapping_max_iter}{Integer. Maximum iterations per map optimization.}
 
 \item{relative_epsilon}{Numeric. Convergence threshold.}
 
@@ -65,9 +69,17 @@ a single output file.
 The function:
 \enumerate{
 \item Takes initial parameter samples as starting points
-\item Creates iterations of sampling for each parallel job
+\item Creates \code{num_parallel_jobs} independent sampling processes
 \item Updates sampling distribution based on likelihoods
 \item Can distribute computation via SLURM for large-scale sampling
+}
+
+Workflow:
+\enumerate{
+\item Runs/Submits 'num_parallel_jobs' independent single-core jobs
+\item Each job runs for num_samples/num_parallel_jobs iterations
+\item Each job adds samples to a common results file
+\item Total: Adds num_samples samples
 }
 
 Both local and SLURM executions append results to the same output file:
@@ -87,10 +99,11 @@ diag(dist_mat) <- 0
 run_adaptive_sampling(
   initial_samples_file = init_file,
   distance_matrix = dist_mat,
-  max_iter = 1000,
+  mapping_max_iter = 1000,
   scenario_name = "test_sampling",
-  parallel_jobs = 4,
-  iterations = 5,
+  num_parallel_jobs = 4,
+  max_cores = 4,
+  num_samples = 8,
   verbose = TRUE
 )
 
@@ -99,7 +112,7 @@ run_adaptive_sampling(
   initial_samples_file = init_file, 
   distance_matrix = dist_mat,
   scenario_name = "slurm_sampling",
-  parallel_jobs = 50,
+  num_parallel_jobs = 50,
   use_slurm = TRUE
 )
 }

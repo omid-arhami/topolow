@@ -24,7 +24,6 @@
 "_PACKAGE"
 
 
-
 #' Run Parameter Optimization Via Latin Hypercube Sampling
 #'
 #' @description
@@ -48,7 +47,7 @@
 #'
 #' @param distance_matrix Matrix or data frame. Input distance matrix. Must be square
 #'        and symmetric. Can contain NA values for missing measurements.
-#' @param max_iter Integer. Maximum number of optimization iterations.
+#' @param mapping_max_iter Integer. Maximum number of optimization iterations (also accepts 'mapping_max_iter').
 #' @param relative_epsilon Numeric. Convergence threshold for relative change in error.
 #' @param convergence_counter Integer. Number of iterations below threshold before 
 #'        declaring convergence.
@@ -57,14 +56,16 @@
 #' @param k0_min,k0_max Numeric. Range for initial spring constant parameter.
 #' @param c_repulsion_min,c_repulsion_max Numeric. Range for repulsion constant parameter.
 #' @param cooling_rate_min,cooling_rate_max Numeric. Range for spring decay parameter.
-#' @param parallel_jobs Integer. Number of parallel jobs to run (cores on local machine or SLURM jobs).
+#' @param num_samples Integer. Number of LHS samples to generate (default: 20).
+#' @param max_cores Integer. Maximum number of cores to use for parallel processing. If NULL,
+#'        uses all available cores minus 1 (default: NULL).
 #' @param folds Integer. Number of cross-validation folds. Default: 20.
 #' @param verbose Logical. Whether to print progress messages. Default: FALSE.
 #' @param write_files Logical. Whether to save results to CSV. Default: TRUE.
 #' @param output_dir Character. Directory where output and temporary files will be saved. If NULL,
 #'        uses current working directory. Directory will be created if it doesn't exist.
 #' @param time Character. Walltime for SLURM jobs in HH:MM:SS format. Default: "8:00:00".
-#' @param memory Character. Memory allocation for SLURM jobs. Default: "10G".
+#' @param memory Character. Memory allocation for SLURM jobs. Default: "3G".
 #' @param use_slurm Logical. Whether to submit jobs via SLURM. Default: FALSE.
 #' @param cider Logical. Whether to use cider queue in SLURM. Default: FALSE.
 #'
@@ -86,10 +87,10 @@
 #' dist_mat[lower.tri(dist_mat)] <- t(dist_mat)[lower.tri(dist_mat)]
 #' diag(dist_mat) <- 0
 #'
-#' # Run local optimization with 4 parallel jobs
+#' # Run local optimization with 50 samples
 #' results <- initial_parameter_optimization(
 #'   distance_matrix = dist_mat,
-#'   max_iter = 1000,
+#'   mapping_max_iter = 1000,
 #'   relative_epsilon = 1e-4,
 #'   convergence_counter = 10,
 #'   scenario_name = "test_opt",
@@ -97,16 +98,17 @@
 #'   k0_min = 1, k0_max = 30,
 #'   c_repulsion_min = 0.00001, c_repulsion_max = 0.2,
 #'   cooling_rate_min = 0.00001, cooling_rate_max = 0.2,
-#'   parallel_jobs = 4
+#'   num_samples = 50,
+#'   max_cores = 4  # Limit to 4 cores
 #' )
 #'
-#' # Run with SLURM using 50 parallel jobs
+#' # Run with SLURM using 100 samples
 #' initial_parameter_optimization(
 #'   distance_matrix = dist_mat,
-#'   max_iter = 1000,
+#'   mapping_max_iter = 1000,
 #'   scenario_name = "slurm_opt",
 #'   N_min = 2, N_max = 10,
-#'   parallel_jobs = 50,
+#'   num_samples = 100,
 #'   use_slurm = TRUE
 #' )
 #' }
@@ -119,27 +121,28 @@
 #' @importFrom stats runif qunif
 #' @export
 initial_parameter_optimization <- function(distance_matrix,
-                                     max_iter,
-                                     relative_epsilon,
-                                     convergence_counter,
-                                     scenario_name,
-                                     N_min,
-                                     N_max,
-                                     k0_min,
-                                     k0_max,
-                                     c_repulsion_min,
-                                     c_repulsion_max,
-                                     cooling_rate_min,
-                                     cooling_rate_max,
-                                     parallel_jobs = 5,
-                                     folds = 20,
-                                     verbose = FALSE,
-                                     write_files = TRUE,
-                                     output_dir = NULL,
-                                     time = "8:00:00",
-                                     memory = "10G",
-                                     use_slurm = FALSE,
-                                     cider = FALSE) {
+                                          mapping_max_iter = NULL,
+                                          relative_epsilon,
+                                          convergence_counter,
+                                          scenario_name,
+                                          N_min,
+                                          N_max,
+                                          k0_min,
+                                          k0_max,
+                                          c_repulsion_min,
+                                          c_repulsion_max,
+                                          cooling_rate_min,
+                                          cooling_rate_max,
+                                          num_samples = 20,
+                                          max_cores = NULL,
+                                          folds = 20,
+                                          verbose = FALSE,
+                                          write_files = TRUE,
+                                          output_dir = NULL,
+                                          time = "8:00:00",
+                                          memory = "3G",
+                                          use_slurm = FALSE,
+                                          cider = FALSE) {
   # Input validation
   if (!is.matrix(distance_matrix)) {
     stop("distance_matrix must be a matrix")
@@ -150,11 +153,11 @@ initial_parameter_optimization <- function(distance_matrix,
   
   # Validate integer parameters
   integer_params <- list(
-    max_iter = max_iter,
+    mapping_max_iter = mapping_max_iter,
     convergence_counter = convergence_counter,
     N_min = N_min,
     N_max = N_max,
-    parallel_jobs = parallel_jobs,
+    num_samples = num_samples,
     folds = folds
   )
   
@@ -224,17 +227,37 @@ initial_parameter_optimization <- function(distance_matrix,
     stop("SLURM requested but not available on this system")
   }
   
-  # Handle output directory
-  if (write_files || use_slurm) {
-    # If no output directory specified, use current working directory
-    if (is.null(output_dir)) {
-      output_dir <- getwd()
+  # Determine maximum cores for parallel processing
+  available_cores <- parallel::detectCores()
+  if (is.null(max_cores)) {
+    # Use all cores minus 1 to avoid bogging down the system
+    max_cores <- max(1, available_cores - 1)
+  } else {
+    # Validate max_cores
+    if (!is.numeric(max_cores) || max_cores < 1 || max_cores != round(max_cores)) {
+      stop("max_cores must be a positive integer")
     }
+    # Limit to available cores
+    max_cores <- min(max_cores, available_cores)
+  }
   
-    # Create required directories
-    param_dir <- file.path(output_dir, "model_parameters")
-    run_topolow_dir <- file.path(output_dir, "init_param_optimization")
-    
+  if (verbose) {
+    cat(sprintf("Processing %d samples with maximum %d cores\n", num_samples, max_cores))
+  }
+  
+  # Handle output directory
+  # Always define these directories regardless of write_files or use_slurm
+  # to ensure they exist for parallel workers
+  if (is.null(output_dir)) {
+    output_dir <- getwd()
+  }
+  
+  # Create directory paths (but don't create directories unless needed)
+  param_dir <- file.path(output_dir, "model_parameters")
+  run_topolow_dir <- file.path(output_dir, "init_param_optimization")
+  
+  # Only create directories and verify permissions if writing files or using SLURM
+  if (write_files || use_slurm) {
     if (write_files) {
       for (dir in c(param_dir, run_topolow_dir)) {
         if (!dir.exists(dir)) {
@@ -266,7 +289,7 @@ initial_parameter_optimization <- function(distance_matrix,
   }
 
   # Generate LHS samples
-  lhs_samples <- maximinLHS(n = parallel_jobs, k = 4)
+  lhs_samples <- maximinLHS(n = num_samples, k = 4)
   lhs_params <- data.frame(
     N = floor(qunif(lhs_samples[,1], min = N_min, max = N_max + 1)),
     k0 = qunif(lhs_samples[,2], min = k0_min, max = k0_max),
@@ -334,7 +357,7 @@ initial_parameter_optimization <- function(distance_matrix,
     submit_parameter_jobs(
       matrix_list_file = matrix_list_file,
       lhs_params = lhs_params,
-      max_iter = max_iter,
+      mapping_max_iter = mapping_max_iter,
       relative_epsilon = relative_epsilon,
       convergence_counter = convergence_counter,
       scenario_name = scenario_name,
@@ -350,14 +373,14 @@ initial_parameter_optimization <- function(distance_matrix,
     # Process samples locally with same file structure as SLURM
     if(verbose) cat("Processing samples locally\n")
     
-    # Determine cores for local processing
-    local_cores <- min(parallel_jobs, parallel::detectCores())
-    if(verbose) cat(sprintf("Using %d cores\n", local_cores))
+    # Determine the optimal number of cores to use
+    local_cores <- min(num_samples, max_cores)
+    if(verbose) cat(sprintf("Using %d cores for processing %d samples\n", local_cores, num_samples))
     
     # Process each sample and fold
     process_sample <- function(i) {
-      sample_idx <- ((i - 1) %% parallel_jobs) + 1
-      fold_idx <- floor((i - 1) / parallel_jobs) + 1
+      sample_idx <- ((i - 1) %% num_samples) + 1
+      fold_idx <- floor((i - 1) / num_samples) + 1
       
       N <- lhs_params$N[sample_idx]
       k0 <- lhs_params$k0[sample_idx]
@@ -371,7 +394,7 @@ initial_parameter_optimization <- function(distance_matrix,
         res_train <- create_topolow_map(
           distance_matrix = input_matrix,
           ndim = N,
-          max_iter = max_iter,
+          mapping_max_iter = mapping_max_iter,
           k0 = k0,
           cooling_rate = cooling_rate,
           c_repulsion = c_repulsion,
@@ -430,49 +453,75 @@ initial_parameter_optimization <- function(distance_matrix,
       })
     }
     
-    # Process all samples in parallel
-    if(verbose) cat("Starting parallel processing\n")
+    # Create batches if num_samples*folds exceeds what we can process at once
+    total_combinations <- num_samples * folds
+    if(verbose) cat(sprintf("Total cross validations to process: %d\n", total_combinations))
     
-    # Determine OS and set up appropriate parallel method
-    if (.Platform$OS.type == "windows") {
-      if(local_cores > 1) {
-        if(verbose) cat("Using parallel cluster on Windows\n")
-        # Create cluster
-        cl <- parallel::makeCluster(local_cores)
-        
-        # Export required functions and data to cluster
-        parallel::clusterExport(cl, c("matrix_list", "lhs_params", "max_iter",
-                                      "relative_epsilon", "convergence_counter",
-                                      "scenario_name", "write_files", "verbose",
-                                      "run_topolow_dir", "parallel_jobs"),
-                                envir = environment())
-        
-        # Load required packages on each cluster node
-        parallel::clusterEvalQ(cl, {
-          library(topolow)
-        })
-        
-        # Run processing
-        res_list <- parallel::parLapply(cl, 1:(parallel_jobs * folds), process_sample)
-        
-        # Clean up
-        parallel::stopCluster(cl)
-      } else {
-        if(verbose) cat("Running sequentially on Windows with single core\n")
-        res_list <- lapply(1:(parallel_jobs * folds), process_sample)
+    # Determine batch size based on available cores and memory considerations
+    # Process in reasonable sized batches to avoid memory issues
+    batch_size <- min(local_cores * 10, total_combinations)
+    num_batches <- ceiling(total_combinations / batch_size)
+    
+    all_results <- list()
+    
+    for(batch in 1:num_batches) {
+      batch_start <- (batch - 1) * batch_size + 1
+      batch_end <- min(batch * batch_size, total_combinations)
+      batch_indices <- batch_start:batch_end
+      
+      if(verbose) {
+        cat(sprintf("Processing batch %d/%d (indices %d-%d)\n", 
+                   batch, num_batches, batch_start, batch_end))
       }
-    } else {
-      # Use mclapply on Unix-like systems
-      if(verbose) cat("Using mclapply on Unix-like system\n")
-      res_list <- parallel::mclapply(
-        1:(parallel_jobs * folds),
-        process_sample,
-        mc.cores = local_cores
-      )
+      
+      # Process all samples in current batch with appropriate parallel method
+      if(local_cores > 1) {
+        if(.Platform$OS.type == "windows") {
+          if(verbose) cat("Using parallel cluster on Windows\n")
+          # Create cluster
+          cl <- parallel::makeCluster(local_cores)
+          
+          # Export required functions and data to cluster
+          parallel::clusterExport(cl, c("matrix_list", "lhs_params", "mapping_max_iter",
+                                        "relative_epsilon", "convergence_counter",
+                                        "scenario_name", "write_files", "verbose",
+                                        "run_topolow_dir", "param_dir", "num_samples"),
+                                  envir = environment())
+          
+          # Load required packages on each cluster node
+          parallel::clusterEvalQ(cl, {
+            library(topolow)
+          })
+          
+          # Run processing
+          batch_results <- parallel::parLapply(cl, batch_indices, process_sample)
+          
+          # Clean up
+          parallel::stopCluster(cl)
+        } else {
+          # Use mclapply on Unix-like systems
+          if(verbose) cat("Using mclapply on Unix-like system\n")
+          batch_results <- parallel::mclapply(
+            batch_indices,
+            process_sample,
+            mc.cores = local_cores
+          )
+        }
+      } else {
+        # Sequential processing
+        if(verbose) cat("Running sequentially with single core\n")
+        batch_results <- lapply(batch_indices, process_sample)
+      }
+      
+      # Add batch results to all_results
+      all_results <- c(all_results, batch_results)
+      
+      # Clean memory between batches
+      gc()
     }
     
     # Remove NULL results
-    res_list <- Filter(Negate(is.null), res_list)
+    res_list <- Filter(Negate(is.null), all_results)
     
     # Check if we have any valid results
     if(length(res_list) == 0) {
@@ -523,6 +572,7 @@ initial_parameter_optimization <- function(distance_matrix,
 }
 
 
+
 #' Submit Parameter Optimization Jobs to SLURM
 #'
 #' @description
@@ -530,7 +580,7 @@ initial_parameter_optimization <- function(distance_matrix,
 #'
 #' @param matrix_list_file Path to saved matrix list RDS file
 #' @param lhs_params Data frame of LHS parameter samples
-#' @param max_iter Maximum iterations
+#' @param mapping_max_iter Maximum map optimization iterations
 #' @param relative_epsilon Convergence threshold
 #' @param convergence_counter Convergence counter
 #' @param scenario_name Scenario name
@@ -543,7 +593,7 @@ initial_parameter_optimization <- function(distance_matrix,
 #' @keywords internal
 submit_parameter_jobs <- function(matrix_list_file,
                                 lhs_params,
-                                max_iter,
+                                mapping_max_iter,
                                 relative_epsilon, 
                                 convergence_counter,
                                 scenario_name,
@@ -581,19 +631,19 @@ submit_parameter_jobs <- function(matrix_list_file,
                  folds, length(matrix_list)))
   }
   
-  parallel_jobs <- nrow(lhs_params)
-  total_jobs <- parallel_jobs * folds
+  num_samples <- nrow(lhs_params)
+  total_jobs <- num_samples * folds
   
   # Submit jobs - one per parameter set/fold combination
   for(i in seq_len(total_jobs)) {
     # Calculate indices
-    sample_idx <- ((i - 1) %% parallel_jobs) + 1
+    sample_idx <- ((i - 1) %% num_samples) + 1
     
     # Prepare arguments
     args <- c(
       matrix_list_file,
       as.character(lhs_params$N[sample_idx]),
-      as.character(max_iter),
+      as.character(mapping_max_iter),
       as.character(lhs_params$k0[sample_idx]),
       as.character(lhs_params$cooling_rate[sample_idx]),
       as.character(lhs_params$c_repulsion[sample_idx]),
@@ -605,7 +655,7 @@ submit_parameter_jobs <- function(matrix_list_file,
       scenario_name,
       as.character(i),
       output_dir,
-      as.character(parallel_jobs)
+      as.character(num_samples)
     )
     
     # Create job script
@@ -632,6 +682,7 @@ submit_parameter_jobs <- function(matrix_list_file,
   
   return(invisible(NULL))
 }
+
 
 
 #' Aggregate Results from Parameter Optimization Jobs
@@ -749,12 +800,6 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 
 
 
-# Copyright (c) 2024 Omid Arhami o.arhami@gmail.com
-# Licensed under MIT License
-
-# R/adaptive_sampling.R
-# Fixed run_adaptive_sampling function to properly parallelize sample generation
-
 #' Run Adaptive Monte Carlo Sampling
 #'
 #' @description 
@@ -766,15 +811,15 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #' @details
 #' The function:
 #' 1. Takes initial parameter samples as starting points
-#' 2. Creates `parallel_jobs` independent sampling processes, each running `iterations` iterations
+#' 2. Creates `num_parallel_jobs` independent sampling processes
 #' 3. Updates sampling distribution based on likelihoods
 #' 4. Can distribute computation via SLURM for large-scale sampling
 #'
 #' Workflow:
-#' 1. Runs/Submits 'parallel_jobs' independent single-core jobs
-#' 2. Each job runs for 'iterations' iterations
+#' 1. Runs/Submits 'num_parallel_jobs' independent single-core jobs
+#' 2. Each job runs for num_samples/num_parallel_jobs iterations
 #' 3. Each job adds samples to a common results file
-#' 4. Total: Adds parallel_jobs x iterations samples
+#' 4. Total: Adds num_samples samples
 #' 
 #' Both local and SLURM executions append results to the same output file:
 #' model_parameters/\{scenario_name\}_model_parameters.csv
@@ -782,11 +827,13 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #' @param initial_samples_file Character. Path to CSV file containing initial samples.
 #'        Must contain columns: log_N, log_k0, log_cooling_rate, log_c_repulsion, NLL
 #' @param distance_matrix Matrix. Distance matrix to optimize.
-#' @param max_iter Integer. Maximum iterations per optimization.
+#' @param mapping_max_iter Integer. Maximum iterations per map optimization.
 #' @param relative_epsilon Numeric. Convergence threshold.
 #' @param folds Integer. Number of CV folds (default: 10).
-#' @param parallel_jobs Integer. Number of parallel jobs (cores on local machine or SLURM jobs).
-#' @param iterations Integer. Number of sampling iterations per job (default: 1).
+#' @param num_parallel_jobs Integer. Number of parallel jobs (cores on local machine or SLURM jobs).
+#' @param max_cores Integer. Maximum number of cores to use for parallel processing. If NULL,
+#'        uses all available cores minus 1 (default: NULL).
+#' @param num_samples Integer. Number of new samples to be added to the CSV file containing initial samples through Adaptive Monte Carlo sampling (default: 10).
 #' @param scenario_name Character. Name for output files.
 #' @param use_slurm Logical. Whether to use SLURM (default: FALSE).
 #' @param cider Logical. Whether to use cider queue (default: FALSE).
@@ -812,10 +859,11 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #' run_adaptive_sampling(
 #'   initial_samples_file = init_file,
 #'   distance_matrix = dist_mat,
-#'   max_iter = 1000,
+#'   mapping_max_iter = 1000,
 #'   scenario_name = "test_sampling",
-#'   parallel_jobs = 4,
-#'   iterations = 5,
+#'   num_parallel_jobs = 4,
+#'   max_cores = 4,
+#'   num_samples = 8,
 #'   verbose = TRUE
 #' )
 #'
@@ -824,7 +872,7 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #'   initial_samples_file = init_file, 
 #'   distance_matrix = dist_mat,
 #'   scenario_name = "slurm_sampling",
-#'   parallel_jobs = 50,
+#'   num_parallel_jobs = 50,
 #'   use_slurm = TRUE
 #' )
 #' }
@@ -835,9 +883,10 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #' @export
 run_adaptive_sampling <- function(initial_samples_file,
                                   distance_matrix,
-                                  parallel_jobs = 5,
-                                  iterations = 5, 
-                                  max_iter, 
+                                  num_parallel_jobs = 5,
+                                  max_cores = NULL,
+                                  num_samples = 10,
+                                  mapping_max_iter, 
                                   relative_epsilon = 1e-4,
                                   folds = 20, 
                                   time = "8:00:00",
@@ -847,16 +896,31 @@ run_adaptive_sampling <- function(initial_samples_file,
                                   use_slurm = FALSE,
                                   cider = FALSE,
                                   verbose = FALSE) {
-    
+  
+  # calculate iterations from num_samples
+  if (!is.numeric(num_samples) || num_samples < 1 || num_samples != round(num_samples)) {
+    stop("num_samples must be a positive integer")
+  }
+  iterations = ceiling(num_samples / num_parallel_jobs)
+  if (verbose) {
+    cat(sprintf("Calculating iterations per job: %d samples / %d jobs = %d iterations per job\n", 
+                num_samples, num_parallel_jobs, iterations))
+    cat(sprintf("This will produce approximately %d total new samples\n", 
+                iterations * num_parallel_jobs))
+  }
+
+  # Record start time for timing report
+  start_time <- Sys.time()
+  
   if(!is.matrix(distance_matrix)) {
     stop("distance_matrix must be a matrix")
   }
   
   # Validate numeric parameters
   integer_params <- list(
-    max_iter = max_iter,
+    mapping_max_iter = mapping_max_iter,
     folds = folds, 
-    parallel_jobs = parallel_jobs,
+    num_parallel_jobs = num_parallel_jobs,
     iterations = iterations
   )
   
@@ -878,6 +942,25 @@ run_adaptive_sampling <- function(initial_samples_file,
   # Check SLURM availability if requested
   if(use_slurm && !has_slurm()) {
     stop("SLURM requested but not available")
+  }
+  
+  # Determine maximum cores for parallel processing
+  available_cores <- parallel::detectCores()
+  if (is.null(max_cores)) {
+    # Use all cores minus 1 to avoid bogging down the system
+    max_cores <- max(1, available_cores - 1)
+  } else {
+    # Validate max_cores
+    if (!is.numeric(max_cores) || max_cores < 1 || max_cores != round(max_cores)) {
+      stop("max_cores must be a positive integer")
+    }
+    # Limit to available cores
+    max_cores <- min(max_cores, available_cores)
+  }
+  
+  if (verbose) {
+    cat(sprintf("Using %d parallel jobs with maximum %d cores\n", 
+               num_parallel_jobs, max_cores))
   }
   
   # Handle output directory
@@ -916,6 +999,9 @@ run_adaptive_sampling <- function(initial_samples_file,
     stop("No valid samples in initial samples file after filtering NAs and infinities")
   }
   
+  # Calculate total expected samples for progress reporting
+  total_expected_samples <- num_parallel_jobs * iterations
+  
   if(use_slurm) {
     # SLURM handling - prepare the distance matrix file
     distance_matrix_file <- file.path(adaptive_sampling_dir,
@@ -923,12 +1009,12 @@ run_adaptive_sampling <- function(initial_samples_file,
     saveRDS(distance_matrix, distance_matrix_file)
     
     # Submit parallel jobs to SLURM
-    for(i in 1:parallel_jobs) {
+    for(i in 1:num_parallel_jobs) {
       # Prepare arguments
       args <- c(
         initial_samples_file,
         distance_matrix_file,
-        as.character(max_iter),
+        as.character(mapping_max_iter),
         as.character(relative_epsilon),
         "1", # num_cores (each job uses 1 core)
         scenario_name, #6
@@ -959,7 +1045,7 @@ run_adaptive_sampling <- function(initial_samples_file,
       submit_job(script_file, use_slurm = TRUE, cider = cider)
       
       if(verbose) cat(sprintf("Submitted job %d of %d with %d iterations\n", 
-                             i, parallel_jobs, iterations))
+                             i, num_parallel_jobs, iterations))
     }
     
     return(invisible(NULL))
@@ -968,8 +1054,22 @@ run_adaptive_sampling <- function(initial_samples_file,
     # Run sampling locally with proper parallelization
     if(verbose) {
       cat(sprintf("Running locally with %d parallel jobs and %d iterations per job\n", 
-                 parallel_jobs, iterations))
+                 num_parallel_jobs, iterations))
+      cat(sprintf("Expecting to generate approximately %d new samples\n", 
+                 total_expected_samples))
     }
+    
+    # Create a progress counter file if verbose mode is enabled
+    progress_file <- NULL
+    if(verbose) {
+      progress_file <- file.path(adaptive_sampling_dir, 
+                                paste0(scenario_name, "_progress.txt"))
+      write(0, file = progress_file)
+    }
+    
+    # Determine the optimal number of cores to use
+    local_cores <- min(num_parallel_jobs, max_cores)
+    if(verbose) cat(sprintf("Using %d cores for processing\n", local_cores))
     
     # Define the worker function for each parallel job
     worker_function <- function(job_id) {
@@ -977,20 +1077,44 @@ run_adaptive_sampling <- function(initial_samples_file,
         # Create a unique scenario name for this job
         job_scenario_name <- paste0(scenario_name, "_job", job_id)
         
-        # Run adaptive sampling for this job
-        result <- adaptive_MC_sampling(
-          samples_file = initial_samples_file,
-          distance_matrix = distance_matrix,
-          iterations = iterations,
-          batch_size = 1,
-          max_iter = max_iter,
-          relative_epsilon = relative_epsilon,
-          folds = folds,
-          num_cores = 1,  # Use 1 core within each job, as we're already parallelizing
-          scenario_name = job_scenario_name,
-          output_dir = output_dir,
-          verbose = if(verbose) TRUE else FALSE
-        )
+        # Create a custom wrapper around adaptive_MC_sampling for progress tracking
+        for(iter in 1:iterations) {
+          if(verbose) {
+            cat(sprintf("Job %d: Starting iteration %d of %d\n", 
+                       job_id, iter, iterations))
+          }
+          
+          # Run one iteration of adaptive sampling
+          result <- adaptive_MC_sampling(
+            samples_file = initial_samples_file,
+            distance_matrix = distance_matrix,
+            iterations = 1,  # One iteration at a time for better progress tracking
+            batch_size = 1,
+            mapping_max_iter = mapping_max_iter,
+            relative_epsilon = relative_epsilon,
+            folds = folds,
+            num_cores = 1,  # Use 1 core within each job
+            scenario_name = job_scenario_name,
+            output_dir = output_dir,
+            verbose = FALSE  # Disable verbose within subfunction
+          )
+          
+          # Update progress counter
+          if(verbose && !is.null(progress_file)) {
+            # Atomic read-modify-write to update progress
+            tryCatch({
+              current <- as.numeric(readLines(progress_file)[1])
+              write(current + 1, file = progress_file)
+              
+              # Report progress
+              cat(sprintf("Completed %d of %d total iterations (%.1f%%)\n", 
+                         current + 1, total_expected_samples,
+                         (current + 1) / total_expected_samples * 100))
+            }, error = function(e) {
+              # Silently ignore errors in progress tracking
+            })
+          }
+        }
         
         return(TRUE)  # Return success indicator
       }, error = function(e) {
@@ -1001,40 +1125,90 @@ run_adaptive_sampling <- function(initial_samples_file,
       })
     }
     
-    # Run parallel jobs using appropriate method based on OS
-    if(.Platform$OS.type == "windows") {
-      if(verbose) cat("Using parallel cluster on Windows\n")
+    # Create a batching mechanism if required
+    batch_size <- min(local_cores, num_parallel_jobs)  # Process in reasonable batches
+    num_batches <- ceiling(num_parallel_jobs / batch_size)
+    
+    for(batch in 1:num_batches) {
+      batch_start <- (batch - 1) * batch_size + 1
+      batch_end <- min(batch * batch_size, num_parallel_jobs)
+      batch_indices <- batch_start:batch_end
       
-      # Create cluster
-      cl <- parallel::makeCluster(parallel_jobs)
-      on.exit(parallel::stopCluster(cl))
+      if(verbose && num_batches > 1) {
+        cat(sprintf("Processing batch %d/%d (jobs %d-%d)\n", 
+                   batch, num_batches, batch_start, batch_end))
+      }
       
-      # Export required objects and functions
-      parallel::clusterExport(cl, c("initial_samples_file", "distance_matrix", 
-                                   "iterations", "max_iter", "relative_epsilon", 
-                                   "folds", "scenario_name", "output_dir", "verbose"),
-                             envir = environment())
+      # Run parallel jobs using appropriate method based on OS
+      if(.Platform$OS.type == "windows") {
+        if(local_cores > 1) {
+          if(verbose) cat("Using parallel cluster on Windows\n")
+          
+          # Create cluster
+          cl <- parallel::makeCluster(min(local_cores, length(batch_indices)))
+          on.exit(parallel::stopCluster(cl))
+          
+          # Export required objects and functions
+          parallel::clusterExport(cl, c("initial_samples_file", "distance_matrix", 
+                                       "iterations", "mapping_max_iter", "relative_epsilon", 
+                                       "folds", "scenario_name", "output_dir", "verbose",
+                                       "progress_file", "total_expected_samples"),
+                                 envir = environment())
+          
+          # Load packages on each node
+          parallel::clusterEvalQ(cl, {
+            library(topolow)
+          })
+          
+          # Run parallel jobs
+          batch_results <- parallel::parLapply(cl, batch_indices, worker_function)
+        } else {
+          # Sequential processing
+          batch_results <- lapply(batch_indices, worker_function)
+        }
+      } else {
+        # For Unix-like systems, use mclapply
+        batch_results <- parallel::mclapply(batch_indices, worker_function, 
+                                          mc.cores = min(local_cores, length(batch_indices)))
+      }
       
-      # Load packages on each node
-      parallel::clusterEvalQ(cl, {
-        library(topolow)
-      })
-      
-      # Run parallel jobs
-      job_results <- parallel::parLapply(cl, 1:parallel_jobs, worker_function)
-    } else {
-      # For Unix-like systems, use mclapply
-      job_results <- parallel::mclapply(1:parallel_jobs, worker_function, 
-                                      mc.cores = parallel_jobs)
+      # Clean memory between batches
+      gc()
+    }
+    
+    # Clean up progress file
+    if(verbose && !is.null(progress_file)) {
+      if(file.exists(progress_file)) {
+        unlink(progress_file)
+      }
     }
     
     # Combine results from individual job files
-    combine_job_results(scenario_name, parallel_jobs, output_dir)
+    if(verbose) cat("Combining results from all jobs...\n")
+    combine_job_results(scenario_name, num_parallel_jobs, output_dir)
+    
+    # Calculate and report total execution time
+    end_time <- Sys.time()
+    time_diff <- difftime(end_time, start_time, units = "auto")
+    
+    # Format time nicely
+    if(time_diff < 60) {
+      time_msg <- sprintf("%.1f seconds", as.numeric(time_diff))
+    } else if(time_diff < 3600) {
+      time_msg <- sprintf("%.1f minutes", as.numeric(time_diff) / 60)
+    } else {
+      time_msg <- sprintf("%.1f hours", as.numeric(time_diff) / 3600)
+    }
+    
+    if(verbose) cat(sprintf("\nAdaptive sampling completed in %s\n", time_msg))
     
     # Return combined results
     result_file <- file.path(param_dir, paste0(scenario_name, "_model_parameters.csv"))
     if(file.exists(result_file)) {
       final_samples <- read.csv(result_file)
+      if(verbose) {
+        cat(sprintf("Generated %d new samples\n", nrow(final_samples) - nrow(init_samples)))
+      }
       return(final_samples)
     } else {
       warning("No results file created")
@@ -1042,6 +1216,7 @@ run_adaptive_sampling <- function(initial_samples_file,
     }
   }
 }
+
 
 
 #' Combine Results from Individual Job Files
@@ -1076,8 +1251,20 @@ combine_job_results <- function(scenario_name, parallel_jobs, output_dir = NULL)
     return(FALSE)
   }
   
+  # Read the original file to ensure we merge with it
+  original_file <- file.path(param_dir, paste0(scenario_name, "_model_parameters.csv"))
+  original_results <- NULL
+  if(file.exists(original_file)) {
+    original_results <- tryCatch({
+      read.csv(original_file)
+    }, error = function(e) {
+      warning("Error reading original file: ", e$message)
+      return(NULL)
+    })
+  }
+  
   # Combine all job files
-  combined_results <- NULL
+  combined_results <- original_results
   for(file in job_files) {
     tryCatch({
       job_results <- read.csv(file)
@@ -1097,8 +1284,7 @@ combine_job_results <- function(scenario_name, parallel_jobs, output_dir = NULL)
   }
   
   # Save combined results
-  combined_file <- file.path(param_dir, paste0(scenario_name, "_model_parameters.csv"))
-  write.csv(combined_results, combined_file, row.names = FALSE)
+  write.csv(combined_results, original_file, row.names = FALSE)
   
   # Clean up individual job files
   for(file in job_files) {
@@ -1228,38 +1414,6 @@ sample_from_distribution <- function(dist, n, epsilon) {
   
   names(samples) <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
   return(samples)
-}
-
-
-#' Calculate Sampling Distribution Parameters
-#'
-#' @description
-#' Calculates mean vector and covariance matrix for next sampling distribution
-#' by weighting previous samples according to their likelihoods.
-#'
-#' @param samples Data frame of previous samples with parameter columns and NLL
-#' @return List with:
-#'   \item{mean}{Vector of weighted means for each parameter}
-#'   \item{cov}{Weighted covariance matrix}
-#' @keywords internal
-get_sampling_prob_legacy <- function(samples) {
-  # First, Remove outliers
-  samples <- as.data.frame(lapply(samples, clean_data, k = 3))
-  samples <- na.omit(samples)
-  
-  # Calculate weights based on likelihoods
-  log_likelihoods <- -samples$NLL  
-  
-  std_log_likelihoods <- log_likelihoods - min(log_likelihoods) + 0.05
-  weights <- std_log_likelihoods / sum(std_log_likelihoods)
-
-  # Calculate weighted mean
-  weighted_mean_vector <- sapply(samples[, 1:4], weighted_mean, weights = weights)
-
-  # Calculate weighted covariance
-  weighted_cov <- cov.wt(samples[, 1:4], wt = weights)$cov
-  
-  return(list(mean = weighted_mean_vector, cov = weighted_cov))
 }
 
 
@@ -1423,7 +1577,7 @@ unweighted_kde <- function(x, n = 512, from = min(x), to = max(x),
 #' 4. Repeating across folds
 #'
 #' @param distance_matrix Distance matrix to fit
-#' @param max_iter Maximum optimization iterations
+#' @param mapping_max_iter Maximum map optimization iterations
 #' @param relative_epsilon Convergence threshold
 #' @param N Number of dimensions
 #' @param k0 Initial spring constant
@@ -1435,7 +1589,7 @@ unweighted_kde <- function(x, n = 512, from = min(x), to = max(x),
 #'   \item{Holdout_MAE}{Mean absolute error on validation data}
 #'   \item{NLL}{Negative log likelihood}
 #' @keywords internal
-likelihood_function <- function(distance_matrix, max_iter,
+likelihood_function <- function(distance_matrix, mapping_max_iter,
                               relative_epsilon, N, k0, cooling_rate,
                               c_repulsion, folds = 20, num_cores = 1) {
   # Create n folds in the data
@@ -1481,7 +1635,7 @@ likelihood_function <- function(distance_matrix, max_iter,
       res_train <- create_topolow_map(
         distance_matrix = input_matrix, 
         ndim = N, 
-        max_iter = max_iter, 
+        mapping_max_iter = mapping_max_iter, 
         k0 = k0, 
         cooling_rate = cooling_rate, 
         c_repulsion = c_repulsion,
@@ -1520,7 +1674,7 @@ likelihood_function <- function(distance_matrix, max_iter,
       # Export required variables
       parallel::clusterExport(cl, 
                              c("matrix_list", "N", "k0", "cooling_rate", "c_repulsion", 
-                               "max_iter", "relative_epsilon"), 
+                               "mapping_max_iter", "relative_epsilon"), 
                              envir = environment())
       
       # Load packages
@@ -1599,7 +1753,7 @@ safe_likelihood_function <- function(...) {
 #' @param distance_matrix Distance matrix to fit
 #' @param iterations Number of sampling iterations per job
 #' @param batch_size Samples per iteration (fixed to 1)
-#' @param max_iter Maximum optimization iterations 
+#' @param mapping_max_iter Maximum map optimization iterations 
 #' @param relative_epsilon Convergence threshold
 #' @param folds Number of CV folds
 #' @param num_cores Number of cores for parallel processing
@@ -1613,7 +1767,7 @@ adaptive_MC_sampling <- function(samples_file,
                                  distance_matrix,
                                  iterations = 1, 
                                  batch_size = 1, # Now fixed to 1 by design
-                                 max_iter, 
+                                 mapping_max_iter, 
                                  relative_epsilon,
                                  folds = 20, 
                                  num_cores = 1,
@@ -1632,7 +1786,7 @@ adaptive_MC_sampling <- function(samples_file,
       on.exit(parallel::stopCluster(cl))
       
       # Export ALL necessary variables to cluster
-      parallel::clusterExport(cl, c("distance_matrix", "max_iter", 
+      parallel::clusterExport(cl, c("distance_matrix", "mapping_max_iter", 
                                    "relative_epsilon", "folds"),
                              envir = environment())
       
@@ -1712,7 +1866,7 @@ adaptive_MC_sampling <- function(samples_file,
       # Call safe_likelihood_function with appropriate parameters
       safe_likelihood_function(
         distance_matrix = distance_matrix,
-        max_iter = max_iter,
+        mapping_max_iter = mapping_max_iter,
         relative_epsilon = relative_epsilon, 
         N = N,
         k0 = k0,

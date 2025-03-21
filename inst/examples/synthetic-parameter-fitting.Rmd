@@ -47,8 +47,8 @@ First, let's create synthetic datasets with different dimensionalities:
 ```{r}
 # Generate datasets in 2, 5, and 10 dimensions
 results <- generate_synthetic_datasets(
-  n_dims_list = c(5, 10),
-  seeds = c(903450, 13450), # 123450, seed for dim 2
+  n_dims_list = c(2, 5, 10),
+  seeds = c(123450, 903450, 13450),
   n_points = 250,
   output_dir = "synthetic_data"
 )
@@ -81,8 +81,8 @@ param_ranges <- list(
 
 # Setup optimization parameters
 opt_params <- list(
-  max_iter = 1000,    # Maximum optimization iterations
-  parallel_jobs = 40,  # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
+  mapping_max_iter = 1000,    # Maximum map optimization iterations
+  num_parallel_jobs = 40,  # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
   folds = 20,         # Number of CV folds
   num_cores = 19,     # Number of cores to use. If using SLURM: 1 core per LHS sampling job. Can try parallel::detectCores() on local machines
   use_slurm = FALSE,
@@ -113,7 +113,7 @@ for(i in seq_along(results$matrices)) {
     # Run optimization
     opt_result <- initial_parameter_optimization(
       distance_matrix = distance_matrix,
-      max_iter = opt_params$max_iter,
+      mapping_max_iter = opt_params$mapping_max_iter,
       relative_epsilon = 1e-4,
       convergence_counter = 5,
       scenario_name = scenario_name,
@@ -125,9 +125,8 @@ for(i in seq_along(results$matrices)) {
       c_repulsion_max = param_ranges$c_repulsion_max,
       cooling_rate_min = param_ranges$cooling_rate_min,
       cooling_rate_max = param_ranges$cooling_rate_max,
-      parallel_jobs = opt_params$parallel_jobs,
+      num_parallel_jobs = opt_params$num_parallel_jobs,
       folds = opt_params$folds,
-      num_cores = opt_params$num_cores,
       write_files = TRUE,
       # time = "3:00:00",
       # memory = "2G",
@@ -172,19 +171,17 @@ Perform adaptive sampling for each case:
 ```{r eval=FALSE}
 # Setup adaptive sampling parameters
 amc_params <- list(
-  parallel_jobs = 600,  # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
-  iterations = 3,          # Number of consecutive iterations per job
-  max_iter = 1000,     # Maximum optimization iterations
+  num_parallel_jobs = 100,  # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
+  num_samples = 2000,        # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
+  mapping_max_iter = 1000,    # Maximum iterations per map optimization
   relative_epsilon = 1e-4
 )
 
 # Setup optimization parameters
 opt_params <- list(
-  max_iter = 1000,    # Maximum optimization iterations
-  parallel_jobs = 40,  # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
   folds = 20,         # Number of CV folds
-  num_cores = 20,     # Number of cores to use. Can try parallel::detectCores() on local machines. It would be best if num_cores is a multiple of folds?
-  use_slurm = TRUE
+  use_slurm = TRUE,
+  cider = FALSE
 )
 
 # Run adaptive sampling for each dimension and matrix type
@@ -211,17 +208,16 @@ for(ndim in results$metadata$dimension) {
     run_adaptive_sampling(
       initial_samples_file = result_file,
       distance_matrix = distance_matrix,
-      max_iter = amc_params$max_iter,
+      mapping_max_iter = amc_params$mapping_max_iter,
       scenario_name = amc_scenario,
-      parallel_jobs = amc_params$parallel_jobs,
-      iterations = amc_params$iterations,
+      num_parallel_jobs = amc_params$num_parallel_jobs,
+      num_samples = amc_params$num_samples,
       relative_epsilon = amc_params$relative_epsilon,
       folds = opt_params$folds,
-      num_cores = min( opt_params$num_cores , opt_params$folds ), ###
       time = "18:00:00",
-      memory = "30G",
+      memory = "3G",
       use_slurm = opt_params$use_slurm,
-      cider = TRUE,
+      cider = opt_params$cider,
       verbose = TRUE
     )
   }

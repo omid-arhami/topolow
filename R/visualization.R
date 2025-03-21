@@ -283,7 +283,7 @@ new_dim_reduction_config <- function(
     ),
     tsne_params = list(
       perplexity = 30,
-      max_iter = 1000,
+      mapping_max_iter = 1000,
       theta = 0.5
     ),
     compute_loadings = FALSE,

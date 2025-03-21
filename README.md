@@ -57,7 +57,7 @@ dist_mat <- matrix(c(0, 2, 3, 2, 0, NA, 3, NA, 0), nrow=3)
 rownames(dist_mat) <- colnames(dist_mat) <- c("V/1", "V/2", "S/1")
 
 # Run TopoLow in 2D
-result <- create_topolow_map(dist_mat, ndim=2, max_iter=100, 
+result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=100, 
                       k0=1.0, cooling_rate=0.01, c_repulsion=0.01)
 
 # Investigate the results

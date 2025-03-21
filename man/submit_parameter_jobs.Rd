@@ -7,7 +7,7 @@
 submit_parameter_jobs(
   matrix_list_file,
   lhs_params,
-  max_iter,
+  mapping_max_iter,
   relative_epsilon,
   convergence_counter,
   scenario_name,
@@ -23,7 +23,7 @@ submit_parameter_jobs(
 
 \item{lhs_params}{Data frame of LHS parameter samples}
 
-\item{max_iter}{Maximum iterations}
+\item{mapping_max_iter}{Maximum map optimization iterations}
 
 \item{relative_epsilon}{Convergence threshold}
 

@@ -9,7 +9,7 @@ prune_distance_network(
   virus_col,
   antibody_col,
   min_connections,
-  max_iterations = 100
+  iterations = 100
 )
 }
 \arguments{
@@ -25,7 +25,7 @@ prune_distance_network(
 
 \item{min_connections}{Integer minimum required connections per point}
 
-\item{max_iterations}{Integer maximum pruning iterations (default 100)}
+\item{iterations}{Integer maximum pruning iterations (default 100)}
 }
 \value{
 List containing:

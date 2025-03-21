@@ -213,7 +213,7 @@ generate_topolow_maps <- function(distance_matrix, params, valid_points, n_maps 
     res <- create_topolow_map(
       distance_matrix = distance_matrix,
       ndim = params$N, 
-      max_iter = 1000,
+      mapping_max_iter = 1000,
       k0 = params$k0,
       cooling_rate = params$cooling_rate,
       c_repulsion = params$c_repulsion,
