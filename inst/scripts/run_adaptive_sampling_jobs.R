@@ -58,7 +58,7 @@ if (!all(required_cols %in% names(current_samples))) {
 adaptive_MC_sampling(
   samples_file = samples_file,
   distance_matrix = distance_matrix,
-  n_iter = iterations, # Use renamed parameter
+  iterations = iterations, # Use renamed parameter
   batch_size = 1, # Always set to 1
   max_iter = max_iter,
   relative_epsilon = relative_epsilon,
