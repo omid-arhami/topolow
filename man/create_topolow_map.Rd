@@ -54,7 +54,6 @@ A list with class "topolow" containing:
 \item positions: Matrix of optimized point coordinates
 \item est_distances: Matrix of distances in the optimized configuration
 \item mae: Mean absolute error between target and optimized distances
-\item r: Pearson correlation between target and optimized distances
 \item iter: Number of iterations performed
 \item parameters: List of input parameters used
 \item convergence: List with convergence status and final error

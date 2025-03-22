@@ -17,12 +17,10 @@ error_calculator_comparison(p_dist_mat, truth_matrix, input_matrix)
 List containing:
 \item{report_df}{Data frame with error metrics per point}
 \item{coverage}{Numeric coverage statistic}
-\item{InSampleCor}{Correlation for in-sample predictions}
-\item{OutSampleCor}{Correlation for out-of-sample predictions}
 }
 \description{
 Computes various error metrics including in-sample and out-of-sample errors,
-correlations, and coverage statistics for model evaluation.
+and coverage statistics for model evaluation.
 }
 \details{
 Input requirements and constraints:

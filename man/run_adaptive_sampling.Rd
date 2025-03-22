@@ -10,7 +10,7 @@ run_adaptive_sampling(
   num_parallel_jobs = 5,
   max_cores = NULL,
   num_samples = 10,
-  mapping_max_iter,
+  mapping_max_iter = 1000,
   relative_epsilon = 1e-04,
   folds = 20,
   time = "8:00:00",

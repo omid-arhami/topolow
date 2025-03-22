@@ -110,9 +110,8 @@ param_ranges <- list(
 # Setup optimization parameters
 opt_params <- list(
   mapping_max_iter = 1000,    # Maximum optimization iterations
-  parallel_jobs = 50,   # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
   folds = 20,         # Number of CV folds
-  num_cores = 6, # Number of cores to use. Try parallel::detectCores() on local machines. If using SLURM: 1 core per LHS sampling job.
+  num_samples = 40, # Number of cores to use. Try parallel::detectCores() on local machines. If using SLURM: 1 core per LHS sampling job.
   use_slurm = FALSE,
   cider = FALSE
 )
@@ -120,13 +119,16 @@ opt_params <- list(
 
 
 ```{r eval=FALSE}
+# Record start time for timing report
+start_time <- Sys.time()
+
 # Run initial parameter optimization
 results <- initial_parameter_optimization(
   distance_matrix = h3n2_distance_matrix,
   mapping_max_iter = opt_params$mapping_max_iter,
   relative_epsilon = 1e-4,
   convergence_counter = 5,
-  scenario_name = "H3N2_2003_data_AMC11",
+  scenario_name = "H3N2_2003_data_AMC102",
   N_min = param_ranges$N_min, 
   N_max = param_ranges$N_max,
   k0_min = param_ranges$k0_min,
@@ -135,25 +137,34 @@ results <- initial_parameter_optimization(
   c_repulsion_max = param_ranges$c_repulsion_max,
   cooling_rate_min = param_ranges$cooling_rate_min,
   cooling_rate_max = param_ranges$cooling_rate_max,
-  parallel_jobs = opt_params$parallel_jobs,
+  num_samples = opt_params$num_samples,
   folds = opt_params$folds,
-  num_cores = opt_params$num_cores,
-  write_files = TRUE,
+  write_files = FALSE, #Only set TRUE on SLURM
   # time = "6:00:00",
   # memory = "2G",
   # use_slurm = opt_params$use_slurm,
   # cider = opt_params$cider,
   verbose = TRUE
 )
+
+write.csv(results, "model_parameters/H3N2_2003_data_AMC102_model_parameters.csv"
+)
+
+# Calculate and report total execution time
+end_time <- Sys.time()
+time_diff <- difftime(end_time, start_time, units = "auto")
+
+cat("\n Initial LHS CV sampling completed in: ")
+time_diff
 ```
 
 ## Aggregate the results
 
- Wait until the jobs are done.
+Aggregation is only needed if SLURM was used for initial sampling. Wait until the jobs are done.
 
 ```{r eval=FALSE}
-scenario_name <- "H3N2_2003_data_AMC11"
-aggregate_parameter_optimization_results(scenario_name, write_files=TRUE)
+#scenario_name <- "H3N2_2003_data_AMC101"
+#aggregate_parameter_optimization_results(scenario_name, write_files=TRUE)
 ```
 
 ## Adaptive Monte Carlo Sampling
@@ -163,49 +174,46 @@ Using the initial results as a starting point, we'll now perform adaptive sampli
 
 ```{r eval=FALSE}
 # Transform samples (with previous code's path)
-scenario_name = "H3N2_2003_data_AMC11"
-samples_file = "model_parameters/H3N2_2003_data_AMC11_model_parameters.csv"
+scenario_name = "H3N2_2003_data_AMC101"
+samples_file = "model_parameters/H3N2_2003_data_AMC101_model_parameters.csv"
 samples <- log_transform_parameters(samples_file)
 
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_parallel_jobs = 4,  # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
-  num_samples = 8,        # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
-  mapping_max_iter = 1000,    # Maximum iterations per map optimization
-  relative_epsilon = 1e-4
-)
-
-# Setup optimization parameters
-opt_params <- list(
-  folds = 20,         # Number of CV folds
-  num_cores = 1,      # Number of cores to use. Can try parallel::detectCores() on local machines. It would be best if num_cores is a multiple of folds
+  num_samples = 200, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
+  num_parallel_jobs = parallel::detectCores()-1,  # For local execution: Number of CPU cores available (Can try parallel::detectCores() ); For SLURM: Number of jobs to submit
+  mapping_max_iter = 1000, # Maximum iterations per map optimization
+  relative_epsilon = 1e-4,
+  folds = 20, # Number of CV folds
   use_slurm = FALSE,
   cider = FALSE
 )
 
-# Run adaptive sampling
-# Workflow:
-# 1. Runs/Submits 'num_parallel_jobs' independent single-core jobs
-# 2. Each job runs for num_samples/num_parallel_jobs iterations
-# 3. Each job adds samples to a common results file
-# 4. Total: Adds num_samples samples
+# Record start time for timing report
+start_time <- Sys.time()
 
 run_adaptive_sampling(
   initial_samples_file = samples_file,
   distance_matrix = h3n2_distance_matrix,
+  num_samples = amc_params$num_samples,
+  num_parallel_jobs = amc_params$num_parallel_jobs,
   mapping_max_iter = amc_params$mapping_max_iter,
   scenario_name = scenario_name,
-  num_parallel_jobs = amc_params$num_parallel_jobs,
-  num_samples = amc_params$num_samples,
   relative_epsilon = amc_params$relative_epsilon,
-  folds = opt_params$folds,
-  num_cores = opt_params$num_cores, 
+  folds = amc_params$folds,
   # time = "15:00:00",
   # memory = "2G",
-  # use_slurm = opt_params$use_slurm,
-  # cider = opt_params$cider,
+  # use_slurm = amc_params$use_slurm,
+  # cider = amc_params$cider,
   verbose = TRUE
 )
+
+# Calculate and report total execution time
+end_time <- Sys.time()
+time_diff <- difftime(end_time, start_time, units = "auto")
+
+cat("\n Initial LHS CV sampling completed in: ")
+time_diff
 ```
 
 ## Convergence Diagnostics
