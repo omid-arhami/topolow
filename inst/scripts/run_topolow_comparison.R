@@ -74,16 +74,6 @@ write.csv(mapped_objects_df, file.path(results_dir,
                                        sprintf("%s_fold%d_coverage.csv", scenario_name, i)), 
           row.names = FALSE)
 
-# Cor
-topolow_cor <- topolow_errors$OutSampleCor
-
-cor_df <- data.table(Dimension=N, Algorithm="TopoLow",
-                     Scenario = scenario_name, Fold = i, Validation_Cor= topolow_cor)
-
-write.csv(cor_df, file.path(results_dir,
-                            sprintf("%s_fold%d_cor.csv", scenario_name, i)),  
-          row.names = FALSE)
-
 # Write combined results file for compatibility
 result_df <- data.frame(
   Dimension = N,

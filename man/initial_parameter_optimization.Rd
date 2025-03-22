@@ -6,7 +6,7 @@
 \usage{
 initial_parameter_optimization(
   distance_matrix,
-  mapping_max_iter = NULL,
+  mapping_max_iter = 1000,
   relative_epsilon,
   convergence_counter,
   scenario_name,
@@ -22,7 +22,7 @@ initial_parameter_optimization(
   max_cores = NULL,
   folds = 20,
   verbose = FALSE,
-  write_files = TRUE,
+  write_files = FALSE,
   output_dir = NULL,
   time = "8:00:00",
   memory = "3G",
@@ -34,7 +34,7 @@ initial_parameter_optimization(
 \item{distance_matrix}{Matrix or data frame. Input distance matrix. Must be square
 and symmetric. Can contain NA values for missing measurements.}
 
-\item{mapping_max_iter}{Integer. Maximum number of optimization iterations (also accepts 'mapping_max_iter').}
+\item{mapping_max_iter}{Integer. Maximum number of optimization iterations.}
 
 \item{relative_epsilon}{Numeric. Convergence threshold for relative change in error.}
 
@@ -60,7 +60,7 @@ uses all available cores minus 1 (default: NULL).}
 
 \item{verbose}{Logical. Whether to print progress messages. Default: FALSE.}
 
-\item{write_files}{Logical. Whether to save results to CSV. Default: TRUE.}
+\item{write_files}{Logical. Whether to save results to CSV. Default: FALSE. Only set TRUE on SLURM}
 
 \item{output_dir}{Character. Directory where output and temporary files will be saved. If NULL,
 uses current working directory. Directory will be created if it doesn't exist.}

@@ -90,8 +90,7 @@ run_topolow_slurm <- function(truth_matrix, input_matrix, best_params,
   results <- read.csv(result_file)
   list(
     mae = results$mae,
-    coverage = results$coverage,
-    correlation = results$correlation
+    coverage = results$coverage
   )
 }
 
@@ -130,7 +129,6 @@ run_topolow_local <- function(truth_matrix, input_matrix, best_params, opt_param
   list(
     errors = errors$report_df,
     coverage = errors$coverage,
-    correlation = errors$OutSampleCor,
     positions = result$positions
   )
 }
@@ -192,7 +190,6 @@ run_racmacs <- function(truth_matrix, input_matrix, opt_params) {
   
   list(
     mae = mean(abs(racmacs_errors$report_df$OutSampleError), na.rm = TRUE),
-    coverage = racmacs_errors$coverage,
-    correlation = racmacs_errors$OutSampleCor
+    coverage = racmacs_errors$coverage
   )
 }

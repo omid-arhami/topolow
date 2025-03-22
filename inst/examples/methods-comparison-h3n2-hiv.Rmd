@@ -856,14 +856,6 @@ coverage_df <- data.table(
   stringsAsFactors = FALSE
 )
 
-cor_df <- data.table(
-  Validation_Cor = numeric(),
-  Algorithm = character(),
-  Dataset = character(),
-  Fold = numeric(),
-  stringsAsFactors = FALSE
-)
-
 ```
 
 
@@ -937,15 +929,6 @@ for(dataset_name in names(datasets)) {
       )
     )
 
-    cor_df <- rbind(
-      cor_df,
-      data.table(
-        Validation_Cor = topo_errors$OutSampleCor,
-        Algorithm = "Topolow",
-        Dataset = dataset_name,
-        Fold = i
-      )
-    )
     
     ################# Run RACMACS
     
@@ -1012,20 +995,10 @@ for(dataset_name in names(datasets)) {
       )
     )
     
-    cor_df <- rbind(
-      cor_df,
-      data.table(
-        Validation_Cor = racmacs_errors$OutSampleCor,
-        Algorithm = "MDS",
-        Dataset = dataset_name,
-        Fold = i
-      )
-    )
   }
 }
 
 write.csv(errors_df, file.path(output_dir, "errors_df_loop.csv") )
-write.csv(cor_df, file.path(output_dir, "cor_df_loop.csv") )
 write.csv(coverage_df, file.path(output_dir, "coverage_df_loop.csv") )
 ```
 
@@ -1035,7 +1008,6 @@ write.csv(coverage_df, file.path(output_dir, "coverage_df_loop.csv") )
 ```{r}
 # Read the CSV files back into dataframes
 errors_df <- read.csv(file.path(output_dir, "errors_df_loop.csv"))
-cor_df <- read.csv(file.path(output_dir, "cor_df_loop.csv"))
 coverage_df <- read.csv(file.path(output_dir, "coverage_df_loop.csv"))
 ```
 
