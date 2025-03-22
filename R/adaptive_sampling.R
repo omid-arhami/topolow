@@ -1613,13 +1613,11 @@ safe_likelihood_function <- function(...) {
 }
 
 
-
-#' Perform Adaptive Monte Carlo Sampling with File Locking
+#' Perform Adaptive Monte Carlo Sampling
 #'
 #' @description
 #' Main function implementing adaptive Monte Carlo sampling to explore parameter space.
-#' Updates sampling distribution based on evaluated likelihoods. Includes file locking
-#' mechanism to prevent race conditions when multiple processes access the same file.
+#' Updates sampling distribution based on evaluated likelihoods.
 #'
 #' @param samples_file Path to CSV with initial samples
 #' @param distance_matrix Distance matrix to fit
@@ -1632,12 +1630,13 @@ safe_likelihood_function <- function(...) {
 #' @param scenario_name Name for output files
 #' @param verbose Logical. Whether to print progress messages. Default: FALSE
 #' @param output_dir Character. Directory for output files. If NULL, uses current directory
+#'
 #' @return Data frame of samples with evaluated likelihoods
 #' @export
 adaptive_MC_sampling <- function(samples_file, 
                                  distance_matrix,
                                  iterations = 1, 
-                                 batch_size = 1, # Fixed to 1 by design
+                                 batch_size = 1, # Now fixed to 1 by design
                                  mapping_max_iter, 
                                  relative_epsilon,
                                  folds = 20, 
@@ -1646,10 +1645,26 @@ adaptive_MC_sampling <- function(samples_file,
                                  output_dir = NULL,
                                  verbose = FALSE) {
   
-  # Check if filelock package is available
-  if (!requireNamespace("filelock", quietly = TRUE)) {
-    message("Installing 'filelock' package for safe concurrent file access")
-    install.packages("filelock")
+  # Handle parallel processing setup
+  use_parallelism <- num_cores > 1
+  if(use_parallelism) {
+    if(verbose) cat("Setting up parallel processing\n")
+    
+    if(.Platform$OS.type == "windows") {
+      if(verbose) cat("Using parallel cluster for Windows\n")
+      cl <- parallel::makeCluster(num_cores)
+      on.exit(parallel::stopCluster(cl))
+      
+      # Export ALL necessary variables to cluster
+      parallel::clusterExport(cl, c("distance_matrix", "mapping_max_iter", 
+                                   "relative_epsilon", "folds"),
+                             envir = environment())
+      
+      # Load required packages on each cluster node
+      parallel::clusterEvalQ(cl, {
+        library(topolow)
+      })
+    }
   }
   
   # Handle output directory
@@ -1665,155 +1680,156 @@ adaptive_MC_sampling <- function(samples_file,
   
   par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
   
-  # Create lock file path
-  lock_file <- file.path(param_dir, paste0(scenario_name, "_model_parameters.lock"))
-  
   for (iter in 1:iterations) {
     if(verbose) cat(sprintf("\nStarting iteration %d of %d\n", iter, iterations))
     
-    # Create a lock - this will block if another process has the lock
-    lock <- filelock::lock(lock_file, timeout = 60) # Wait up to 60 seconds
+    # Read & clean current samples
+    current_samples <- read.csv(samples_file)
+    current_samples <- current_samples[apply(current_samples, 1, 
+                                             function(row) all(is.finite(row))), ]
+    current_samples <- na.omit(current_samples)
     
-    if (is.null(lock)) {
-      warning("Could not acquire file lock after 60 seconds. Skipping iteration.")
-      next
+    if(nrow(current_samples) == 0) {
+      warning("No valid samples remaining after filtering")
+      break
     }
     
-    tryCatch({
-      # Now we have exclusive access to the file
-      
-      # Read & clean current samples
-      current_samples <- read.csv(samples_file)
-      current_samples <- current_samples[apply(current_samples, 1, 
-                                             function(row) all(is.finite(row))), ]
-      current_samples <- na.omit(current_samples)
-      
-      if(nrow(current_samples) == 0) {
-        warning("No valid samples remaining after filtering")
-        break
-      }
-      
-      # Remove the first half of rows as burn-in if we have enough samples
-      if(nrow(current_samples) > 2) {
-        current_samples <- current_samples[-(1:round(nrow(current_samples) * 0.5)), ]
-      }
-      
-      # Check convergence
-      if(nrow(current_samples) > 500) {
-        conv_check <- check_gaussian_convergence(data=current_samples[,par_names], 
+    # Remove the first half of rows as burn-in
+    if(nrow(current_samples) > 2) {
+      current_samples <- current_samples[-(1:round(nrow(current_samples) * 0.5)), ]
+    }
+
+    # Check convergence
+    if(nrow(current_samples) > 500) {
+      conv_check <- check_gaussian_convergence(data=current_samples[,par_names], 
                                                window_size = 500, 
                                                tolerance = 0.002)
-        if (conv_check$converged) {
-          if(verbose) cat("Convergence achieved at iteration", iter, "\n")
-          break
-        }
+      if (conv_check$converged) {
+        if(verbose) cat("Convergence achieved at iteration", iter, "\n")
+        break
       }
+    }
+    
+    # Generate new samples - always generate batch_size samples
+    # batch_size is fixed to 1 by design, but kept as parameter for backward compatibility
+    new_samples <- generate_kde_samples(
+      samples = current_samples,
+      n = batch_size
+    )
+    
+    # Ensure numeric columns
+    for (col in par_names) {
+      new_samples[[col]] <- as.numeric(new_samples[[col]])
+    }
+    
+    # Define the evaluate_sample function with explicit scoping
+    evaluate_sample <- function(i) {
+      # Convert log parameters to regular parameters
+      N <- round(exp(new_samples[i, "log_N"]))
+      k0 <- exp(new_samples[i, "log_k0"])
+      cooling_rate <- exp(new_samples[i, "log_cooling_rate"])
+      c_repulsion <- exp(new_samples[i, "log_c_repulsion"])
       
-      # Generate new samples - always generate batch_size samples
-      new_samples <- generate_kde_samples(
-        samples = current_samples,
-        n = batch_size
+      # Always use single-core for the inner function when in parallel mode
+      inner_cores <- if(use_parallelism) 1 else min(folds, num_cores)
+      
+      # Call safe_likelihood_function with appropriate parameters
+      safe_likelihood_function(
+        distance_matrix = distance_matrix,
+        mapping_max_iter = mapping_max_iter,
+        relative_epsilon = relative_epsilon, 
+        N = N,
+        k0 = k0,
+        cooling_rate = cooling_rate,
+        c_repulsion = c_repulsion,
+        folds = folds,
+        num_cores = inner_cores
       )
-      
-      # Ensure numeric columns
-      for (col in par_names) {
-        new_samples[[col]] <- as.numeric(new_samples[[col]])
-      }
-      
-      # Define the evaluate_sample function with explicit scoping
-      evaluate_sample <- function(i) {
-        # Convert log parameters to regular parameters
-        N <- round(exp(new_samples[i, "log_N"]))
-        k0 <- exp(new_samples[i, "log_k0"])
-        cooling_rate <- exp(new_samples[i, "log_cooling_rate"])
-        c_repulsion <- exp(new_samples[i, "log_c_repulsion"])
+    }
+    
+    # Evaluate samples with appropriate parallel method
+    if(use_parallelism) {
+      if(.Platform$OS.type == "windows") {
+        # Export the evaluate_sample function and new_samples to the cluster
+        parallel::clusterExport(cl, c("evaluate_sample", "new_samples", "use_parallelism"), 
+                               envir = environment())
         
-        # Always use single-core for the inner function when in parallel mode
-        inner_cores <- if(num_cores > 1) 1 else min(folds, num_cores)
-        
-        # Call safe_likelihood_function with appropriate parameters
-        safe_likelihood_function(
-          distance_matrix = distance_matrix,
-          mapping_max_iter = mapping_max_iter,
-          relative_epsilon = relative_epsilon, 
-          N = N,
-          k0 = k0,
-          cooling_rate = cooling_rate,
-          c_repulsion = c_repulsion,
-          folds = folds,
-          num_cores = inner_cores
-        )
+        # Run in parallel using the cluster
+        new_likelihoods <- parallel::parLapply(cl, 1:nrow(new_samples), evaluate_sample)
+      } else {
+        # For non-Windows, use mclapply
+        new_likelihoods <- parallel::mclapply(1:nrow(new_samples), 
+                                            evaluate_sample,
+                                            mc.cores = num_cores)
       }
-      
-      # Evaluate samples
+    } else {
+      # Sequential processing
       new_likelihoods <- lapply(1:nrow(new_samples), evaluate_sample)
+    }
+    
+    # Process results with robust error handling
+    valid_results <- !sapply(new_likelihoods, is.null) & 
+                    !sapply(new_likelihoods, function(x) all(is.na(unlist(x))))
+    
+    if(sum(valid_results) > 0) {
+      # Extract only valid results
+      valid_likelihoods <- new_likelihoods[valid_results]
       
-      # Process results with robust error handling
-      valid_results <- !sapply(new_likelihoods, is.null) & 
-                      !sapply(new_likelihoods, function(x) all(is.na(unlist(x))))
+      # Convert list to data frame
+      new_likelihoods_df <- as.data.frame(do.call(rbind, 
+                                                 lapply(valid_likelihoods, unlist)))
+      colnames(new_likelihoods_df) <- c("Holdout_MAE", "NLL")
       
-      if(sum(valid_results) > 0) {
-        # Extract only valid results
-        valid_likelihoods <- new_likelihoods[valid_results]
+      # Subset to only valid samples
+      valid_samples <- new_samples[valid_results, ]
+      
+      # Combine with likelihoods
+      valid_samples$Holdout_MAE <- as.numeric(new_likelihoods_df$Holdout_MAE)
+      valid_samples$NLL <- as.numeric(new_likelihoods_df$NLL)
+      
+      # Match columns with current samples
+      valid_samples <- valid_samples[, names(current_samples)]
+      
+      # Remove invalid results
+      valid_samples <- valid_samples[complete.cases(valid_samples) & 
+                                     apply(valid_samples, 1, function(x) all(is.finite(x))), ]
+      
+      if (nrow(valid_samples) > 0) {
+        # Save results
+        result_file <- file.path(param_dir,
+                                 paste0(scenario_name, "_model_parameters.csv"))
         
-        # Convert list to data frame
-        new_likelihoods_df <- as.data.frame(do.call(rbind, 
-                                                   lapply(valid_likelihoods, unlist)))
-        colnames(new_likelihoods_df) <- c("Holdout_MAE", "NLL")
-        
-        # Subset to only valid samples
-        valid_samples <- new_samples[valid_results, ]
-        
-        # Combine with likelihoods
-        valid_samples$Holdout_MAE <- as.numeric(new_likelihoods_df$Holdout_MAE)
-        valid_samples$NLL <- as.numeric(new_likelihoods_df$NLL)
-        
-        # Add columns to match existing file structure
-        if (!identical(names(valid_samples), names(current_samples))) {
-          # Match columns with current samples
-          missing_cols <- setdiff(names(current_samples), names(valid_samples))
-          for (col in missing_cols) {
-            valid_samples[[col]] <- NA
-          }
-          valid_samples <- valid_samples[, names(current_samples)]
+        if (file.exists(result_file)) {
+          existing_data <- read.csv(result_file)
+          colnames(existing_data) <- colnames(valid_samples)
+          updated_data <- rbind(existing_data, valid_samples)
+          write.csv(updated_data, result_file, row.names = FALSE)
+        } else {
+          write.csv(valid_samples, result_file, row.names = FALSE)
         }
         
-        # Remove invalid results
-        valid_samples <- valid_samples[complete.cases(valid_samples) & 
-                                      apply(valid_samples, 1, function(x) all(is.finite(x))), ]
-        
-        if (nrow(valid_samples) > 0) {
-          # Append to existing samples
-          updated_samples <- rbind(current_samples, valid_samples)
-          
-          # Write back to the file
-          write.csv(updated_samples, samples_file, row.names = FALSE)
-          
-          if(verbose) {
-            cat(sprintf("Added %d new valid samples\n", nrow(valid_samples)))
-          }
-        } else {
-          if(verbose) cat("No valid samples in this iteration\n")
+        if(verbose) {
+          cat(sprintf("Added %d new valid samples\n", nrow(valid_samples)))
         }
       } else {
-        if(verbose) cat("All likelihood evaluations failed in this iteration\n")
+        if(verbose) cat("No valid samples in this iteration\n")
       }
-    }, finally = {
-      # Always release the lock, even if errors occur
-      filelock::unlock(lock)
-    })
+    } else {
+      if(verbose) cat("All likelihood evaluations failed in this iteration\n")
+    }
   }
   
   # Return final samples if any
-  if(file.exists(samples_file)) {
-    final_samples <- read.csv(samples_file)
+  result_file <- file.path(param_dir,
+                           paste0(scenario_name, "_model_parameters.csv"))
+  if(file.exists(result_file)) {
+    final_samples <- read.csv(result_file)
     return(final_samples)
   } else {
     warning("No results file created")
     return(NULL)
   }
 }
-
 
 
 #' Calculate Weighted Marginal Distributions

@@ -2,7 +2,7 @@
 % Please edit documentation in R/adaptive_sampling.R
 \name{adaptive_MC_sampling}
 \alias{adaptive_MC_sampling}
-\title{Perform Adaptive Monte Carlo Sampling with File Locking}
+\title{Perform Adaptive Monte Carlo Sampling}
 \usage{
 adaptive_MC_sampling(
   samples_file,
@@ -46,6 +46,5 @@ Data frame of samples with evaluated likelihoods
 }
 \description{
 Main function implementing adaptive Monte Carlo sampling to explore parameter space.
-Updates sampling distribution based on evaluated likelihoods. Includes file locking
-mechanism to prevent race conditions when multiple processes access the same file.
+Updates sampling distribution based on evaluated likelihoods.
 }
