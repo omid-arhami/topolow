@@ -849,7 +849,8 @@ run_adaptive_sampling <- function(initial_samples_file,
                                   cider = FALSE,
                                   verbose = FALSE,
                                   update_initial_file = TRUE) {
-  
+  par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
+  batch_size <- 1  # Fixed to 1 by design
   # Calculate iterations from num_samples
   if (!is.numeric(num_samples) || num_samples < 1 || num_samples != round(num_samples)) {
     stop("num_samples must be a positive integer")
@@ -1332,6 +1333,7 @@ weighted_mean <- function(x, weights) {
 #' @return List containing:
 #'   \item{x}{Vector of evaluation points}
 #'   \item{y}{Vector of density estimates}
+#' 
 #' @export
 weighted_kde <- function(x, weights, n = 512, from = min(x), to = max(x)) {
   # Normalize weights
@@ -1363,6 +1365,7 @@ weighted_kde <- function(x, weights, n = 512, from = min(x), to = max(x)) {
   
   list(x = eval_points, y = density_est)
 }
+
 
 #' Unweighted Kernel Density Estimation 
 #'
@@ -1661,10 +1664,11 @@ adaptive_MC_sampling <- function(samples_file,
       warning("No valid samples remaining after filtering")
       break
     }
-    
-    # Remove the first half of rows as burn-in
-    if(nrow(current_samples) > 2) {
-      current_samples <- current_samples[-(1:round(nrow(current_samples) * 0.5)), ]
+
+    # burn-in - only if we have many samples
+    if(nrow(current_samples) > 10) {
+      burn_in <- min(round(nrow(current_samples) * 0.3), nrow(current_samples) - 5)
+      current_samples <- current_samples[-(1:burn_in), ]
     }
 
     # Check convergence
