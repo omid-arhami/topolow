@@ -17,7 +17,7 @@
 #' - Parameter distribution analysis
 #'
 #' @importFrom coda gelman.diag effectiveSize mcmc mcmc.list
-#' @importFrom stats var sd cor quantile
+#' @importFrom stats var sd quantile
 #' @importFrom parallel mclapply detectCores
 #' @keywords internal
 "_PACKAGE"
