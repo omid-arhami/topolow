@@ -802,7 +802,6 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 
 
 
-
 #' Run Adaptive Monte Carlo Sampling
 #'
 #' @description 
@@ -810,22 +809,6 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #' or distributed via SLURM. Samples are drawn adaptively based on previous evaluations
 #' to focus sampling in high-likelihood regions. Results from all jobs accumulate in
 #' a single output file.
-#'
-#' @details
-#' The function:
-#' 1. Takes initial parameter samples as starting points
-#' 2. Creates `num_parallel_jobs` independent sampling processes
-#' 3. Updates sampling distribution based on likelihoods
-#' 4. Can distribute computation via SLURM for large-scale sampling
-#'
-#' Workflow:
-#' 1. Runs/Submits 'num_parallel_jobs' independent single-core jobs
-#' 2. Each job runs for num_samples/num_parallel_jobs iterations
-#' 3. Each job adds samples to a common results file
-#' 4. Total: Adds num_samples samples
-#' 
-#' Both local and SLURM executions append results to the same output file:
-#' model_parameters/\{scenario_name\}_model_parameters.csv
 #'
 #' @param initial_samples_file Character. Path to CSV file containing initial samples.
 #'        Must contain columns: log_N, log_k0, log_cooling_rate, log_c_repulsion, NLL
@@ -836,7 +819,7 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #' @param num_parallel_jobs Integer. Number of parallel jobs (cores on local machine or SLURM jobs).
 #' @param max_cores Integer. Maximum number of cores to use for parallel processing. If NULL,
 #'        uses all available cores minus 1 (default: NULL).
-#' @param num_samples Integer. Number of new samples to be added to the CSV file containing initial samples through Adaptive Monte Carlo sampling (default: 10).
+#' @param num_samples Integer. Number of new samples to be added through Adaptive Monte Carlo sampling (default: 10).
 #' @param scenario_name Character. Name for output files.
 #' @param use_slurm Logical. Whether to use SLURM (default: FALSE).
 #' @param cider Logical. Whether to use cider queue (default: FALSE).
@@ -844,44 +827,10 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #' @param verbose Logical. Whether to print progress messages. Default: FALSE.
 #' @param time Character. Walltime for SLURM jobs in HH:MM:SS format. Default: "8:00:00".
 #' @param memory Character. Memory allocation for SLURM jobs. Default: "10G".
+#' @param update_initial_file Logical. Whether to update the initial samples file with final results (default: TRUE).
 #'
-#' @return Invisible NULL. Results are appended to:
+#' @return Data frame of samples with evaluated likelihoods. Results are also written to:
 #'         model_parameters/\{scenario_name\}_model_parameters.csv
-#'
-#' @examples
-#' \dontrun{
-#' # Read initial samples
-#' init_file <- "initial_samples.csv"
-#' 
-#' # Create distance matrix
-#' dist_mat <- matrix(runif(100), 10, 10)
-#' dist_mat[lower.tri(dist_mat)] <- t(dist_mat)[lower.tri(dist_mat)]
-#' diag(dist_mat) <- 0
-#'
-#' # Run local adaptive sampling with 4 parallel jobs
-#' run_adaptive_sampling(
-#'   initial_samples_file = init_file,
-#'   distance_matrix = dist_mat,
-#'   mapping_max_iter = 1000,
-#'   scenario_name = "test_sampling",
-#'   num_parallel_jobs = 4,
-#'   max_cores = 4,
-#'   num_samples = 8,
-#'   verbose = TRUE
-#' )
-#'
-#' # Run with SLURM using 50 parallel jobs
-#' run_adaptive_sampling(
-#'   initial_samples_file = init_file, 
-#'   distance_matrix = dist_mat,
-#'   scenario_name = "slurm_sampling",
-#'   num_parallel_jobs = 50,
-#'   use_slurm = TRUE
-#' )
-#' }
-#'
-#' @seealso
-#' \code{\link{adaptive_MC_sampling}} for the core sampling algorithm
 #'
 #' @export
 run_adaptive_sampling <- function(initial_samples_file,
@@ -898,9 +847,10 @@ run_adaptive_sampling <- function(initial_samples_file,
                                   output_dir = NULL,
                                   use_slurm = FALSE,
                                   cider = FALSE,
-                                  verbose = FALSE) {
+                                  verbose = FALSE,
+                                  update_initial_file = TRUE) {
   
-  # calculate iterations from num_samples
+  # Calculate iterations from num_samples
   if (!is.numeric(num_samples) || num_samples < 1 || num_samples != round(num_samples)) {
     stop("num_samples must be a positive integer")
   }
@@ -1058,6 +1008,14 @@ run_adaptive_sampling <- function(initial_samples_file,
                              i, num_parallel_jobs, iterations))
     }
     
+    if(verbose) {
+      cat("Jobs submitted to SLURM. New samples will be written to:", results_file, "\n")
+      if(update_initial_file) {
+        cat("The initial samples file will be updated with results when SLURM jobs complete.\n")
+        cat("You'll need to manually update it by copying the contents from:", results_file, "\n")
+      }
+    }
+    
     return(invisible(NULL))
     
   } else {
@@ -1205,12 +1163,22 @@ run_adaptive_sampling <- function(initial_samples_file,
     
     if(verbose) cat(sprintf("\nAdaptive sampling completed in %s\n", time_msg))
     
-    # Return combined results
-    if(file.exists(results_file)) {
+    # Update the initial samples file if requested
+    if(update_initial_file && file.exists(results_file)) {
       final_samples <- read.csv(results_file)
       if(verbose) {
-        cat(sprintf("Generated %d new samples\n", nrow(final_samples) - nrow(init_samples)))
+        cat(sprintf("Updating initial samples file with %d new samples\n", 
+                   nrow(final_samples) - nrow(init_samples)))
       }
+      file.copy(results_file, initial_samples_file, overwrite = TRUE)
+    } else if(verbose) {
+      cat("Results saved to:", results_file, "\n")
+      cat("Initial samples file not updated. To update it manually, copy from:", results_file, "\n")
+    }
+    
+    # Return final results
+    if(file.exists(results_file)) {
+      final_samples <- read.csv(results_file)
       return(final_samples)
     } else {
       warning("No results file created")

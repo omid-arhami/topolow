@@ -19,7 +19,8 @@ run_adaptive_sampling(
   output_dir = NULL,
   use_slurm = FALSE,
   cider = FALSE,
-  verbose = FALSE
+  verbose = FALSE,
+  update_initial_file = TRUE
 )
 }
 \arguments{
@@ -33,7 +34,7 @@ Must contain columns: log_N, log_k0, log_cooling_rate, log_c_repulsion, NLL}
 \item{max_cores}{Integer. Maximum number of cores to use for parallel processing. If NULL,
 uses all available cores minus 1 (default: NULL).}
 
-\item{num_samples}{Integer. Number of new samples to be added to the CSV file containing initial samples through Adaptive Monte Carlo sampling (default: 10).}
+\item{num_samples}{Integer. Number of new samples to be added through Adaptive Monte Carlo sampling (default: 10).}
 
 \item{mapping_max_iter}{Integer. Maximum iterations per map optimization.}
 
@@ -54,9 +55,11 @@ uses all available cores minus 1 (default: NULL).}
 \item{cider}{Logical. Whether to use cider queue (default: FALSE).}
 
 \item{verbose}{Logical. Whether to print progress messages. Default: FALSE.}
+
+\item{update_initial_file}{Logical. Whether to update the initial samples file with final results (default: TRUE).}
 }
 \value{
-Invisible NULL. Results are appended to:
+Data frame of samples with evaluated likelihoods. Results are also written to:
 model_parameters/\{scenario_name\}_model_parameters.csv
 }
 \description{
@@ -64,60 +67,4 @@ Performs adaptive Monte Carlo sampling to explore parameter space, either locall
 or distributed via SLURM. Samples are drawn adaptively based on previous evaluations
 to focus sampling in high-likelihood regions. Results from all jobs accumulate in
 a single output file.
-}
-\details{
-The function:
-\enumerate{
-\item Takes initial parameter samples as starting points
-\item Creates \code{num_parallel_jobs} independent sampling processes
-\item Updates sampling distribution based on likelihoods
-\item Can distribute computation via SLURM for large-scale sampling
-}
-
-Workflow:
-\enumerate{
-\item Runs/Submits 'num_parallel_jobs' independent single-core jobs
-\item Each job runs for num_samples/num_parallel_jobs iterations
-\item Each job adds samples to a common results file
-\item Total: Adds num_samples samples
-}
-
-Both local and SLURM executions append results to the same output file:
-model_parameters/\{scenario_name\}_model_parameters.csv
-}
-\examples{
-\dontrun{
-# Read initial samples
-init_file <- "initial_samples.csv"
-
-# Create distance matrix
-dist_mat <- matrix(runif(100), 10, 10)
-dist_mat[lower.tri(dist_mat)] <- t(dist_mat)[lower.tri(dist_mat)]
-diag(dist_mat) <- 0
-
-# Run local adaptive sampling with 4 parallel jobs
-run_adaptive_sampling(
-  initial_samples_file = init_file,
-  distance_matrix = dist_mat,
-  mapping_max_iter = 1000,
-  scenario_name = "test_sampling",
-  num_parallel_jobs = 4,
-  max_cores = 4,
-  num_samples = 8,
-  verbose = TRUE
-)
-
-# Run with SLURM using 50 parallel jobs
-run_adaptive_sampling(
-  initial_samples_file = init_file, 
-  distance_matrix = dist_mat,
-  scenario_name = "slurm_sampling",
-  num_parallel_jobs = 50,
-  use_slurm = TRUE
-)
-}
-
-}
-\seealso{
-\code{\link{adaptive_MC_sampling}} for the core sampling algorithm
 }
