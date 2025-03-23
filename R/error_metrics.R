@@ -1,6 +1,5 @@
 # Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
 # License: free of charge access granted to any academic researcher to use this software for non-commercial, academic research purposes **only**.  Nobody may modify, distribute, sublicense, or publicly share the Software or any derivative works, until the paper is published by the original authors.  The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.  In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the Software or the use or other dealings in the Software.
-
 # R/error_metrics.R
 
 #' Error calculation and validation metrics for topolow
@@ -82,16 +81,15 @@ error_calculator_comparison <- function(p_dist_mat, truth_matrix, input_matrix) 
   report_df$OutSampleError <- report_df$True_distance - report_df$Pred_for_missing
   
   # Calculate percentage errors
-  non_zero_mask <- report_df$True_distance > 0
+  report_df$InSamplePercentageError <- (report_df$InSampleError / report_df$True_distance) * 100
+  report_df$OutSamplePercentageError <- (report_df$OutSampleError / report_df$True_distance) * 100
   
-  report_df$InSamplePercentageError <- NA
-  report_df$InSamplePercentageError[non_zero_mask] <- 
-    (report_df$InSampleError[non_zero_mask] / report_df$True_distance[non_zero_mask]) * 100
-
-  report_df$OutSamplePercentageError <- NA
-  report_df$OutSamplePercentageError[non_zero_mask] <- 
-    (report_df$OutSampleError[non_zero_mask] / report_df$True_distance[non_zero_mask]) * 100
-
+  # Calculate correlations
+  InSampleCor <- cor(report_df$True_distance, report_df$Pred_for_observeds, 
+                     use = "pairwise.complete.obs", method = "pearson")
+  OutSampleCor <- cor(report_df$True_distance, report_df$Pred_for_missing,
+                      use = "pairwise.complete.obs", method = "pearson")
+  
   report_df <- report_df %>% 
     dplyr::select(-c(True_distance, Pred_for_observeds, Pred_for_missing))
   
@@ -102,9 +100,12 @@ error_calculator_comparison <- function(p_dist_mat, truth_matrix, input_matrix) 
   
   return(list(
     report_df = report_df,
-    coverage = coverage
+    coverage = coverage,
+    InSampleCor = InSampleCor,
+    OutSampleCor = OutSampleCor
   ))
 }
+
 
 
 #' Calculate prediction interval for distance estimates
