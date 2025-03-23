@@ -75,7 +75,7 @@
 #' @importFrom dplyr %>% select filter mutate group_by summarise ungroup
 #' @importFrom reshape2 melt
 #' @import ggplot2
-#' @importFrom stats cor median sd var
+#' @importFrom stats median sd var
 #' @importFrom parallel mclapply detectCores
 #' @importFrom utils write.csv read.csv
 #' @importFrom coda mcmc mcmc.list gelman.diag effectiveSize

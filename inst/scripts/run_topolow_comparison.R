@@ -81,8 +81,7 @@ result_df <- data.frame(
   Scenario = scenario_name,
   Fold = i,
   Holdout_MAE = mean(abs(topolow_df$OutSampleError), na.rm = TRUE),
-  Validation_Coverage = topolow_coverage,
-  Validation_Cor = topolow_cor
+  Validation_Coverage = topolow_coverage
 )
 
 write.csv(result_df, file.path(results_dir,

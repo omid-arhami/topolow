@@ -80,16 +80,17 @@ error_calculator_comparison <- function(p_dist_mat, truth_matrix, input_matrix) 
   report_df$InSampleError <- report_df$True_distance - report_df$Pred_for_observeds
   report_df$OutSampleError <- report_df$True_distance - report_df$Pred_for_missing
   
-  # Calculate percentage errors
-  report_df$InSamplePercentageError <- (report_df$InSampleError / report_df$True_distance) * 100
-  report_df$OutSamplePercentageError <- (report_df$OutSampleError / report_df$True_distance) * 100
+  # Calculate percentage errors - WITH FIX
+  non_zero_mask <- !is.na(report_df$True_distance) & report_df$True_distance > 0
   
-  # Calculate correlations
-  InSampleCor <- cor(report_df$True_distance, report_df$Pred_for_observeds, 
-                     use = "pairwise.complete.obs", method = "pearson")
-  OutSampleCor <- cor(report_df$True_distance, report_df$Pred_for_missing,
-                      use = "pairwise.complete.obs", method = "pearson")
-  
+  report_df$InSamplePercentageError <- NA
+  report_df$InSamplePercentageError[non_zero_mask] <- 
+    (report_df$InSampleError[non_zero_mask] / report_df$True_distance[non_zero_mask]) * 100
+
+  report_df$OutSamplePercentageError <- NA
+  report_df$OutSamplePercentageError[non_zero_mask] <- 
+    (report_df$OutSampleError[non_zero_mask] / report_df$True_distance[non_zero_mask]) * 100
+
   report_df <- report_df %>% 
     dplyr::select(-c(True_distance, Pred_for_observeds, Pred_for_missing))
   
@@ -100,12 +101,9 @@ error_calculator_comparison <- function(p_dist_mat, truth_matrix, input_matrix) 
   
   return(list(
     report_df = report_df,
-    coverage = coverage,
-    InSampleCor = InSampleCor,
-    OutSampleCor = OutSampleCor
+    coverage = coverage
   ))
 }
-
 
 
 #' Calculate prediction interval for distance estimates
