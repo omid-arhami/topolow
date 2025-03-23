@@ -829,8 +829,7 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #' @param memory Character. Memory allocation for SLURM jobs. Default: "10G".
 #' @param update_initial_file Logical. Whether to update the initial samples file with final results (default: TRUE).
 #'
-#' @return Data frame of samples with evaluated likelihoods. Results are also written to:
-#'         model_parameters/\{scenario_name\}_model_parameters.csv
+#' @return NULL. Results are  written to: model_parameters/\{scenario_name\}_model_parameters.csv
 #'
 #' @export
 run_adaptive_sampling <- function(initial_samples_file,
@@ -1043,26 +1042,25 @@ run_adaptive_sampling <- function(initial_samples_file,
     # Define the worker function for each parallel job
     worker_function <- function(job_id) {
       tryCatch({
-        # Create a custom wrapper around adaptive_MC_sampling for progress tracking
         for(iter in 1:iterations) {
           if(verbose) {
             cat(sprintf("Job %d: Starting iteration %d of %d\n", 
-                       job_id, iter, iterations))
+                      job_id, iter, iterations))
           }
           
-          # Run one iteration of adaptive sampling using the shared results file
-          result <- adaptive_MC_sampling(
-            samples_file = results_file,  # Use the common results file
+          # Run one iteration - let adaptive_MC_sampling handle the file writing
+          adaptive_MC_sampling(
+            samples_file = results_file,
             distance_matrix = distance_matrix,
-            iterations = 1,  # One iteration at a time for better progress tracking
+            iterations = 1,
             batch_size = 1,
             mapping_max_iter = mapping_max_iter,
             relative_epsilon = relative_epsilon,
             folds = folds,
-            num_cores = 1,  # Use 1 core within each job
-            scenario_name = scenario_name,  # Use the original scenario name without job suffix
+            num_cores = 1,
+            scenario_name = scenario_name,
             output_dir = output_dir,
-            verbose = FALSE  # Disable verbose within subfunction
+            verbose = FALSE
           )
           
           # Update progress counter
@@ -1153,38 +1151,11 @@ run_adaptive_sampling <- function(initial_samples_file,
     end_time <- Sys.time()
     time_diff <- difftime(end_time, start_time, units = "auto")
     
-    # Format time nicely
-    if(time_diff < 60) {
-      time_msg <- sprintf("%.1f seconds", as.numeric(time_diff))
-    } else if(time_diff < 3600) {
-      time_msg <- sprintf("%.1f minutes", as.numeric(time_diff) / 60)
-    } else {
-      time_msg <- sprintf("%.1f hours", as.numeric(time_diff) / 3600)
-    }
-    
-    if(verbose) cat(sprintf("\nAdaptive sampling completed in %s\n", time_msg))
-    
-    # Update the initial samples file if requested
-    if(update_initial_file && file.exists(results_file)) {
-      final_samples <- read.csv(results_file)
-      if(verbose) {
-        cat(sprintf("Updating initial samples file with %d new samples\n", 
-                   nrow(final_samples) - nrow(init_samples)))
-      }
-      file.copy(results_file, initial_samples_file, overwrite = TRUE)
-    } else if(verbose) {
+    if(verbose) {
       cat("Results saved to:", results_file, "\n")
-      cat("Initial samples file not updated. To update it manually, copy from:", results_file, "\n")
+      cat("\nAdaptive sampling completed in: ", time_diff, "\n")
     }
     
-    # Return final results
-    if(file.exists(results_file)) {
-      final_samples <- read.csv(results_file)
-      return(final_samples)
-    } else {
-      warning("No results file created")
-      return(NULL)
-    }
   }
 }
 
