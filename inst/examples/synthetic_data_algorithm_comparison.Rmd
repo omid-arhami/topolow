@@ -290,24 +290,24 @@ plot_dimension_results <- function(results, output_dir) {
       if(nrow(dataset_data) == 0) next
       
       # Calculate the scaled position for 95% coverage
-      max_mae <- max(dataset_data$MAE)
-      scaled_95_percent <- 95/max(dataset_data$Completeness)*max_mae
+      max_mape <- max(dataset_data$MAPE)
+      scaled_95_percent <- 95/max(dataset_data$Completeness)*max_mape
       
       # Create plot with dual y-axes for this dataset
       p <- ggplot(dataset_data, aes(x = Dimension)) +
-        # MAE line
-        geom_line(aes(y = MAE, color = "Validation MAE"), size = 0.8) +
-        geom_point(aes(y = MAE, color = "Validation MAE"), size = 1.5) +
-        # Completeness line (scaled to match MAE range for dual axis)
-        geom_line(aes(y = Completeness/max(Completeness)*max_mae, color = "Completeness"), size = 0.8) +
-        geom_point(aes(y = Completeness/max(Completeness)*max_mae, color = "Completeness"), size = 1.5) +
+        # MAPE line
+        geom_line(aes(y = MAPE, color = "Validation MAPE"), size = 0.8) +
+        geom_point(aes(y = MAPE, color = "Validation MAPE"), size = 1.5) +
+        # Completeness line (scaled to match MAPE range for dual axis)
+        geom_line(aes(y = Completeness/max(Completeness)*max_mape, color = "Completeness"), size = 0.8) +
+        geom_point(aes(y = Completeness/max(Completeness)*max_mape, color = "Completeness"), size = 1.5) +
         # Add horizontal line at 95% coverage
         geom_hline(yintercept = scaled_95_percent, linetype = "dashed", color = "blue", alpha = 0.7) +
         # Set up axes
         scale_y_continuous(
-          name = "Validation MAE",
-          sec.axis = sec_axis(~ . * max(dataset_data$Completeness)/max_mae, name = "Completeness (%)")) +
-        scale_color_manual(values = c("Validation MAE" = "red", "Completeness" = "blue"),
+          name = "Validation MAPE",
+          sec.axis = sec_axis(~ . * max(dataset_data$Completeness)/max_mape, name = "Completeness (%)")) +
+        scale_color_manual(values = c("Validation MAPE" = "red", "Completeness" = "blue"),
                          name = "Metric") +
         labs(x = "Dimension") +
         theme_minimal() +
@@ -450,11 +450,11 @@ plot_dimension_results <- function(results, output_dir) {
   legend_data <- data.frame(
     x = 1:2,
     y = 1:2,
-    Metric = c("Validation MAE", "Completeness")
+    Metric = c("Validation MAPE", "Completeness")
   )
   legend_plot <- ggplot(legend_data, aes(x = x, y = y, color = Metric)) +
     geom_point() +
-    scale_color_manual(values = c("Validation MAE" = "red", "Completeness" = "blue")) +
+    scale_color_manual(values = c("Validation MAPE" = "red", "Completeness" = "blue")) +
     theme_void() +
     theme(legend.position = "bottom")
   legend <- get_legend(legend_plot)
@@ -467,19 +467,19 @@ plot_dimension_results <- function(results, output_dir) {
       scales = "free_y",
       switch = "y"
     ) +
-    # MAE line
-    geom_line(aes(x = Dimension, y = MAE, color = "Validation MAE"), size = 0.6) +
-    geom_point(aes(x = Dimension, y = MAE, color = "Validation MAE"), size = 1.2) +
+    # MAPE line
+    geom_line(aes(x = Dimension, y = MAPE, color = "Validation MAPE"), size = 0.6) +
+    geom_point(aes(x = Dimension, y = MAPE, color = "Validation MAPE"), size = 1.2) +
     # Completeness line with secondary y-axis scaling done in annotation
-    geom_line(aes(x = Dimension, y = Completeness/100*max(MAE), color = "Completeness"), size = 0.6) +
-    geom_point(aes(x = Dimension, y = Completeness/100*max(MAE), color = "Completeness"), size = 1.2) +
+    geom_line(aes(x = Dimension, y = Completeness/100*max(MAPE), color = "Completeness"), size = 0.6) +
+    geom_point(aes(x = Dimension, y = Completeness/100*max(MAPE), color = "Completeness"), size = 1.2) +
     # 95% coverage reference line
-    geom_hline(aes(yintercept = 0.95*max(MAE)), linetype = "dashed", color = "blue", alpha = 0.4) +
+    geom_hline(aes(yintercept = 0.95*max(MAPE)), linetype = "dashed", color = "blue", alpha = 0.4) +
     # Styling
-    scale_color_manual(values = c("Validation MAE" = "red", "Completeness" = "blue")) +
+    scale_color_manual(values = c("Validation MAPE" = "red", "Completeness" = "blue")) +
     labs(
       x = "Test Dimension",
-      y = "Validation MAE"
+      y = "Validation MAPE"
     ) +
     theme_minimal() +
     theme(

@@ -13,45 +13,103 @@
 NULL
 
 
-#' Process ideal distance values
+#' Process Threshold-Annotated Distance Values Using Pre-processed Numeric Representation
+#'
+#' @description
+#' Processes distance values with pre-processed threshold indicators for the TopoLow 
+#' optimization algorithm. This version uses numeric codes for thresholds instead of 
+#' string operations, significantly improving performance in the optimization loop.
+#'
+#' @details
+#' This function implements the threshold logic for antigenic cartography measurements
+#' using pre-processed numeric representations of threshold types:
 #' 
-#' Helper function that processes distance values that may include threshold indicators
-#' (< or >). Used internally by the optimization functions to handle thresholded
-#' measurements.
+#' - When threshold_type is 1 (representing ">" originally): Returns the numeric value
+#'   if the calculated distance is less than the threshold (meaning a force needs to
+#'   be applied), otherwise returns NULL (constraint is satisfied)
 #' 
-#' @param reported_distance Character or numeric. The reported distance value, possibly 
-#'        with < or > prefix
-#' @param distance Numeric. The calculated distance to compare against
-#' @return Numeric or NULL. Returns the processed distance value if the threshold 
-#'         condition is met, NULL otherwise
+#' - When threshold_type is -1 (representing "<" originally): Returns the numeric value
+#'   if the calculated distance is greater than the threshold (meaning a force needs to
+#'   be applied), otherwise returns NULL (constraint is satisfied)
+#' 
+#' - When threshold_type is 0 (normal value): Simply returns the numeric value
+#'
+#' The return value signals to the calling function whether a force should be applied
+#' (numeric return) or if the current configuration already satisfies the constraint (NULL).
+#'
+#' @param numeric_value Numeric. The target distance value (already converted to numeric)
+#' @param threshold_type Integer. Code representing the threshold type:
+#'        1 for "greater than" (>), -1 for "less than" (<), or 0 for exact values
+#' @param distance Numeric. The calculated distance between points in the current configuration
+#'
+#' @return Numeric or NULL. Returns the numeric value if a force should be applied to
+#'         meet the threshold constraint, or NULL if the constraint is already satisfied.
+#'
+#' @examples
+#' \dontrun{
+#' # Example with regular distance (threshold_type = 0)
+#' process_ideal_distance(5, 0, 3)  # Returns 5
+#'
+#' # Example with "greater than" threshold (threshold_type = 1)
+#' process_ideal_distance(5, 1, 3)  # Returns 5 (need to apply force)
+#' process_ideal_distance(5, 1, 6)  # Returns NULL (constraint satisfied)
+#'
+#' # Example with "less than" threshold (threshold_type = -1)
+#' process_ideal_distance(5, -1, 6)  # Returns 5 (need to apply force)
+#' process_ideal_distance(5, -1, 4)  # Returns NULL (constraint satisfied)
+#' }
+#'
 #' @keywords internal
-process_ideal_distance <- function(reported_distance, distance) {
+process_ideal_distance <- function(numeric_value, threshold_type, distance) {
   if (!is.numeric(distance)) {
     stop("'distance' must be numeric")
   }
   
-  if (is.character(reported_distance) && startsWith(reported_distance, ">")) {
-    numeric_part <- as.numeric(sub(">", "", reported_distance))
-    if (distance < numeric_part) {
-      return(numeric_part)
+  if(threshold_type == 1) {  # was ">"
+    if(distance < numeric_value) {
+      return(numeric_value)
     } else {
       return(NULL)
     }
-  } else if (is.character(reported_distance) && startsWith(reported_distance, "<")) {
-    numeric_part <- as.numeric(sub("<", "", reported_distance))
-    if (distance > numeric_part) {
-      return(numeric_part)
+  } else if(threshold_type == -1) {  # was "<"
+    if(distance > numeric_value) {
+      return(numeric_value)
     } else {
       return(NULL)
     }
-  } else {
-    tryCatch({
-      return(as.numeric(reported_distance))
-    }, error = function(e) {
-      stop("'reported_distance' must be numeric or a character starting with > or <")
-    })
+  } else {  # normal value
+    return(numeric_value)
   }
 }
+
+# process_ideal_distance <- function(reported_distance, distance) {
+#   if (!is.numeric(distance)) {
+#     stop("'distance' must be numeric")
+#   }
+#   
+#   if (is.character(reported_distance) && startsWith(reported_distance, ">")) {
+#     numeric_part <- as.numeric(sub(">", "", reported_distance))
+#     if (distance < numeric_part) {
+#       return(numeric_part)
+#     } else {
+#       return(NULL)
+#     }
+#   } else if (is.character(reported_distance) && startsWith(reported_distance, "<")) {
+#     numeric_part <- as.numeric(sub("<", "", reported_distance))
+#     if (distance > numeric_part) {
+#       return(numeric_part)
+#     } else {
+#       return(NULL)
+#     }
+#   } else {
+#     tryCatch({
+#       return(as.numeric(reported_distance))
+#     }, error = function(e) {
+#       stop("'reported_distance' must be numeric or a character starting with > or <")
+#     })
+#   }
+# }
+
 
 
 #' Process distance matrix for convergence error calculations
@@ -91,43 +149,126 @@ process_distance_matrix <- function(reported_distance, distance) {
   }
 }
 
-# Vectorized function to process distance matrix for convergence error calculations
-vectorized_process_distance_matrix <- function(distance_matrix, p_dist_mat) {
-  # Create result matrix
-  result <- matrix(NA, nrow = nrow(distance_matrix), ncol = ncol(distance_matrix))
+
+
+#' Vectorized Processing of Distance Matrix for Convergence Error Calculations
+#' 
+#' @description
+#' Efficiently processes elements of the distance matrix for calculating convergence error
+#' using pre-processed numeric representations of thresholds. This optimized version
+#' eliminates expensive string operations during optimization.
+#' 
+#' @details
+#' This function handles threshold logic for convergence error calculation by using
+#' pre-processed numeric matrices:
+#' 
+#' - For "greater than" thresholds (threshold_mask = 1): Returns the numeric value if the 
+#'   calculated distance is less than the threshold, otherwise returns NA
+#'   
+#' - For "less than" thresholds (threshold_mask = -1): Returns the numeric value if the
+#'   calculated distance is greater than the threshold, otherwise returns NA
+#'   
+#' - For regular values (threshold_mask = 0): Returns the numeric value
+#' 
+#' This function operates on entire matrices at once using vectorized operations,
+#' which is significantly faster than processing each element individually.
+#' 
+#' @param distances_numeric Numeric matrix. The numeric distance values (without threshold
+#'        indicators)
+#' @param threshold_mask Integer matrix. Codes representing threshold types:
+#'        1 for "greater than" (>), -1 for "less than" (<), or 0 for exact values
+#' @param p_dist_mat Numeric matrix. The calculated distance matrix to compare against
+#' 
+#' @return Numeric matrix with processed distance values. Elements where threshold
+#'         conditions are satisfied will contain NA.
+#'         
+#' @keywords internal
+vectorized_process_distance_matrix <- function(distances_numeric, threshold_mask, p_dist_mat) {
+  # Create result matrix (defaults to NA)
+  result <- matrix(NA, nrow = nrow(distances_numeric), ncol = ncol(distances_numeric))
   
-  # Convert to character matrix for string operations
-  char_matrix <- matrix(as.character(distance_matrix), nrow = nrow(distance_matrix))
+  # Find indices for each threshold type
+  gt_indices <- which(threshold_mask == 1)  # Greater than (>)
+  lt_indices <- which(threshold_mask == -1) # Less than (<)
+  normal_indices <- which(threshold_mask == 0) # Normal values
   
-  # Process greater than cases (">x")
-  gt_mask <- grepl("^>", char_matrix)
-  if (any(gt_mask)) {
-    gt_indices <- which(gt_mask)
-    numeric_parts <- suppressWarnings(as.numeric(gsub("^>", "", char_matrix[gt_indices])))
-    valid <- !is.na(numeric_parts) & !is.na(p_dist_mat[gt_indices]) & 
-      p_dist_mat[gt_indices] < numeric_parts
-    result[gt_indices[valid]] <- numeric_parts[valid]
+  # Process greater than thresholds
+  if (length(gt_indices) > 0) {
+    valid <- !is.na(distances_numeric[gt_indices]) & 
+             !is.na(p_dist_mat[gt_indices]) & 
+             p_dist_mat[gt_indices] < distances_numeric[gt_indices]
+    
+    if (any(valid)) {
+      result[gt_indices[valid]] <- distances_numeric[gt_indices[valid]]
+    }
   }
   
-  # Process less than cases ("<x")
-  lt_mask <- grepl("^<", char_matrix)
-  if (any(lt_mask)) {
-    lt_indices <- which(lt_mask)
-    numeric_parts <- suppressWarnings(as.numeric(gsub("^<", "", char_matrix[lt_indices])))
-    valid <- !is.na(numeric_parts) & !is.na(p_dist_mat[lt_indices]) & 
-      p_dist_mat[lt_indices] > numeric_parts
-    result[lt_indices[valid]] <- numeric_parts[valid]
+  # Process less than thresholds
+  if (length(lt_indices) > 0) {
+    valid <- !is.na(distances_numeric[lt_indices]) & 
+             !is.na(p_dist_mat[lt_indices]) & 
+             p_dist_mat[lt_indices] > distances_numeric[lt_indices]
+    
+    if (any(valid)) {
+      result[lt_indices[valid]] <- distances_numeric[lt_indices[valid]]
+    }
   }
   
-  # Process other values (convert to numeric)
-  other_mask <- !is.na(char_matrix) & !gt_mask & !lt_mask
-  if (any(other_mask)) {
-    other_indices <- which(other_mask)
-    result[other_indices] <- suppressWarnings(as.numeric(char_matrix[other_indices]))
+  # Process normal values
+  if (length(normal_indices) > 0) {
+    result[normal_indices] <- distances_numeric[normal_indices]
+    result[is.infinite(result)] <- NA
   }
-  
+
   return(result)
 }
+
+
+#' Vectorized Process distance matrix for convergence error calculations
+#' 
+#' Helper function that processes elements of the distance matrix for calculating 
+#' convergence error using vectorization. Handles threshold indicators and NA values.
+#' 
+#' @param distance_matrix Character or numeric. The reported distance value
+#' @param p_dist_mat Numeric. The calculated distance matrix to compare against
+#' @return Numeric. Returns processed distance
+#' @keywords internal
+# vectorized_process_distance_matrix_legacy <- function(distance_matrix, p_dist_mat) {
+#   # Create result matrix
+#   result <- matrix(NA, nrow = nrow(distance_matrix), ncol = ncol(distance_matrix))
+#   
+#   # Convert to character matrix for string operations
+#   char_matrix <- matrix(as.character(distance_matrix), nrow = nrow(distance_matrix))
+#   
+#   # Process greater than cases (">x")
+#   gt_mask <- grepl("^>", char_matrix)
+#   if (any(gt_mask)) {
+#     gt_indices <- which(gt_mask)
+#     numeric_parts <- suppressWarnings(as.numeric(gsub("^>", "", char_matrix[gt_indices])))
+#     valid <- !is.na(numeric_parts) & !is.na(p_dist_mat[gt_indices]) &
+#       p_dist_mat[gt_indices] < numeric_parts
+#     result[gt_indices[valid]] <- numeric_parts[valid]
+#   }
+#   
+#   # Process less than cases ("<x")
+#   lt_mask <- grepl("^<", char_matrix)
+#   if (any(lt_mask)) {
+#     lt_indices <- which(lt_mask)
+#     numeric_parts <- suppressWarnings(as.numeric(gsub("^<", "", char_matrix[lt_indices])))
+#     valid <- !is.na(numeric_parts) & !is.na(p_dist_mat[lt_indices]) &
+#       p_dist_mat[lt_indices] > numeric_parts
+#     result[lt_indices[valid]] <- numeric_parts[valid]
+#   }
+#   
+#   # Process other values (convert to numeric)
+#   other_mask <- !is.na(char_matrix) & !gt_mask & !lt_mask
+#   if (any(other_mask)) {
+#     other_indices <- which(other_mask)
+#     result[other_indices] <- suppressWarnings(as.numeric(char_matrix[other_indices]))
+#   }
+#   
+#   return(result)
+# }
 
 
 #' Main TopoLow algorithm implementation
@@ -267,18 +408,42 @@ create_topolow_map <- function(distance_matrix,
   node_degrees_1 <- node_degrees + 1
   
   # OPTIMIZATION 2: Replace ifelse with direct indexing
-  distances <- matrix(Inf, n, n)
-  distances[!is_na_matrix] <- distance_matrix[!is_na_matrix]
+  # OPTIMIZATION 10: Do string operations in advance and create a mask for thresholded values
+  # distances <- matrix(Inf, n, n)
+  # distances[!is_na_matrix] <- distance_matrix[!is_na_matrix]
+  distances_numeric <- matrix(Inf, n, n)
+  threshold_mask <- matrix(0, n, n)  # 0 = number, 1 = >, -1 = <
+
+  for(i in 1:n) {
+    for(j in 1:n) {
+      if(!is.na(distance_matrix[i,j])) {
+        if(is.character(distance_matrix[i,j])) {
+          if(startsWith(distance_matrix[i,j], ">")) {
+            distances_numeric[i,j] <- as.numeric(sub(">", "", distance_matrix[i,j]))
+            threshold_mask[i,j] <- 1
+          } else if(startsWith(distance_matrix[i,j], "<")) {
+            distances_numeric[i,j] <- as.numeric(sub("<", "", distance_matrix[i,j]))
+            threshold_mask[i,j] <- -1
+          } else {
+            distances_numeric[i,j] <- as.numeric(distance_matrix[i,j])
+          }
+        } else {
+          distances_numeric[i,j] <- distance_matrix[i,j]
+        }
+      }
+    }
+  }
   
-  # Initialize positions (unchanged)
+  # Initialize positions
   positions <- if(is.null(initial_positions)) {
     distance_matrix_numeric <- suppressWarnings(as.numeric(as.character(distance_matrix)))
     distance_matrix_numeric[is.na(distance_matrix_numeric)] <- NA
     init_step <- max(distance_matrix_numeric, na.rm=TRUE) / n
-    pos <- matrix(0, n, ndim)
-    for (i in 2:n) {
-      pos[i, ] <- pos[i-1, ] + stats::runif(ndim, 0, 2*init_step)
-    }
+    # OPTIMIZATION 9: Use matrix operations for random initialization
+    # Generate all random values at once
+    random_steps <- matrix(stats::runif((n-1) * ndim, 0, 2*init_step), nrow=n-1, ncol=ndim)
+    # First row stays zero, subsequent rows are cumulative sums
+    pos <- rbind(matrix(0, 1, ndim), apply(random_steps, 2, cumsum))
     pos
   } else {
     initial_positions
@@ -306,7 +471,7 @@ create_topolow_map <- function(distance_matrix,
   for(idx in 1:nrow(point_pairs)) {
     i <- point_pairs[idx, 1]
     j <- point_pairs[idx, 2]
-    has_measurement[idx] <- distances[i, j] != Inf
+    has_measurement[idx] <- distances_numeric[i, j] != Inf
   }
   
   ################## Main optimization loop
@@ -330,9 +495,14 @@ create_topolow_map <- function(distance_matrix,
       
       # OPTIMIZATION 6: Use pre-computed measurement status
       if(shuffled_has_measurement[pair_idx]) {
-        ideal_distance <- distances[i, j]
-        ideal_distance_processed <- process_ideal_distance(ideal_distance, distance)
-        
+        #ideal_distance <- distances[i, j]
+        #ideal_distance_processed <- process_ideal_distance(ideal_distance, distance)
+        ideal_distance_processed <- process_ideal_distance(
+                                                  distances_numeric[i, j], 
+                                                  threshold_mask[i, j], 
+                                                  distance
+                                                )
+
         if (!is.null(ideal_distance_processed)) {
           # Spring force
           adjustment_factor <- 2*k*(ideal_distance_processed-distance)*delta/distance_01
@@ -355,7 +525,7 @@ create_topolow_map <- function(distance_matrix,
     # OPTIMIZATION 8: Check for numerical stability less frequently
     if(iter %% 5 == 0) {
       # Vectorized check for NA/Inf values
-      if(any(is.na(positions)) || any(is.infinite(positions))) {
+      if(any(!is.finite(positions))) {
         warning("Numerical instability detected at iteration ", iter)
         stop <- TRUE
         break
@@ -364,29 +534,29 @@ create_topolow_map <- function(distance_matrix,
     
     if(stop) break
     
+    # OPTIMIZATION 8: replace coordinates_to_matrix function call with a simple part of its code
     # Calculate current distances and convergence error
-    p_dist_mat <- coordinates_to_matrix(positions)
-    
+    #p_dist_mat <- coordinates_to_matrix(positions)
+    p_dist_mat <- as.matrix(stats::dist(positions))
+    rownames(p_dist_mat) <- rownames(positions)
+    colnames(p_dist_mat) <- rownames(positions)
+
+    # OPTIMIZATION 9: Vectorized distance_matrix_convergence_error calculation
     # Process thresholded elements for convergence error
     # distance_matrix_convergence_error <- mapply(
     #   process_distance_matrix, 
     #   distance_matrix, 
     #   p_dist_mat
     # )
-    distance_matrix_convergence_error <- vectorized_process_distance_matrix(distance_matrix, p_dist_mat)
-    
-    distance_matrix_convergence_error <- matrix(
-      distance_matrix_convergence_error, 
-      nrow = nrow(distance_matrix)
-    )
-    
-    # OPTIMIZATION 9: Vectorized convergence error calculation
-    distance_vec <- as.vector(as.numeric(distance_matrix_convergence_error))
-    p_dist_vec <- as.vector(p_dist_mat)
-    valid_indices <- !is.na(distance_vec)
-    convergence_error <- mean(
-      abs(distance_vec[valid_indices] - p_dist_vec[valid_indices])
-    )
+    # distance_matrix_convergence_error <- matrix(
+    #   distance_matrix_convergence_error, 
+    #   nrow = nrow(distance_matrix)
+    # )
+    distance_matrix_convergence_error <- vectorized_process_distance_matrix(distances_numeric, threshold_mask, p_dist_mat)
+
+    # Vectorized convergence error calculation
+    valid_mask <- !is.na(distance_matrix_convergence_error)
+    convergence_error <- mean(abs(distance_matrix_convergence_error[valid_mask] - p_dist_mat[valid_mask]))
     
     # Calculate evaluation metrics similarly
     distance_vec_raw <- suppressWarnings(as.vector(as.numeric(distance_matrix)))
@@ -529,4 +699,3 @@ gmultiple <- function(x) {
   }
   1/(1 + exp(-10*x))
 }
-
