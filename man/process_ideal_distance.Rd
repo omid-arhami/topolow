@@ -2,23 +2,56 @@
 % Please edit documentation in R/core.R
 \name{process_ideal_distance}
 \alias{process_ideal_distance}
-\title{Process ideal distance values}
+\title{Process Threshold-Annotated Distance Values Using Pre-processed Numeric Representation}
 \usage{
-process_ideal_distance(reported_distance, distance)
+process_ideal_distance(numeric_value, threshold_type, distance)
 }
 \arguments{
-\item{reported_distance}{Character or numeric. The reported distance value, possibly
-with < or > prefix}
+\item{numeric_value}{Numeric. The target distance value (already converted to numeric)}
 
-\item{distance}{Numeric. The calculated distance to compare against}
+\item{threshold_type}{Integer. Code representing the threshold type:
+1 for "greater than" (>), -1 for "less than" (<), or 0 for exact values}
+
+\item{distance}{Numeric. The calculated distance between points in the current configuration}
 }
 \value{
-Numeric or NULL. Returns the processed distance value if the threshold
-condition is met, NULL otherwise
+Numeric or NULL. Returns the numeric value if a force should be applied to
+meet the threshold constraint, or NULL if the constraint is already satisfied.
 }
 \description{
-Helper function that processes distance values that may include threshold indicators
-(< or >). Used internally by the optimization functions to handle thresholded
-measurements.
+Processes distance values with pre-processed threshold indicators for the TopoLow
+optimization algorithm. This version uses numeric codes for thresholds instead of
+string operations, significantly improving performance in the optimization loop.
+}
+\details{
+This function implements the threshold logic for antigenic cartography measurements
+using pre-processed numeric representations of threshold types:
+\itemize{
+\item When threshold_type is 1 (representing ">" originally): Returns the numeric value
+if the calculated distance is less than the threshold (meaning a force needs to
+be applied), otherwise returns NULL (constraint is satisfied)
+\item When threshold_type is -1 (representing "<" originally): Returns the numeric value
+if the calculated distance is greater than the threshold (meaning a force needs to
+be applied), otherwise returns NULL (constraint is satisfied)
+\item When threshold_type is 0 (normal value): Simply returns the numeric value
+}
+
+The return value signals to the calling function whether a force should be applied
+(numeric return) or if the current configuration already satisfies the constraint (NULL).
+}
+\examples{
+\dontrun{
+# Example with regular distance (threshold_type = 0)
+process_ideal_distance(5, 0, 3)  # Returns 5
+
+# Example with "greater than" threshold (threshold_type = 1)
+process_ideal_distance(5, 1, 3)  # Returns 5 (need to apply force)
+process_ideal_distance(5, 1, 6)  # Returns NULL (constraint satisfied)
+
+# Example with "less than" threshold (threshold_type = -1)
+process_ideal_distance(5, -1, 6)  # Returns 5 (need to apply force)
+process_ideal_distance(5, -1, 4)  # Returns NULL (constraint satisfied)
+}
+
 }
 \keyword{internal}

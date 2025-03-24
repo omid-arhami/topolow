@@ -59,8 +59,7 @@ uses all available cores minus 1 (default: NULL).}
 \item{update_initial_file}{Logical. Whether to update the initial samples file with final results (default: TRUE).}
 }
 \value{
-Data frame of samples with evaluated likelihoods. Results are also written to:
-model_parameters/\{scenario_name\}_model_parameters.csv
+NULL. Results are  written to: model_parameters/\{scenario_name\}_model_parameters.csv
 }
 \description{
 Performs adaptive Monte Carlo sampling to explore parameter space, either locally

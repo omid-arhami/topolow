@@ -167,14 +167,14 @@ summary(coverage_stats$n_measurements)
 
 ```{r}
 # Prepare matrix for visualization
-heatmap_data <- prepare_heatmap_data(hiv_distance_matrix, cluster_rows = FALSE)
-
-# Plot heatmap
-plot_distance_heatmap(heatmap_data, "hiv_panel")
-
-# Analyze and visualize network structure
-net_results <- analyze_network_structure(hiv_distance_matrix)
-plot_network_structure(net_results, "hiv_network")
+# heatmap_data <- prepare_heatmap_data(hiv_distance_matrix, cluster_rows = FALSE)
+# 
+# # Plot heatmap
+# plot_distance_heatmap(heatmap_data, "hiv_panel")
+# 
+# # Analyze and visualize network structure
+# net_results <- analyze_network_structure(hiv_distance_matrix)
+# plot_network_structure(net_results, "hiv_network")
 
 ```
 
@@ -474,14 +474,14 @@ sum(!is.na(hiv_distance_matrix))
 sum(!is.na(hiv_distance_matrix))/nrow(hiv_distance_matrix)/ncol(hiv_distance_matrix)
 
 # Prepare matrix for visualization
-heatmap_data <- prepare_heatmap_data(hiv_distance_matrix, cluster_rows = FALSE)
-
-# Plot heatmap
-plot_distance_heatmap(heatmap_data, "hiv_panel")
-
-# Analyze and visualize network structure
-net_results <- analyze_network_structure(hiv_distance_matrix)
-plot_network_structure(net_results, "hiv_network")
+# heatmap_data <- prepare_heatmap_data(hiv_distance_matrix, cluster_rows = FALSE)
+# 
+# # Plot heatmap
+# plot_distance_heatmap(heatmap_data, "hiv_panel")
+# 
+# # Analyze and visualize network structure
+# net_results <- analyze_network_structure(hiv_distance_matrix)
+# plot_network_structure(net_results, "hiv_network")
 
 ```
 
@@ -506,40 +506,55 @@ param_ranges <- list(
 # Setup optimization parameters
 opt_params <- list(
   mapping_max_iter = 1000,    # Maximum optimization iterations
-  parallel_jobs = 30,   # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
   folds = 20,         # Number of CV folds
-  num_cores = max(1, parallel::detectCores() - 1),
-  use_slurm = FALSE
+  num_samples = 50, 
+  use_slurm = FALSE,
+  cider = FALSE
 )
 ```
 
 
 ```{r eval=FALSE}
+scenario_name = "HIV_BC_AMC3"
+samples_file = "model_parameters/HIV_BC_AMC3_model_parameters.csv"
+
+# Record start time for timing report
+start_time <- Sys.time()
+
 # Run initial parameter optimization
 results <- initial_parameter_optimization(
   distance_matrix = hiv_distance_matrix,
   mapping_max_iter = opt_params$mapping_max_iter,
   relative_epsilon = 1e-4,
   convergence_counter = 5,
-  scenario_name = "HIV_BC_AMC2",
+  scenario_name = scenario_name,
   N_min = param_ranges$N_min, 
   N_max = param_ranges$N_max,
   k0_min = param_ranges$k0_min,
-  k0_max = param_ranges$k0_max, 
+  k0_max = param_ranges$k0_max,
   c_repulsion_min = param_ranges$c_repulsion_min,
   c_repulsion_max = param_ranges$c_repulsion_max,
   cooling_rate_min = param_ranges$cooling_rate_min,
   cooling_rate_max = param_ranges$cooling_rate_max,
-  parallel_jobs = opt_params$parallel_jobs,
+  num_samples = opt_params$num_samples,
   folds = opt_params$folds,
-  num_cores = opt_params$num_cores,
-  time = "6:00:00",
-  memory = "4G",
-  write_files = TRUE,
-  use_slurm = opt_params$use_slurm,
-  cider = FALSE,
+  write_files = FALSE, # Only set TRUE on SLURM
+  # time = "6:00:00",
+  # memory = "2G",
+  # use_slurm = opt_params$use_slurm,
+  # cider = opt_params$cider,
   verbose = TRUE
 )
+
+# Calculate and report total execution time
+end_time <- Sys.time()
+time_diff <- difftime(end_time, start_time, units = "auto")
+
+cat("\n Initial LHS CV sampling completed in: ")
+time_diff
+
+write.csv(results, samples_file, row.names=FALSE)
+
 ```
 
 ## Aggregate the results
