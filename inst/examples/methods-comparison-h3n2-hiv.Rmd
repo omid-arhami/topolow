@@ -27,7 +27,7 @@ This vignette demonstrates a rigorous comparison between Topolow and RACMACS alg
 1. HIV neutralization data
 2. H3N2 influenza HI assay data (Smith et al. 2004)
 
-We conduct 20-fold cross-validation and evaluate performance using multiple metrics including mean absolute error (MAE), correlation, and coverage.
+We conduct 20-fold cross-validation and evaluate performance using multiple metrics including mean absolute error (MAE) and Completeness.
 
 You will need to find the optimal parameters for Topolow first. You can either use parameter fitting scripts to run sufficient number of Monte Carlo simulations on your computers, or use the results of simulations we have provided on Github (the csv files used in this script), or use the parameters provided below:
 
@@ -359,7 +359,7 @@ for(dataset_name in names(datasets)) {
     
     # Storage for this dimension's folds
     fold_mae <- numeric(opt_setting$n_folds)
-    fold_coverage <- numeric(opt_setting$n_folds)
+    fold_Completeness <- numeric(opt_setting$n_folds)
     
     # Run comparison for each fold
     for(i in seq_len(opt_setting$n_folds)) {
@@ -412,12 +412,12 @@ for(dataset_name in names(datasets)) {
       
       # Store this fold's metrics
       fold_mae[i] <- mean(abs(racmacs_errors$report_df$OutSampleError), na.rm = TRUE)
-      fold_coverage[i] <- racmacs_errors$coverage
+      fold_Completeness[i] <- racmacs_errors$Completeness
     }
     
     # Calculate averages across folds
     mean_mae <- mean(fold_mae, na.rm = TRUE)
-    mean_coverage <- mean(fold_coverage, na.rm = TRUE)
+    mean_Completeness <- mean(fold_Completeness, na.rm = TRUE)
     
     # Store dimension results
     dim_results <- rbind(
@@ -425,7 +425,7 @@ for(dataset_name in names(datasets)) {
       data.table(
         Dimension = dim,
         MAE = mean_mae,
-        Completeness = mean_coverage * 100,  # Convert to percentage
+        Completeness = mean_Completeness * 100,  # Convert to percentage
         Dataset = dataset_name,
         Algorithm = "MDS"
       )
@@ -440,7 +440,7 @@ write.csv(dim_results, file.path(output_dir, "racmacs_dimension_results.csv"))
 plot_dimension_results <- function(results, dataset_name) {
   # Filter results for this dataset
   dataset_results <- results[results$Dataset == dataset_name,]
-  # Calculate the scaled position for 95% coverage
+  # Calculate the scaled position for 95% Completeness
   scaled_95_percent <- 95/max(dataset_results$Completeness)*max(dataset_results$MAE)
   
   # Create plot with dual y-axes
@@ -451,9 +451,9 @@ plot_dimension_results <- function(results, dataset_name) {
     # Completeness line (scaled to match MAE range for dual axis)
     geom_line(aes(y = Completeness/max(Completeness)*max(MAE), color = "Completeness"), size = 1) +
     geom_point(aes(y = Completeness/max(Completeness)*max(MAE), color = "Completeness"), size = 2) +
-    # Add horizontal line at 95% coverage
+    # Add horizontal line at 95% Completeness
     geom_hline(yintercept = scaled_95_percent, linetype = "dashed", color = "blue", alpha = 0.7) +
-    # Add text label for 95% coverage line
+    # Add text label for 95% Completeness line
     annotate("text", x = max(dataset_results$Dimension) * 0.7, 
              y = scaled_95_percent * 1.04, 
              label = "Completeness = 95%", 
@@ -846,10 +846,10 @@ errors_df <- data.table(
   stringsAsFactors = FALSE
 )
 
-coverage_df <- data.table(
+Completeness_df <- data.table(
   Mapped = numeric(),
   Total = numeric(),
-  Validation_Coverage = numeric(),
+  Validation_Completeness = numeric(),
   Algorithm = character(),
   Dataset = character(),
   Fold = numeric(),
@@ -917,12 +917,12 @@ for(dataset_name in names(datasets)) {
 
     errors_df <- rbind(errors_df, topo_df)
 
-    coverage_df <- rbind(
-      coverage_df,
+    Completeness_df <- rbind(
+      Completeness_df,
       data.table(
         Mapped = nrow(p_dist_mat),
         Total = nrow(truth_matrix),
-        Validation_Coverage = topo_errors$coverage,
+        Validation_Completeness = topo_errors$Completeness,
         Algorithm = "Topolow",
         Dataset = dataset_name,
         Fold = i
@@ -983,12 +983,12 @@ for(dataset_name in names(datasets)) {
     
     errors_df <- rbind(errors_df, racmacs_df)
     
-    coverage_df <- rbind(
-      coverage_df,
+    Completeness_df <- rbind(
+      Completeness_df,
       data.table(
         Mapped = nrow(p_dist_mat),
         Total = nrow(truth_matrix),
-        Validation_Coverage = racmacs_errors$coverage,
+        Validation_Completeness = racmacs_errors$Completeness,
         Algorithm = "MDS",
         Dataset = dataset_name,
         Fold = i
@@ -999,7 +999,7 @@ for(dataset_name in names(datasets)) {
 }
 
 write.csv(errors_df, file.path(output_dir, "errors_df_loop.csv") )
-write.csv(coverage_df, file.path(output_dir, "coverage_df_loop.csv") )
+write.csv(Completeness_df, file.path(output_dir, "Completeness_df_loop.csv") )
 ```
 
 
@@ -1008,7 +1008,7 @@ write.csv(coverage_df, file.path(output_dir, "coverage_df_loop.csv") )
 ```{r}
 # Read the CSV files back into dataframes
 errors_df <- read.csv(file.path(output_dir, "errors_df_loop.csv"))
-coverage_df <- read.csv(file.path(output_dir, "coverage_df_loop.csv"))
+Completeness_df <- read.csv(file.path(output_dir, "Completeness_df_loop.csv"))
 ```
 
 
@@ -1278,24 +1278,24 @@ knitr::kable(error_summary)
 
 
 # Completeness summary
-coverage_summary <- coverage_df %>%
+Completeness_summary <- Completeness_df %>%
   group_by(Dataset, Algorithm) %>%
   summarize(
-    Mean_Coverage = mean(Validation_Coverage),
-    SD_Coverage = sd(Validation_Coverage),
+    Mean_Completeness = mean(Validation_Completeness),
+    SD_Completeness = sd(Validation_Completeness),
     .groups = 'drop'
   ) %>%
   mutate(
     Completeness = sprintf("%.1f%% ± %.1f%%", 
-                      Mean_Coverage * 100, 
-                      SD_Coverage * 100)
+                      Mean_Completeness * 100, 
+                      SD_Completeness * 100)
   ) %>%
   select(Dataset, Algorithm, Completeness) %>%
   tidyr::pivot_wider(names_from = Algorithm,
                      values_from = Completeness)
 
-print("\nCoverage Summary:")
-knitr::kable(coverage_summary)
+print("\nCompleteness Summary:")
+knitr::kable(Completeness_summary)
 ```
 
 ## Distribution of Errors

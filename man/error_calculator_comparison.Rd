@@ -16,11 +16,11 @@ error_calculator_comparison(p_dist_mat, truth_matrix, input_matrix)
 \value{
 List containing:
 \item{report_df}{Data frame with error metrics per point}
-\item{coverage}{Numeric coverage statistic}
+\item{Completeness}{Numeric Completeness statistic}
 }
 \description{
 Computes various error metrics including in-sample and out-of-sample errors,
-and coverage statistics for model evaluation.
+and Completeness statistics for model evaluation.
 }
 \details{
 Input requirements and constraints:
