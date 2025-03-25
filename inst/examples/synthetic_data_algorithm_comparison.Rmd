@@ -23,7 +23,7 @@ knitr::opts_chunk$set(
 
 ##Introduction
 
-This vignette demonstrates how to perform a rigorous comparison between Topolow and RACMACS algorithms for antigenic cartography. We conduct k-fold cross-validation and evaluate performance using multiple metrics including mean absolute error (MAE), Mean Absolute Percentage Error (MAPE), and coverage.
+This vignette demonstrates how to perform a rigorous comparison between Topolow and RACMACS algorithms for antigenic cartography. We conduct k-fold cross-validation and evaluate performance using multiple metrics including mean absolute error (MAE), Mean Absolute Percentage Error (MAPE), and Completeness.
 
 You need the optimal parameters to create topolow maps. They are in csv files named "optimal_parameters_80points.csv" or "optimal_parameters_250points.csv" which are provided on Github or you can generate them by running sufficient Monte Carlo simulations (on a machine with tens of CPU cores for faster calculations) in file synthetic-parameter-fitting.Rmd in the same folder is current file.
 
@@ -104,7 +104,7 @@ print(matrix_variants)
 ```{r}
 #' Find Optimal Dimensionality for RACMACS with Early Stopping
 #' 
-#' Analyzes each simulated dataset with increasing dimensionality until coverage
+#' Analyzes each simulated dataset with increasing dimensionality until Completeness
 #' falls below 95% or max dimension is reached.
 #'
 #' @param sim_data The sim_data from generate_synthetic_datasets 
@@ -117,7 +117,7 @@ find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setti
   dim_results <- data.table(
     Dimension = integer(),
     MAE = numeric(),
-    MAPE = numeric(),     # Added MAPE column
+    MAPE = numeric(),
     Completeness = numeric(),
     OriginalDimension = integer(),
     Variant = character(),
@@ -155,7 +155,7 @@ find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setti
         n_folds = opt_setting$n_folds
       )
       
-      # Test dimensions starting from 2, incrementing until coverage < 95%
+      # Test dimensions starting from 2, incrementing until Completeness < 95%
       continue_testing <- TRUE
       test_dim <- 2  # Start with 2D
       
@@ -164,8 +164,8 @@ find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setti
         
         # Storage for this dimension's folds
         fold_mae <- numeric(opt_setting$n_folds)
-        fold_mape <- numeric(opt_setting$n_folds)  # Added for MAPE
-        fold_coverage <- numeric(opt_setting$n_folds)
+        fold_mape <- numeric(opt_setting$n_folds)
+        fold_Completeness <- numeric(opt_setting$n_folds)
         
         # Run each fold
         for(i in seq_len(opt_setting$n_folds)) {
@@ -218,13 +218,13 @@ find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setti
           # Store this fold's metrics
           fold_mae[i] <- mean(abs(racmacs_errors$report_df$OutSampleError), na.rm = TRUE)
           fold_mape[i] <- mean(abs(racmacs_errors$report_df$OutSamplePercentageError), na.rm = TRUE)  # Added MAPE calculation
-          fold_coverage[i] <- racmacs_errors$coverage
+          fold_Completeness[i] <- racmacs_errors$Completeness
         }
         
         # Calculate averages across folds
         mean_mae <- mean(fold_mae, na.rm = TRUE)
-        mean_mape <- mean(fold_mape, na.rm = TRUE)  # Added MAPE average
-        mean_coverage <- mean(fold_coverage, na.rm = TRUE)
+        mean_mape <- mean(fold_mape, na.rm = TRUE)
+        mean_Completeness <- mean(fold_Completeness, na.rm = TRUE)
         
         # Store dimension results
         dim_results <- rbind(
@@ -232,18 +232,18 @@ find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setti
           data.table(
             Dimension = test_dim,
             MAE = mean_mae,
-            MAPE = mean_mape,  # Added MAPE to results
-            Completeness = mean_coverage * 100,  # Convert to percentage
+            MAPE = mean_mape,
+            Completeness = mean_Completeness * 100,  # Convert to percentage
             OriginalDimension = orig_dim,
             Variant = variant,
             Algorithm = "MDS"
           )
         )
         
-        # Check stopping condition - stop when coverage falls below 95%
-        if(mean_coverage < 0.95) {
+        # Check stopping condition - stop when Completeness falls below 95%
+        if(mean_Completeness < 0.95) {
           cat(sprintf("    Completeness below 95%% (%.2f%%) - stopping dimension testing\n", 
-                    mean_coverage * 100))
+                    mean_Completeness * 100))
           continue_testing <- FALSE
         } else {
           test_dim <- test_dim + 1  # Test next dimension
@@ -261,13 +261,26 @@ find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setti
 }
 
 
-#' Plot Individual Dimension Results for Each Dataset Variant
+
+
+#' Plot Dimension Results with Highlighted Optimal Dimensions
 #'
 #' @param results The dimension results dataframe
-#' @param output_dir Directory to save 
-#' @return The combined grid plot of all individual plots
-
-plot_dimension_results <- function(results, output_dir) {
+#' @param output_dir Directory to save plots
+#' @param optimal_dims Vector of 27 numbers indicating optimal dimension for each panel
+#' @return The improved faceted plot with highlighted optimal dimensions
+#'
+#' @details
+#' The optimal_dims parameter should contain 27 values in this order:
+#' - First grouped by original dimension (2D, 5D, 10D)
+#' - Then by completeness (70%, 85%, 95%)
+#' - Then by variant type (Missing Data, Noise, Noise+Bias)
+#'
+#' Example: optimal_dims[1] = optimal dimension for 2D original, 70% completeness, Missing Data
+#'          optimal_dims[2] = optimal dimension for 2D original, 70% completeness, Noise
+#'          optimal_dims[3] = optimal dimension for 2D original, 70% completeness, Noise+Bias
+#'          ...and so on
+plot_dimension_results <- function(results, output_dir, optimal_dims = NULL) {
   plots_dir <- file.path(output_dir, "plots")
   if (!dir.exists(plots_dir)) {
     dir.create(plots_dir, recursive = TRUE)
@@ -275,41 +288,40 @@ plot_dimension_results <- function(results, output_dir) {
   
   # Get all unique combinations of original dimension and variant
   orig_dims <- sort(unique(results$OriginalDimension))
-  variants <- sort(unique(results$Variant))
+  all_variants <- sort(unique(results$Variant))
+  
+  # Organize variants by type and level
+  variant_types <- c("missing", "noise1", "noise_bias")
+  variant_levels <- c("S", "M", "L")
   
   # Create a list to store all individual plots
   individual_plots <- list()
   
   # Create plots for each combination
   for(orig_dim in orig_dims) {
-    for(variant in variants) {
+    for(variant in all_variants) {
       # Get data for this specific dataset
       dataset_data <- results[results$OriginalDimension == orig_dim & 
                                results$Variant == variant, ]
       
       if(nrow(dataset_data) == 0) next
       
-      # Calculate the scaled position for 95% coverage
-      max_mape <- max(dataset_data$MAPE)
-      scaled_95_percent <- 95/max(dataset_data$Completeness)*max_mape
+      # Filter data to only include points with Completeness > 95
+      dataset_data <- dataset_data[dataset_data$Completeness > 95, ]
+      if(nrow(dataset_data) == 0) next
       
-      # Create plot with dual y-axes for this dataset
+      # Create plot focusing only on MAPE
       p <- ggplot(dataset_data, aes(x = Dimension)) +
-        # MAPE line
-        geom_line(aes(y = MAPE, color = "Validation MAPE"), size = 0.8) +
-        geom_point(aes(y = MAPE, color = "Validation MAPE"), size = 1.5) +
-        # Completeness line (scaled to match MAPE range for dual axis)
-        geom_line(aes(y = Completeness/max(Completeness)*max_mape, color = "Completeness"), size = 0.8) +
-        geom_point(aes(y = Completeness/max(Completeness)*max_mape, color = "Completeness"), size = 1.5) +
-        # Add horizontal line at 95% coverage
-        geom_hline(yintercept = scaled_95_percent, linetype = "dashed", color = "blue", alpha = 0.7) +
+        # MAPE line and points in black
+        geom_line(aes(y = MAPE), color = "black", size = 0.8) +
+        geom_point(aes(y = MAPE), color = "black", size = 1.5) +
         # Set up axes
-        scale_y_continuous(
-          name = "Validation MAPE",
-          sec.axis = sec_axis(~ . * max(dataset_data$Completeness)/max_mape, name = "Completeness (%)")) +
-        scale_color_manual(values = c("Validation MAPE" = "red", "Completeness" = "blue"),
-                         name = "Metric") +
-        labs(x = "Dimension") +
+        scale_y_continuous(name = "Validation MAPE (%)") +
+        labs(
+          x = "Dimension", 
+          title = paste0(orig_dim, "D - ", 
+                       gsub("^([SML])_([a-z]+).*$", "\\1-\\2", variant))
+        ) +
         theme_minimal() +
         theme(
           panel.grid.minor = element_blank(),
@@ -324,186 +336,136 @@ plot_dimension_results <- function(results, output_dir) {
       plot_key <- paste0("dim", orig_dim, "_", variant)
       individual_plots[[plot_key]] <- p
       
-      # Save individual plot if needed
+      # Save individual plot
       individual_file <- file.path(plots_dir, paste0(plot_key, ".pdf"))
       ggsave(individual_file, p, width = 2.5, height = 2, units = "in")
     }
   }
   
-  # Arrange all plots into a grid (dimensions as rows, variants as columns)
-  # First, create a matrix of the plots in the right order
-  plot_matrix <- matrix(list(), nrow = length(orig_dims), ncol = length(variants))
-  rownames(plot_matrix) <- paste0(orig_dims, "D")
-  colnames(plot_matrix) <- variants
-  
-  # Fill the matrix with plots
-  for(i in seq_along(orig_dims)) {
-    for(j in seq_along(variants)) {
-      plot_key <- paste0("dim", orig_dims[i], "_", variants[j])
-      if(plot_key %in% names(individual_plots)) {
-        plot_matrix[i, j] <- individual_plots[[plot_key]]
-      } else {
-        # Create empty plot if this combination wasn't analyzed
-        plot_matrix[i, j] <- list(ggplot() + theme_void())
-      }
-    }
-  }
-  
-  # Create variant type labels for the top of the grid
-  variant_types <- list(
-    "Missing" = grep("missing", variants, value = TRUE),
-    "Noise" = grep("noise1$", variants, value = TRUE),
-    "Noise+Bias" = grep("noise_bias", variants, value = TRUE)
-  )
-  
-  # Create plot titles with dimension and variant
-  titles <- sapply(variants, function(v) {
-    if(grepl("S_", v)) return("Low")
-    if(grepl("M_", v)) return("Medium")
-    if(grepl("L_", v)) return("High")
-  })
-  
-  # Reorganize variants into proper order for grid
-  # Define the variant order groups
-  missing_variants <- grep("missing", variants, value = TRUE)
-  noise_variants <- grep("noise1$", variants, value = TRUE)
-  bias_variants <- grep("noise_bias", variants, value = TRUE)
-  
-  # Sort within each group by S, M, L
-  sort_by_level <- function(vars) {
-    vars[order(factor(gsub("_.*", "", vars), levels = c("S", "M", "L")))]
-  }
-  
-  missing_variants <- sort_by_level(missing_variants)
-  noise_variants <- sort_by_level(noise_variants)
-  bias_variants <- sort_by_level(bias_variants)
-  
-  # Combine in the desired order
-  ordered_variants <- c(missing_variants, noise_variants, bias_variants)
-  
-  # Create a vector of column spans for the top annotation
-  col_spans <- c(length(missing_variants), length(noise_variants), length(bias_variants))
-  top_labels <- c("Missing Data", "Noise", "Noise+Bias")
-  
-  # Convert plot matrix to a list in column-major order for arranging
-  plot_list <- list()
-  title_list <- list()
-  
-  for(v in ordered_variants) {
-    for(d in orig_dims) {
-      plot_key <- paste0("dim", d, "_", v)
-      if(plot_key %in% names(individual_plots)) {
-        plot_list <- c(plot_list, individual_plots[[plot_key]])
-        
-        # Determine level from variant
-        level <- if(grepl("S_", v)) "Low" else if(grepl("M_", v)) "Medium" else "High"
-        title_list <- c(title_list, level)
-      }
-    }
-  }
-  
-  # Create the combined grid plot
-  # First arrange the plots in a grid
-  combined_plot <- grid.arrange(
-    grobs = plot_list,
-    ncol = length(ordered_variants),
-    nrow = length(orig_dims),
-    top = textGrob("RACMACS Dimensionality Analysis", gp = gpar(fontsize = 10, fontface = "bold")),
-    left = textGrob("Original Dimension", rot = 90, gp = gpar(fontsize = 8)),
-    bottom = textGrob("Test Dimension", gp = gpar(fontsize = 8)),
-    heights = unit(rep(1, length(orig_dims)), "null"),
-    widths = unit(rep(1, length(ordered_variants)), "null")
-  )
-  
-  # Save the combined plot
-  combined_file <- file.path(plots_dir, "all_dimension_analysis.pdf")
-  ggsave(combined_file, combined_plot, width = 9, height = 4, units = "in")
-  
-  # Create a nicer version with proper labels using ggplot
   # Prepare data for faceted plot
   plot_data <- results %>%
-    # Extract data severity level (S/M/L)
+    # Filter to only include data with Completeness > 95
+    filter(Completeness > 95) %>%
+    # Map variant levels to completion percentages for faceting labels
     mutate(
-      Level = case_when(
-        grepl("^S_", Variant) ~ "Low",
-        grepl("^M_", Variant) ~ "Medium",
-        grepl("^L_", Variant) ~ "High"
+      CompletenessLabel = case_when(
+        grepl("^S_", Variant) ~ "70%",
+        grepl("^M_", Variant) ~ "85%",
+        grepl("^L_", Variant) ~ "95%",
+        TRUE ~ NA_character_
       ),
       # Extract variant type
       VariantType = case_when(
-        grepl("missing", Variant) ~ "Missing Data",
+        grepl("missing", Variant) ~ "Original",
         grepl("noise_bias", Variant) ~ "Noise+Bias",
-        grepl("noise1", Variant) ~ "Noise"
+        grepl("noise1", Variant) ~ "Noise",
+        TRUE ~ NA_character_
       )
     ) %>%
     # Add dimension label for faceting
     mutate(DimensionLabel = paste0(OriginalDimension, "D"))
   
+  # Create a combined dimension-completeness variable for 9 column facet layout
+  plot_data <- plot_data %>%
+    mutate(DimCompLabel = paste0(DimensionLabel, "-", CompletenessLabel))
+  
+  # Create proper ordering for the combined factor
+  dim_comp_levels <- c()
+  for (dim in paste0(sort(unique(results$OriginalDimension)), "D")) {
+    for (comp in c("70%", "85%", "95%")) {
+      dim_comp_levels <- c(dim_comp_levels, paste0(dim, "-", comp))
+    }
+  }
+  
   # Ensure proper ordering
-  plot_data$Level <- factor(plot_data$Level, levels = c("Low", "Medium", "High"))
+  plot_data$CompletenessLabel <- factor(plot_data$CompletenessLabel, 
+                                levels = c("70%", "85%", "95%"))
   plot_data$VariantType <- factor(plot_data$VariantType, 
-                                 levels = c("Missing Data", "Noise", "Noise+Bias"))
+                                 levels = c("Original", "Noise", "Noise+Bias"))
   plot_data$DimensionLabel <- factor(plot_data$DimensionLabel,
-                                    levels = paste0(orig_dims, "D"))
+                                    levels = paste0(sort(unique(results$OriginalDimension)), "D"))
+  plot_data$DimCompLabel <- factor(plot_data$DimCompLabel, levels = dim_comp_levels)
   
-  # Create a legend plot for the metrics
-  legend_data <- data.frame(
-    x = 1:2,
-    y = 1:2,
-    Metric = c("Validation MAPE", "Completeness")
-  )
-  legend_plot <- ggplot(legend_data, aes(x = x, y = y, color = Metric)) +
-    geom_point() +
-    scale_color_manual(values = c("Validation MAPE" = "red", "Completeness" = "blue")) +
-    theme_void() +
-    theme(legend.position = "bottom")
-  legend <- get_legend(legend_plot)
+  # Find the maximum dimension tested for setting x-axis breaks
+  max_dim <- max(plot_data$Dimension)
+  x_breaks <- seq(2, max_dim, by = 2)  # Even integers only
   
-  # Create faceted plot for the grid
+  # Create highlights data if optimal_dims is provided
+  highlights_data <- NULL
+  if (!is.null(optimal_dims)) {
+    # Build reference table matching panel index to dimension, completeness, variant
+    panel_idx <- 1
+    highlights_data <- data.frame()
+    
+    for (dim in orig_dims) {
+      for (comp in c("70%", "85%", "95%")) {
+        for (vtype in c("Original", "Noise", "Noise+Bias")) {
+          if (panel_idx <= length(optimal_dims) && !is.na(optimal_dims[panel_idx])) {
+            # Find the corresponding data point
+            subset_data <- plot_data %>%
+              filter(
+                OriginalDimension == dim,
+                CompletenessLabel == comp,
+                VariantType == vtype,
+                Dimension == optimal_dims[panel_idx]
+              )
+            
+            # If we found a match, add it to highlights
+            if (nrow(subset_data) > 0) {
+              highlights_data <- rbind(highlights_data, subset_data)
+            }
+          }
+          panel_idx <- panel_idx + 1
+        }
+      }
+    }
+  }
+  
+  # Create the faceted plot with improved styling and 3×9 layout
   facet_plot <- ggplot(plot_data) +
-    # Create one panel per dimension x variant type x level
+    # Create facet grid with 3 rows (variant types) and 9 columns (dimension-completeness combinations)
     facet_grid(
-      DimensionLabel ~ VariantType + Level,
-      scales = "free_y",
-      switch = "y"
+      VariantType ~ DimCompLabel,
+      scales = "free_y"
     ) +
-    # MAPE line
-    geom_line(aes(x = Dimension, y = MAPE, color = "Validation MAPE"), size = 0.6) +
-    geom_point(aes(x = Dimension, y = MAPE, color = "Validation MAPE"), size = 1.2) +
-    # Completeness line with secondary y-axis scaling done in annotation
-    geom_line(aes(x = Dimension, y = Completeness/100*max(MAPE), color = "Completeness"), size = 0.6) +
-    geom_point(aes(x = Dimension, y = Completeness/100*max(MAPE), color = "Completeness"), size = 1.2) +
-    # 95% coverage reference line
-    geom_hline(aes(yintercept = 0.95*max(MAPE)), linetype = "dashed", color = "blue", alpha = 0.4) +
-    # Styling
-    scale_color_manual(values = c("Validation MAPE" = "red", "Completeness" = "blue")) +
+    # MAPE line and points in black
+    geom_line(aes(x = Dimension, y = MAPE), color = "black", size = 0.8) +
+    geom_point(aes(x = Dimension, y = MAPE), color = "black", size = 1.5) +
+    
+    # Add highlights for optimal dimensions if provided
+    {if (!is.null(highlights_data) && nrow(highlights_data) > 0)
+      geom_point(data = highlights_data, 
+                aes(x = Dimension, y = MAPE),
+                color = "black", size = 2.5, shape = 21, 
+                stroke = 1.2, fill = NA)
+    } +
+    
+    scale_x_continuous(breaks = x_breaks) +  # Integer breaks only
     labs(
+      #title = "RACMACS Dimensionality Analysis Across Synthetic Datasets",
       x = "Test Dimension",
-      y = "Validation MAPE"
+      y = "Validation MAPE (%)"
     ) +
     theme_minimal() +
     theme(
-      strip.text = element_text(size = 7, face = "bold"),
+      strip.text = element_text(size = 6, face = "bold"),  # Smaller text for column labels
       strip.background = element_rect(fill = "gray95", color = NA),
       axis.title = element_text(size = 8),
       axis.text = element_text(size = 6),
       panel.grid.minor = element_blank(),
       panel.grid.major = element_line(color = "gray90", size = 0.2),
-      legend.position = "none",
-      panel.spacing = unit(1, "mm")
+      legend.position = "none",  # Remove legend
+      panel.spacing = unit(0.5, "mm"),
+      # Add black borders between panels
+      panel.border = element_rect(color = "black", fill = NA, size = 0.2)
     )
   
-  # Save the faceted grid plot
+  # Save the faceted plot with adjusted dimensions for 3×9 layout
   facet_file <- file.path(plots_dir, "faceted_dimension_analysis.pdf")
-  facet_plot_with_legend <- grid.arrange(facet_plot, legend, nrow = 2, 
-                                        heights = unit(c(4, 0.3), "in"))
-  ggsave(facet_file, facet_plot_with_legend, width = 9, height = 4.5, units = "in")
+  ggsave(facet_file, facet_plot, width = 12, height = 6, units = "in")
   
-  # Return both plot types
   return(list(
-    individual_plots = individual_plots,
-    combined_plot = combined_plot,
-    faceted_plot = facet_plot_with_legend
+    faceted_plot = facet_plot
   ))
 }
 ```
@@ -523,13 +485,31 @@ dim_results <- find_optimal_racmacs_dimensions(
 
 ```{r}
 # Generate plots
-dim_results <- read.csv("racmacs_dimensions_sim_data.csv")
+racmacs_dimensions_sim_data <- read.csv("synthetic_data/racmacs_dimensions_sim_data.csv")
 
-all_plots <- plot_dimension_results(dim_results, output_dir)
+#  optimal dimensions
+optimal_dims <- c(
+  # 2D original dimension
+  2, 2, 2,  # 70% (Missing, Noise, Noise+Bias)
+  2, 2, 2,  # 85% (Missing, Noise, Noise+Bias)
+  2, 2, 2,  # 95% (Missing, Noise, Noise+Bias)
+  
+  # 5D original dimension
+  4, 4, 4,  # 70% (Missing, Noise, Noise+Bias)
+  4, 4, 4,  # 85% (Missing, Noise, Noise+Bias)
+  2, 2, 2,  # 95% (Missing, Noise, Noise+Bias)
+  
+  # 10D original dimension
+  4, 4, 4,  # 70% (Missing, Noise, Noise+Bias)
+  4, 4, 4,  # 85% (Missing, Noise, Noise+Bias)
+  3, 3, 3   # 95% (Missing, Noise, Noise+Bias)
+)
+
+all_plots <- plot_dimension_results(results = racmacs_dimensions_sim_data, output_dir, optimal_dims)
 
 # Output a summary of findings
 cat("\n----- Summary of Optimal Dimensions -----\n")
-# Group by original dimension and variant, find where coverage drops below 95%
+# Group by original dimension and variant, find where Completeness drops below 95%
 summary_table <- dim_results %>%
   group_by(OriginalDimension, Variant) %>%
   arrange(OriginalDimension, Variant, Dimension) %>%
@@ -566,7 +546,7 @@ topolow_mapped_objects_df <- data.table(
   Dimension = numeric(),
   Mapped = numeric(),
   Total = numeric(),
-  Validation_Coverage = numeric(),
+  Validation_Completeness = numeric(),
   Algorithm = character(),
   Scenario = character(), 
   Fold = numeric(),
@@ -599,22 +579,22 @@ racmacs_TrueDim_errors_df <- data.table(
   stringsAsFactors = FALSE
 )
 
-racmacs_2D_coverage <- data.table(
+racmacs_2D_Completeness <- data.table(
   Dimension = numeric(),
   Mapped = numeric(),
   Total = numeric(), 
-  Validation_Coverage = numeric(),
+  Validation_Completeness = numeric(),
   Algorithm = character(),
   Scenario = character(),
   Fold = numeric(),
   stringsAsFactors = FALSE
 )
 
-racmacs_TrueDim_coverage <- data.table(
+racmacs_TrueDim_Completeness <- data.table(
   Dimension = numeric(),
   Mapped = numeric(),
   Total = numeric(), 
-  Validation_Coverage = numeric(),
+  Validation_Completeness = numeric(),
   Algorithm = character(),
   Scenario = character(),
   Fold = numeric(),
@@ -751,14 +731,14 @@ for (ndim in sim_data$metadata$dimension) {
         topolow_df$Fold <- i
         topolow_errors_df <- rbind(topolow_errors_df, topolow_df)
 
-        # Store coverage results
+        # Store Completeness results
         topolow_mapped_objects_df <- rbind(
           topolow_mapped_objects_df,
           data.table(
             Dimension = best_params$N,
             Mapped = nrow(p_dist_mat),
             Total = nrow(truth_matrix),
-            Validation_Coverage = topolow_errors$coverage,
+            Validation_Completeness = topolow_errors$Completeness,
             Algorithm = "Topolow",
             Scenario = scenario_name,
             Fold = i
@@ -824,13 +804,13 @@ for (ndim in sim_data$metadata$dimension) {
       racmacs_df$Fold <- i
       racmacs_2D_errors_df <- rbind(racmacs_2D_errors_df, racmacs_df)
 
-      racmacs_2D_coverage <- rbind(
-        racmacs_2D_coverage,
+      racmacs_2D_Completeness <- rbind(
+        racmacs_2D_Completeness,
         data.table(
           Dimension = ndim,
           Mapped = count_mapped_rows,
           Total = nrow(truth_matrix),
-          Validation_Coverage = racmacs_errors$coverage,
+          Validation_Completeness = racmacs_errors$Completeness,
           Algorithm = "MDS",
           Scenario = scenario_name,
           Fold = i
@@ -889,13 +869,13 @@ for (ndim in sim_data$metadata$dimension) {
       # racmacs_df$Fold <- i
       # racmacs_TrueDim_errors_df <- rbind(racmacs_TrueDim_errors_df, racmacs_df)
       # 
-      # racmacs_TrueDim_coverage <- rbind(
-      #   racmacs_TrueDim_coverage,
+      # racmacs_TrueDim_Completeness <- rbind(
+      #   racmacs_TrueDim_Completeness,
       #   data.table(
       #     Dimension = ndim,
       #     Mapped = count_mapped_rows,
       #     Total = nrow(truth_matrix),
-      #     Validation_Coverage = racmacs_errors$coverage,
+      #     Validation_Completeness = racmacs_errors$Completeness,
       #     Algorithm = "MDS",
       #     Scenario = scenario_name,
       #     Fold = i
@@ -917,13 +897,13 @@ write.csv(topolow_mapped_objects_df, "Topolow_mapped_objects.csv",
 write.csv(racmacs_2D_errors_df,"RACMACS_comparisondf.csv",
           row.names = FALSE)
 
-write.csv(racmacs_2D_coverage, "RACMACS_mapped_objects.csv",
+write.csv(racmacs_2D_Completeness, "RACMACS_mapped_objects.csv",
           row.names = FALSE)
 
 # write.csv(racmacs_TrueDim_errors_df,"RACMACS_TrueDim_comparisondf.csv",
 #           row.names = FALSE)
 # 
-# write.csv(racmacs_TrueDim_coverage, "RACMACS_TrueDim_mapped_objects.csv",
+# write.csv(racmacs_TrueDim_Completeness, "RACMACS_TrueDim_mapped_objects.csv",
 #           row.names = FALSE)
 ```
 
@@ -935,9 +915,9 @@ After all Topolow jobs complete, collect and analyze results:
 ```{r}
 # Read the CSV files back into dataframes
 racmacs_2D_errors_df <- read.csv("RACMACS_comparisondf.csv")
-racmacs_2D_coverage <- read.csv("RACMACS_mapped_objects.csv")
+racmacs_2D_Completeness <- read.csv("RACMACS_mapped_objects.csv")
 
-#racmacs_TrueDim_coverage <- read.csv("RACMACS_TrueDim_mapped_objects.csv")
+#racmacs_TrueDim_Completeness <- read.csv("RACMACS_TrueDim_mapped_objects.csv")
 
 topolow_errors_df <- read.csv("Topolow_comparisondf.csv")
 topolow_mapped_objects_df <- read.csv("Topolow_mapped_objects.csv")
@@ -958,7 +938,7 @@ topolow_mapped_objects_df <- read.csv("Topolow_mapped_objects.csv")
 #                            use.names = TRUE, fill = TRUE)
 # 
 # # Completeness
-# pattern <- paste0("_coverage", "\\.csv$")
+# pattern <- paste0("_Completeness", "\\.csv$")
 # csv_files <- list.files(path = directory_path, pattern = pattern,
 #                        full.names = TRUE)
 # topolow_mapped_objects_df <- rbindlist(lapply(csv_files, fread),
@@ -995,13 +975,13 @@ get_scenario_stats <- function(errors, metric) {
 # RACMACS results
 racmacs_mae_stats <- get_scenario_stats(racmacs_2D_errors_df, metric = "OutSampleError")
 racmacs_mape_stats <- get_scenario_stats(racmacs_2D_errors_df, metric = "OutSamplePercentageError")
-racmacs_2D_coverage_stats <- get_scenario_stats(racmacs_2D_coverage, metric = "Mapped")
-#racmacs_TrueDim_coverage_stats <- get_scenario_stats(racmacs_TrueDim_coverage, metric = "Mapped")
+racmacs_2D_Completeness_stats <- get_scenario_stats(racmacs_2D_Completeness, metric = "Mapped")
+#racmacs_TrueDim_Completeness_stats <- get_scenario_stats(racmacs_TrueDim_Completeness, metric = "Mapped")
 
 # Topolow results  
 topolow_mae_stats <- get_scenario_stats(topolow_errors_df, metric = "OutSampleError")
 topolow_mape_stats <- get_scenario_stats(topolow_errors_df, metric = "OutSamplePercentageError")
-topolow_coverage_stats <- get_scenario_stats(topolow_mapped_objects_df, metric = "Mapped")
+topolow_Completeness_stats <- get_scenario_stats(topolow_mapped_objects_df, metric = "Mapped")
 
 # Add the new columns
 add_columns <- function(df, Method) {
@@ -1025,11 +1005,11 @@ add_columns <- function(df, Method) {
 
 racmacs_mae_stats <- add_columns(racmacs_mae_stats, Method="MDS")
 racmacs_mape_stats <- add_columns(racmacs_mape_stats, Method="MDS")
-racmacs_2D_coverage_stats <- add_columns(racmacs_2D_coverage_stats, Method="MDS")
-#racmacs_TrueDim_coverage_stats <- add_columns(racmacs_TrueDim_coverage_stats, Method="MDS")
+racmacs_2D_Completeness_stats <- add_columns(racmacs_2D_Completeness_stats, Method="MDS")
+#racmacs_TrueDim_Completeness_stats <- add_columns(racmacs_TrueDim_Completeness_stats, Method="MDS")
 
 topolow_mae_stats <- add_columns(topolow_mae_stats, Method="Topolow")
-topolow_coverage_stats <- add_columns(topolow_coverage_stats, Method="Topolow")
+topolow_Completeness_stats <- add_columns(topolow_Completeness_stats, Method="Topolow")
 topolow_mape_stats <- add_columns(topolow_mape_stats, Method="Topolow")
 ```
 
@@ -1143,10 +1123,10 @@ cat(latex_table)
 
 
 ```{r}
-all_coverage_results <- bind_rows(topolow_coverage_stats, racmacs_2D_coverage_stats)
+all_Completeness_results <- bind_rows(topolow_Completeness_stats, racmacs_2D_Completeness_stats)
 
-# Create summary table of coverage
-summary_table_cov <- all_coverage_results %>%
+# Create summary table of Completeness
+summary_table_cov <- all_Completeness_results %>%
   group_by(Dimension, Missing, Method) %>%
   summarize(Mean = mean(Mean), .groups = 'drop') %>%
   spread(Method, Mean)

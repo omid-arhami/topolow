@@ -109,9 +109,9 @@ param_ranges <- list(
 
 # Setup optimization parameters
 opt_params <- list(
-  mapping_max_iter = 1000,    # Maximum optimization iterations
+  mapping_max_iter = 1000,    # Maximum mapping optimization iterations
   folds = 20,         # Number of CV folds
-  num_samples = 40, # Number of cores to use. Try parallel::detectCores() on local machines. If using SLURM: 1 core per LHS sampling job.
+  num_samples = 40, 
   use_slurm = FALSE,
   cider = FALSE
 )
@@ -119,6 +119,9 @@ opt_params <- list(
 
 
 ```{r eval=FALSE}
+scenario_name = "H3N2_2003_data_AMC102"
+samples_file = "model_parameters/H3N2_2003_data_AMC102_model_parameters.csv"
+
 # Record start time for timing report
 start_time <- Sys.time()
 
@@ -128,7 +131,7 @@ results <- initial_parameter_optimization(
   mapping_max_iter = opt_params$mapping_max_iter,
   relative_epsilon = 1e-4,
   convergence_counter = 5,
-  scenario_name = "H3N2_2003_data_AMC102",
+  scenario_name = scenario_name,
   N_min = param_ranges$N_min, 
   N_max = param_ranges$N_max,
   k0_min = param_ranges$k0_min,
@@ -139,15 +142,12 @@ results <- initial_parameter_optimization(
   cooling_rate_max = param_ranges$cooling_rate_max,
   num_samples = opt_params$num_samples,
   folds = opt_params$folds,
-  write_files = FALSE, #Only set TRUE on SLURM
+  write_files = FALSE, # Only set TRUE on SLURM
   # time = "6:00:00",
   # memory = "2G",
   # use_slurm = opt_params$use_slurm,
   # cider = opt_params$cider,
   verbose = TRUE
-)
-
-write.csv(results, "model_parameters/H3N2_2003_data_AMC102_model_parameters.csv"
 )
 
 # Calculate and report total execution time
@@ -156,11 +156,15 @@ time_diff <- difftime(end_time, start_time, units = "auto")
 
 cat("\n Initial LHS CV sampling completed in: ")
 time_diff
+
+write.csv(results, samples_file, row.names=FALSE)
+
 ```
 
 ## Aggregate the results
 
-Aggregation is only needed if SLURM was used for initial sampling. Wait until the jobs are done.
+Aggregation is only needed if the argument write_files was TRUE in previous step which creates one file for each sample (typically when task is done through submitting jobs to SLURM). If so, Wait until the jobs are done.
+ Wait until the jobs are done.
 
 ```{r eval=FALSE}
 #scenario_name <- "H3N2_2003_data_AMC101"
