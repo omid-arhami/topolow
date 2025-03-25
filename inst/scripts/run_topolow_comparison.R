@@ -62,16 +62,16 @@ write.csv(topolow_df, file.path(results_dir,
           row.names = FALSE)
 
 # count the recovered:
-topolow_coverage <- topolow_errors$coverage
+topolow_Completeness <- topolow_errors$Completeness
 
 mapped_objects_df= data.table(Dimension=N, Algorithm="TopoLow", 
                               Scenario = scenario_name, Fold = i,
                                 Mapped= nrow(p_dist_mat),
                                 Total= nrow(truth_matrix),
-                                Validation_Coverage= topolow_coverage)
+                                Validation_Completeness= topolow_Completeness)
 
 write.csv(mapped_objects_df, file.path(results_dir,
-                                       sprintf("%s_fold%d_coverage.csv", scenario_name, i)), 
+                                       sprintf("%s_fold%d_Completeness.csv", scenario_name, i)), 
           row.names = FALSE)
 
 # Write combined results file for compatibility
@@ -81,7 +81,7 @@ result_df <- data.frame(
   Scenario = scenario_name,
   Fold = i,
   Holdout_MAE = mean(abs(topolow_df$OutSampleError), na.rm = TRUE),
-  Validation_Coverage = topolow_coverage
+  Validation_Completeness = topolow_Completeness
 )
 
 write.csv(result_df, file.path(results_dir,

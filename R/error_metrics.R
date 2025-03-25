@@ -16,7 +16,7 @@
 #'
 #' @description
 #' Computes various error metrics including in-sample and out-of-sample errors,
-#' and coverage statistics for model evaluation.
+#' and Completeness statistics for model evaluation.
 #'
 #' @details
 #' Input requirements and constraints:
@@ -30,7 +30,7 @@
 #' @param input_matrix Matrix of input distances (may contain NAs and is used to find the NAs' pattern)
 #' @return List containing:
 #'   \item{report_df}{Data frame with error metrics per point}
-#'   \item{coverage}{Numeric coverage statistic}
+#'   \item{Completeness}{Numeric Completeness statistic}
 #' @export
 error_calculator_comparison <- function(p_dist_mat, truth_matrix, input_matrix) {
   # Validate inputs
@@ -94,14 +94,14 @@ error_calculator_comparison <- function(p_dist_mat, truth_matrix, input_matrix) 
   report_df <- report_df %>% 
     dplyr::select(-c(True_distance, Pred_for_observeds, Pred_for_missing))
   
-  # Calculate coverage on validation set
+  # Calculate Completeness on validation set
   validation_count <- sum(!is.na(truth_matrix[missing_pattern]))
   pred_for_validation_count <- sum(!is.na(truth_matrix) & !is.na(pred_for_missing))
-  coverage <- pred_for_validation_count / validation_count
+  Completeness <- pred_for_validation_count / validation_count
   
   return(list(
     report_df = report_df,
-    coverage = coverage
+    Completeness = Completeness
   ))
 }
 
