@@ -819,7 +819,7 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #' @param num_parallel_jobs Integer. Number of parallel jobs (cores on local machine or SLURM jobs).
 #' @param max_cores Integer. Maximum number of cores to use for parallel processing. If NULL,
 #'        uses all available cores minus 1 (default: NULL).
-#' @param num_samples Integer. Number of new samples to be added through Adaptive Monte Carlo sampling (default: 10).
+#' @param num_samples Integer. Number of new samples to be added to the CSV file containing initial samples through Adaptive Monte Carlo sampling (default: 10).
 #' @param scenario_name Character. Name for output files.
 #' @param use_slurm Logical. Whether to use SLURM (default: FALSE).
 #' @param cider Logical. Whether to use cider queue (default: FALSE).
@@ -827,7 +827,6 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #' @param verbose Logical. Whether to print progress messages. Default: FALSE.
 #' @param time Character. Walltime for SLURM jobs in HH:MM:SS format. Default: "8:00:00".
 #' @param memory Character. Memory allocation for SLURM jobs. Default: "10G".
-#' @param update_initial_file Logical. Whether to update the initial samples file with final results (default: TRUE).
 #'
 #' @return NULL. Results are  written to: model_parameters/\{scenario_name\}_model_parameters.csv
 #'
@@ -846,8 +845,7 @@ run_adaptive_sampling <- function(initial_samples_file,
                                   output_dir = NULL,
                                   use_slurm = FALSE,
                                   cider = FALSE,
-                                  verbose = FALSE,
-                                  update_initial_file = TRUE) {
+                                  verbose = FALSE) {
   par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
   batch_size <- 1  # Fixed to 1 by design
   # Calculate iterations from num_samples
@@ -1010,10 +1008,7 @@ run_adaptive_sampling <- function(initial_samples_file,
     
     if(verbose) {
       cat("Jobs submitted to SLURM. New samples will be written to:", results_file, "\n")
-      if(update_initial_file) {
-        cat("The initial samples file will be updated with results when SLURM jobs complete.\n")
-        cat("You'll need to manually update it by copying the contents from:", results_file, "\n")
-      }
+      cat("The initial samples file will be updated with results when SLURM jobs complete.\n")
     }
     
     return(invisible(NULL))
@@ -1057,10 +1052,10 @@ run_adaptive_sampling <- function(initial_samples_file,
             mapping_max_iter = mapping_max_iter,
             relative_epsilon = relative_epsilon,
             folds = folds,
-            num_cores = 1,
+            num_cores = 1,  # Use 1 core within each job
             scenario_name = scenario_name,
             output_dir = output_dir,
-            verbose = FALSE
+            verbose = FALSE  # Disable verbose within subfunction
           )
           
           # Update progress counter

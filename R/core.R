@@ -61,9 +61,9 @@ NULL
 #'
 #' @keywords internal
 process_ideal_distance <- function(numeric_value, threshold_type, distance) {
-  if (!is.numeric(distance)) {
-    stop("'distance' must be numeric")
-  }
+  # if (!is.numeric(distance)) {
+  #   stop("'distance' must be numeric")
+  # }
   
   if(threshold_type == 1) {  # was ">"
     if(distance < numeric_value) {
