@@ -559,9 +559,9 @@ create_topolow_map <- function(distance_matrix,
     convergence_error <- mean(abs(distance_matrix_convergence_error[valid_mask] - p_dist_mat[valid_mask]))
     
     # Calculate evaluation metrics similarly
-    distance_vec_raw <- suppressWarnings(as.vector(as.numeric(distance_matrix)))
-    valid_indices_raw <- !is.na(distance_vec_raw)
-    mae <- mean(abs(distance_vec_raw[valid_indices_raw] - p_dist_vec[valid_indices_raw]))
+    distance_matrix_raw <- suppressWarnings(as.numeric(distance_matrix))
+    valid_indices_raw <- !is.na(distance_matrix_raw)
+    mae <- mean(abs(distance_matrix_raw[valid_indices_raw] - p_dist_mat[valid_indices_raw]))
     
     if (verbose) {
       cat(sprintf(
