@@ -1274,18 +1274,6 @@ generate_kde_samples <- function(samples, n, epsilon = 0) {
 }
 
 
-#' Calculate Weighted Mean
-#'
-#' @description Helper function to calculate weighted mean of a vector.
-#' @param x Numeric vector
-#' @param weights Vector of weights
-#' @return Weighted mean value
-#' @keywords internal
-weighted_mean <- function(x, weights) {
-  sum(x * weights) / sum(weights)
-}
-
-
 #' Weighted Kernel Density Estimation
 #'
 #' @description
@@ -1539,15 +1527,15 @@ likelihood_function <- function(distance_matrix, mapping_max_iter,
 #' @param ... Arguments passed to likelihood_function
 #' @return Same as likelihood_function or NA if error
 #' @keywords internal
-safe_likelihood_function <- function(...) {
-  tryCatch({
-    likelihood_function(...)
-  }, error = function(e) {
-    cat("Error in safe_likelihood_function:", e$message, "\n")
-    # If an error occurs, return NA or a placeholder value
-    NA  # You can return NA or a small likelihood if preferred, e.g. 0.01
-  })
-}
+# safe_likelihood_function <- function(...) {
+#   tryCatch({
+#     likelihood_function(...)
+#   }, error = function(e) {
+#     cat("Error in safe_likelihood_function:", e$message, "\n")
+#     # If an error occurs, return NA or a placeholder value
+#     NA  # You can return NA or a small likelihood if preferred, e.g. 0.01
+#   })
+# }
 
 
 #' Perform Adaptive Monte Carlo Sampling
@@ -1671,18 +1659,35 @@ adaptive_MC_sampling <- function(samples_file,
       # Always use single-core for the inner function when in parallel mode
       inner_cores <- if(use_parallelism) 1 else min(folds, num_cores)
       
-      # Call safe_likelihood_function with appropriate parameters
-      safe_likelihood_function(
-        distance_matrix = distance_matrix,
-        mapping_max_iter = mapping_max_iter,
-        relative_epsilon = relative_epsilon, 
-        N = N,
-        k0 = k0,
-        cooling_rate = cooling_rate,
-        c_repulsion = c_repulsion,
-        folds = folds,
-        num_cores = inner_cores
-      )
+      # OPTIMIZATION 12: Instead of Call safe_likelihood_function with appropriate parameters
+      # safe_likelihood_function(
+      #   distance_matrix = distance_matrix,
+      #   mapping_max_iter = mapping_max_iter,
+      #   relative_epsilon = relative_epsilon, 
+      #   N = N,
+      #   k0 = k0,
+      #   cooling_rate = cooling_rate,
+      #   c_repulsion = c_repulsion,
+      #   folds = folds,
+      #   num_cores = inner_cores
+      # )
+
+      # Call inline replacement:
+      tryCatch({
+        likelihood_function(distance_matrix = distance_matrix,
+         mapping_max_iter = mapping_max_iter,
+         relative_epsilon = relative_epsilon, 
+         N = N,
+         k0 = k0,
+         cooling_rate = cooling_rate,
+         c_repulsion = c_repulsion,
+         folds = folds,
+         num_cores = inner_cores)
+      }, error = function(e) {
+        cat("Error in likelihood calculation:", e$message, "\n")
+        NA
+      })
+
     }
     
     # Evaluate samples with appropriate parallel method

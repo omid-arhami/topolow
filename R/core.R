@@ -60,27 +60,27 @@ NULL
 #' }
 #'
 #' @keywords internal
-process_ideal_distance <- function(numeric_value, threshold_type, distance) {
-  # if (!is.numeric(distance)) {
-  #   stop("'distance' must be numeric")
-  # }
-  
-  if(threshold_type == 1) {  # was ">"
-    if(distance < numeric_value) {
-      return(numeric_value)
-    } else {
-      return(NULL)
-    }
-  } else if(threshold_type == -1) {  # was "<"
-    if(distance > numeric_value) {
-      return(numeric_value)
-    } else {
-      return(NULL)
-    }
-  } else {  # normal value
-    return(numeric_value)
-  }
-}
+# process_ideal_distance <- function(numeric_value, threshold_type, distance) {
+#   # if (!is.numeric(distance)) {
+#   #   stop("'distance' must be numeric")
+#   # }
+#   
+#   if(threshold_type == 1) {  # was ">"
+#     if(distance < numeric_value) {
+#       return(numeric_value)
+#     } else {
+#       return(NULL)
+#     }
+#   } else if(threshold_type == -1) {  # was "<"
+#     if(distance > numeric_value) {
+#       return(numeric_value)
+#     } else {
+#       return(NULL)
+#     }
+#   } else {  # normal value
+#     return(numeric_value)
+#   }
+# }
 
 # process_ideal_distance <- function(reported_distance, distance) {
 #   if (!is.numeric(distance)) {
@@ -497,11 +497,19 @@ create_topolow_map <- function(distance_matrix,
       if(shuffled_has_measurement[pair_idx]) {
         #ideal_distance <- distances[i, j]
         #ideal_distance_processed <- process_ideal_distance(ideal_distance, distance)
-        ideal_distance_processed <- process_ideal_distance(
-                                                  distances_numeric[i, j], 
-                                                  threshold_mask[i, j], 
-                                                  distance
-                                                )
+        # OPTIMIZATION 11: Instead of this function call:
+        # ideal_distance_processed <- process_ideal_distance(
+        #                                                  distances_numeric[i, j], 
+        #                                                  threshold_mask[i, j], 
+        #                                                  distance)
+        # We used this inlined version:
+        if(threshold_mask[i, j] == 1) {  # ">" case
+          ideal_distance_processed <- if(distance < distances_numeric[i, j]) distances_numeric[i, j] else NULL
+        } else if(threshold_mask[i, j] == -1) {  # "<" case
+          ideal_distance_processed <- if(distance > distances_numeric[i, j]) distances_numeric[i, j] else NULL
+        } else {  # normal value
+          ideal_distance_processed <- distances_numeric[i, j]
+        }
 
         if (!is.null(ideal_distance_processed)) {
           # Spring force
