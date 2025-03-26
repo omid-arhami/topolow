@@ -4,7 +4,7 @@
 \alias{calculate_diagnostics}
 \title{Calculate Adaptive Monte Carlo Sampling Diagnostics}
 \usage{
-calculate_diagnostics(chain_files, mutual_size = 2000)
+calculate_diagnostics(chain_files, mutual_size = 500)
 }
 \arguments{
 \item{chain_files}{Character vector of paths to CSV files containing chains}
