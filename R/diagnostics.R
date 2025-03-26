@@ -164,67 +164,62 @@ calculate_diagnostics <- function(chain_files, mutual_size=500) {
     stop("mutual_size must be a positive integer")
   }
   
-  # Minimum recommended size for reliable diagnostics
-  if (mutual_size < 50) {
-    warning("mutual_size is very small (", mutual_size, "). Consider using at least 50 samples for reliable diagnostics.")
-  }
-
-  # Read chains
-  chains <- lapply(chain_files, read.csv)
-  
-  # Get parameter names, excluding NLL/Holdout columns
+  # Get parameter names we need to analyze
   par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
   
-  # Process each chain
-  for(i in 1:length(chains)) {
-    # Check if required columns exist
-    missing_cols <- setdiff(c(par_names, "NLL", "Holdout_MAE"), names(chains[[i]]))
+  # Read and clean chains
+  chains <- lapply(chain_files, function(file) {
+    # Read the file with special handling for empty strings
+    df <- read.csv(file, na.strings = c("NA", ""), stringsAsFactors = FALSE)
+    
+    # Check for required columns
+    missing_cols <- setdiff(c(par_names, "NLL", "Holdout_MAE"), names(df))
     if(length(missing_cols) > 0) {
-      stop("File ", chain_files[i], " missing required columns: ", 
+      stop("File ", file, " missing required columns: ", 
            paste(missing_cols, collapse = ", "))
     }
     
-    # Filter out rows with NA or Inf in NLL or Holdout_MAE
-    chains[[i]] <- chains[[i]][!is.na(chains[[i]]$NLL) & 
-                               !is.na(chains[[i]]$Holdout_MAE) &
-                               is.finite(chains[[i]]$NLL) & 
-                               is.finite(chains[[i]]$Holdout_MAE), ]
-    
-    # Ensure sufficient rows remain
-    if(nrow(chains[[i]]) < mutual_size) {
-      stop("Chain ", i, " has only ", nrow(chains[[i]]), 
-           " valid rows, but mutual_size=", mutual_size, 
-           ". Try reducing mutual_size.")
+    # Ensure all columns are numeric
+    for(col in c(par_names, "NLL", "Holdout_MAE")) {
+      if(!is.numeric(df[[col]])) {
+        df[[col]] <- as.numeric(df[[col]])
+      }
     }
     
-    # Also check for NA or Inf in parameter columns
-    chains[[i]] <- chains[[i]][apply(chains[[i]][, par_names], 1, 
-                                    function(row) all(is.finite(row))), ]
+    # Filter out rows with NAs or Infs in any required column
+    valid_rows <- complete.cases(df[, c(par_names, "NLL", "Holdout_MAE")]) & 
+                  apply(df[, c(par_names, "NLL", "Holdout_MAE")], 1, 
+                        function(row) all(is.finite(row)))
     
-    # Final check that we still have enough data
-    if(nrow(chains[[i]]) < mutual_size) {
-      stop("Chain ", i, " has insufficient valid parameter values after filtering NAs and Infs.")
-    }
+    clean_df <- df[valid_rows, ]
     
-    # Take the last mutual_size rows
-    end_idx <- nrow(chains[[i]])
-    start_idx <- max(1, end_idx - mutual_size + 1)  # Prevent negative indices
-    chains[[i]] <- chains[[i]][start_idx:end_idx, par_names]
+    # Return only parameter columns
+    return(clean_df[, par_names, drop=FALSE])
+  })
+  
+  # Check if chains have enough rows after cleaning
+  chain_sizes <- sapply(chains, nrow)
+  if(any(chain_sizes < mutual_size)) {
+    problem_chains <- which(chain_sizes < mutual_size)
+    sizes_info <- paste(problem_chains, ":", chain_sizes[problem_chains], collapse=", ")
+    stop("Some chains have fewer valid rows than mutual_size (", mutual_size, 
+         "). Chain sizes: ", sizes_info)
   }
   
-  # Check that all chains have the same parameter columns
-  n_params <- unique(sapply(chains, ncol))
-  if (length(n_params) != 1) {
-    stop("All chains must have the same number of parameters")
+  # Extract the last mutual_size rows from each chain
+  for(i in seq_along(chains)) {
+    n_rows <- nrow(chains[[i]])
+    chains[[i]] <- chains[[i]][(n_rows - mutual_size + 1):n_rows, , drop=FALSE]
   }
   
-  # Try to identify any remaining issues before conversion
-  for(i in 1:length(chains)) {
-    # Check for zero variance parameters
+  # Check for zero variance parameters that could cause problems
+  for(i in seq_along(chains)) {
     variances <- apply(chains[[i]], 2, var)
-    if(any(variances < 1e-10)) {
+    zero_var_params <- which(variances < 1e-10)
+    if(length(zero_var_params) > 0) {
       warning("Chain ", i, " has near-zero variance in parameters: ", 
-             paste(names(variances)[variances < 1e-10], collapse=", "))
+              paste(names(zero_var_params), collapse=", "), 
+              ". This may cause problems with diagnostics.")
     }
   }
   
@@ -234,16 +229,24 @@ calculate_diagnostics <- function(chain_files, mutual_size=500) {
       coda::mcmc(as.matrix(chain))
     }))
     
-    # Calculate diagnostics with error handling
+    # Calculate diagnostics
     gelman_result <- tryCatch({
       coda::gelman.diag(mcmc_list)
     }, error = function(e) {
-      stop("Error in Gelman diagnostics calculation: ", e$message, 
-           ". Try increasing mutual_size or check data quality.")
+      warning("Error in Gelman diagnostics: ", e$message)
+      # Return NA values if calculation fails
+      matrix(NA, nrow=length(par_names), ncol=2, 
+             dimnames=list(par_names, c("Point est.", "Upper C.I.")))
     })
     
-    rhat <- gelman_result$psrf[,1]
+    # Get R-hat values (if available)
+    rhat <- if(is.null(gelman_result$psrf)) {
+      rep(NA, length(par_names))
+    } else {
+      gelman_result$psrf[,1]
+    }
     
+    # Calculate effective sample size
     ess <- tryCatch({
       coda::effectiveSize(mcmc_list)
     }, error = function(e) {
@@ -251,6 +254,7 @@ calculate_diagnostics <- function(chain_files, mutual_size=500) {
       rep(NA, length(par_names))
     })
     
+    # Return results
     structure(list(
       rhat = rhat,
       ess = ess,
@@ -260,9 +264,10 @@ calculate_diagnostics <- function(chain_files, mutual_size=500) {
     ), class = "topolow_amcs_diagnostics")
     
   }, error = function(e) {
-    stop("Error converting chains to mcmc objects: ", e$message)
+    stop("Error in MCMC diagnostics: ", e$message)
   })
 }
+
 
 
 #' Calculate Cumulative Distance Metrics
