@@ -27,7 +27,7 @@ run_adaptive_sampling(
 \item{initial_samples_file}{Character. Path to CSV file containing initial samples.
 Must contain columns: log_N, log_k0, log_cooling_rate, log_c_repulsion, NLL}
 
-\item{distance_matrix}{Matrix. Distance matrix to optimize.}
+\item{distance_matrix}{Matrix. Distance matrix of the input data.}
 
 \item{num_parallel_jobs}{Integer. Number of parallel jobs (cores on local machine or SLURM jobs).}
 
