@@ -2,7 +2,7 @@
 % Please edit documentation in R/core.R
 \name{process_distance_matrix}
 \alias{process_distance_matrix}
-\title{Process distance matrix for convergence error calculations}
+\title{Process Threshold-Annotated Distance Values Using Pre-processed Numeric Representation}
 \usage{
 process_distance_matrix(reported_distance, distance)
 }
@@ -10,12 +10,74 @@ process_distance_matrix(reported_distance, distance)
 \item{reported_distance}{Character or numeric. The reported distance value}
 
 \item{distance}{Numeric. The calculated distance to compare against}
+
+\item{numeric_value}{Numeric. The target distance value (already converted to numeric)}
+
+\item{threshold_type}{Integer. Code representing the threshold type:
+1 for "greater than" (>), -1 for "less than" (<), or 0 for exact values}
 }
 \value{
+Numeric or NULL. Returns the numeric value if a force should be applied to
+meet the threshold constraint, or NULL if the constraint is already satisfied.
+
 Numeric or NA. Returns processed distance if valid, NA otherwise
 }
 \description{
-Helper function that processes elements of the distance matrix for calculating
-convergence error. Handles threshold indicators and NA values.
+Processes distance values with pre-processed threshold indicators for the TopoLow
+optimization algorithm. This version uses numeric codes for thresholds instead of
+string operations, significantly improving performance in the optimization loop.
 }
+\details{
+This function implements the threshold logic for antigenic cartography measurements
+using pre-processed numeric representations of threshold types:
+\itemize{
+\item When threshold_type is 1 (representing ">" originally): Returns the numeric value
+if the calculated distance is less than the threshold (meaning a force needs to
+be applied), otherwise returns NULL (constraint is satisfied)
+\item When threshold_type is -1 (representing "<" originally): Returns the numeric value
+if the calculated distance is greater than the threshold (meaning a force needs to
+be applied), otherwise returns NULL (constraint is satisfied)
+\item When threshold_type is 0 (normal value): Simply returns the numeric value
+}
+
+The return value signals to the calling function whether a force should be applied
+(numeric return) or if the current configuration already satisfies the constraint (NULL).
+}
+\examples{
+\dontrun{
+# Example with regular distance (threshold_type = 0)
+process_ideal_distance(5, 0, 3)  # Returns 5
+
+# Example with "greater than" threshold (threshold_type = 1)
+process_ideal_distance(5, 1, 3)  # Returns 5 (need to apply force)
+process_ideal_distance(5, 1, 6)  # Returns NULL (constraint satisfied)
+
+# Example with "less than" threshold (threshold_type = -1)
+process_ideal_distance(5, -1, 6)  # Returns 5 (need to apply force)
+process_ideal_distance(5, -1, 4)  # Returns NULL (constraint satisfied)
+}
+
+}
+\keyword{Handles}
+\keyword{Helper}
+\keyword{NA}
+\keyword{Process}
+\keyword{and}
+\keyword{calculating}
+\keyword{calculations}
+\keyword{convergence}
+\keyword{distance}
+\keyword{elements}
+\keyword{error}
+\keyword{error.}
+\keyword{for}
+\keyword{function}
+\keyword{indicators}
 \keyword{internal}
+\keyword{matrix}
+\keyword{of}
+\keyword{processes}
+\keyword{that}
+\keyword{the}
+\keyword{threshold}
+\keyword{values.}

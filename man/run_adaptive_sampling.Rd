@@ -19,8 +19,7 @@ run_adaptive_sampling(
   output_dir = NULL,
   use_slurm = FALSE,
   cider = FALSE,
-  verbose = FALSE,
-  update_initial_file = TRUE
+  verbose = FALSE
 )
 }
 \arguments{
@@ -34,7 +33,7 @@ Must contain columns: log_N, log_k0, log_cooling_rate, log_c_repulsion, NLL}
 \item{max_cores}{Integer. Maximum number of cores to use for parallel processing. If NULL,
 uses all available cores minus 1 (default: NULL).}
 
-\item{num_samples}{Integer. Number of new samples to be added through Adaptive Monte Carlo sampling (default: 10).}
+\item{num_samples}{Integer. Number of new samples to be added to the CSV file containing initial samples through Adaptive Monte Carlo sampling (default: 10).}
 
 \item{mapping_max_iter}{Integer. Maximum iterations per map optimization.}
 
@@ -55,8 +54,6 @@ uses all available cores minus 1 (default: NULL).}
 \item{cider}{Logical. Whether to use cider queue (default: FALSE).}
 
 \item{verbose}{Logical. Whether to print progress messages. Default: FALSE.}
-
-\item{update_initial_file}{Logical. Whether to update the initial samples file with final results (default: TRUE).}
 }
 \value{
 NULL. Results are  written to: model_parameters/\{scenario_name\}_model_parameters.csv

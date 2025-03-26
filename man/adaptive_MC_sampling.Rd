@@ -2,7 +2,7 @@
 % Please edit documentation in R/adaptive_sampling.R
 \name{adaptive_MC_sampling}
 \alias{adaptive_MC_sampling}
-\title{Perform Adaptive Monte Carlo Sampling}
+\title{Safe Wrapper for Likelihood Evaluation}
 \usage{
 adaptive_MC_sampling(
   samples_file,
@@ -40,11 +40,23 @@ adaptive_MC_sampling(
 \item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
 
 \item{verbose}{Logical. Whether to print progress messages. Default: FALSE}
+
+\item{...}{Arguments passed to likelihood_function}
 }
 \value{
+Same as likelihood_function or NA if error
+
 Data frame of samples with evaluated likelihoods
 }
 \description{
+Wraps likelihood calculation in error handler to return NA on failure.
+
 Main function implementing adaptive Monte Carlo sampling to explore parameter space.
 Updates sampling distribution based on evaluated likelihoods.
 }
+\keyword{Adaptive}
+\keyword{Carlo}
+\keyword{Monte}
+\keyword{Perform}
+\keyword{Sampling}
+\keyword{internal}
