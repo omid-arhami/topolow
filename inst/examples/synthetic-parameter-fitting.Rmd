@@ -82,11 +82,11 @@ param_ranges <- list(
 # Setup optimization parameters
 opt_params <- list(
   mapping_max_iter = 1000,    # Maximum map optimization iterations
-  num_parallel_jobs = 40,  # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
   folds = 20,         # Number of CV folds
-  num_cores = 19,     # Number of cores to use. If using SLURM: 1 core per LHS sampling job. Can try parallel::detectCores() on local machines
-  use_slurm = FALSE,
-  cider = FALSE
+  num_samples = 40,
+  use_slurm = TRUE,
+  cider = TRUE,
+  write_files = TRUE  # Only set TRUE on SLURM
 )
 ```
 
@@ -105,7 +105,7 @@ for(i in seq_along(results$matrices)) {
     distance_matrix <- dim_data[[matrix_type]]
     
     # Create scenario name incorporating dimension and matrix type
-    scenario_name <- sprintf("synthetic_AMC101_dim%d_%s", ndim, matrix_type)
+    scenario_name <- sprintf("synthetic_AMC103_dim%d_%s", ndim, matrix_type)
     
     message(sprintf("\nOptimizing for %d dimensions, matrix type: %s", 
                    ndim, matrix_type))
@@ -125,13 +125,13 @@ for(i in seq_along(results$matrices)) {
       c_repulsion_max = param_ranges$c_repulsion_max,
       cooling_rate_min = param_ranges$cooling_rate_min,
       cooling_rate_max = param_ranges$cooling_rate_max,
-      num_parallel_jobs = opt_params$num_parallel_jobs,
       folds = opt_params$folds,
-      write_files = TRUE,
-      # time = "3:00:00",
-      # memory = "2G",
-      # use_slurm = opt_params$use_slurm,
-      # cider = opt_params$cider,
+      num_samples = opt_params$num_samples,
+      write_files = opt_params$write_files,
+      time = "4:00:00",
+      memory = "1G",
+      use_slurm = opt_params$use_slurm,
+      cider = opt_params$cider,
       verbose = TRUE
     )
   }
@@ -151,7 +151,7 @@ for(ndim in results$metadata$dimension) {
   dim_results <- list()
   
   for(matrix_type in matrix_variants) { #
-    scenario_name <- sprintf("synthetic_AMC101_dim%d_%s", ndim, matrix_type)
+    scenario_name <- sprintf("synthetic_AMC103_dim%d_%s", ndim, matrix_type)
     print(scenario_name)
     # Aggregate optimization results
     dim_results[[matrix_type]] <- aggregate_parameter_optimization_results(
@@ -171,8 +171,8 @@ Perform adaptive sampling for each case:
 ```{r eval=FALSE}
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_parallel_jobs = 100,  # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
-  num_samples = 2000,        # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
+  num_parallel_jobs = 1500,  # For local execution: Number of CPU cores available; For SLURM: Number of samples
+  num_samples = 1500,        # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
   mapping_max_iter = 1000,    # Maximum iterations per map optimization
   relative_epsilon = 1e-4
 )
@@ -181,7 +181,7 @@ amc_params <- list(
 opt_params <- list(
   folds = 20,         # Number of CV folds
   use_slurm = TRUE,
-  cider = FALSE
+  cider = TRUE
 )
 
 # Run adaptive sampling for each dimension and matrix type
@@ -190,7 +190,7 @@ for(ndim in results$metadata$dimension) {
   
   for(matrix_type in matrix_variants) { # 
     # Get scenario names
-    base_scenario <- sprintf("synthetic_AMC101_dim%d_%s", ndim, matrix_type)
+    base_scenario <- sprintf("synthetic_AMC105_dim%d_%s", ndim, matrix_type)
     amc_scenario <- base_scenario #sprintf("%s_amc", base_scenario)
     
     # Get result file path
@@ -212,10 +212,11 @@ for(ndim in results$metadata$dimension) {
       scenario_name = amc_scenario,
       num_parallel_jobs = amc_params$num_parallel_jobs,
       num_samples = amc_params$num_samples,
+      max_cores = 21, # Each job on SLURM can work with 20 cores for a 20-fold CV
       relative_epsilon = amc_params$relative_epsilon,
       folds = opt_params$folds,
-      time = "18:00:00",
-      memory = "3G",
+      time = "3:00:00",
+      memory = "1G",
       use_slurm = opt_params$use_slurm,
       cider = opt_params$cider,
       verbose = TRUE
@@ -231,37 +232,51 @@ After all jobs complete, analyze parameter variations:
 ```{r}
 # Initialize results collection
 final_params <- data.frame()
-
 # Collect results for each dimension and matrix type
 for(ndim in results$metadata$dimension) {
   for(matrix_type in matrix_variants) {
     # Read AMC results
     amc_files <- c(
                    file.path("model_parameters",
-                         sprintf("synthetic_AMC101_dim%d_%s_model_parameters.csv", 
+                         sprintf("synthetic_AMC102_dim%d_%s_model_parameters.csv", 
                                 ndim, matrix_type))
                    )
     # Combine chain results
     amc_results <- do.call(rbind, lapply(amc_files, read.csv))
+    
+    # Ensure numeric columns are properly converted
+    numeric_columns <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion", "NLL", "Holdout_MAE")
+    for(col in numeric_columns) {
+      if(col %in% names(amc_results)) {
+        amc_results[[col]] <- as.numeric(as.character(amc_results[[col]]))
+      }
+    }
+    
     amc_results <- amc_results %>%
       filter(is.finite(NLL) & is.finite(Holdout_MAE)) %>%
       na.omit()
     amc_results <- amc_results[amc_results$log_N >= log(2),]
     
-    amc_results <- as.data.frame(lapply(amc_results, clean_data, k = 4))
+    # Only clean numeric columns
+    numeric_cols <- sapply(amc_results, is.numeric)
+    amc_results[numeric_cols] <- lapply(amc_results[numeric_cols], clean_data, k = 4)
     amc_results <- na.omit(amc_results)
     
     # Find best parameters (minimum NLL)
-    best_params <- amc_results[which.min(amc_results$Holdout_MAE),]
-    best_params$true_dim <- ndim
-    best_params$matrix_type <- matrix_type
-    best_params$N <- round(exp(best_params$log_N))
-    
-    final_params <- rbind(final_params, best_params)
+    if(nrow(amc_results) > 0) {
+      best_params <- amc_results[which.min(amc_results$Holdout_MAE),]
+      best_params$true_dim <- ndim
+      best_params$matrix_type <- matrix_type
+      best_params$N <- round(exp(best_params$log_N))
+      
+      final_params <- rbind(final_params, best_params)
+    } else {
+      cat("Warning: No valid results for dimension", ndim, "and matrix type", matrix_type, "\n")
+    }
   }
 }
 
-write.csv(final_params, "optimal_parameters_250points.csv")
+write.csv(final_params, "optimal_parameters_250points_AMC102.csv")
 ```
 
 
@@ -274,7 +289,8 @@ Check convergence for each case:
 analyze_convergence <- function(ndim, matrix_type, mutual_size) {
   # Create the two specific file patterns we want to match
   file_patterns <- c(
-    sprintf("synthetic_AMC101_dim%d_%s_model_parameters.csv", ndim, matrix_type)
+    sprintf("synthetic_AMC101_dim%d_%s_model_parameters.csv", ndim, matrix_type),
+    sprintf("synthetic_AMC102_dim%d_%s_model_parameters.csv", ndim, matrix_type)
   )
 
   # Get full paths for both files
@@ -302,7 +318,7 @@ analyze_convergence <- function(ndim, matrix_type, mutual_size) {
 }
 
 # Set the mutual_size, smaller then the minimum simulaations for each scenario:
-mutual_size <- 20
+mutual_size <- 100
 
 # Analyze convergence for each case
 convergence_results <- list()

@@ -179,20 +179,6 @@ generate_unique_string <- function(n, length = 8, lower_bound = 1, upper_bound =
 }
 
 
-#' Extract last part of a path or name after final slash 
-#'
-#' @param name Character string containing path or name
-#' @return Last part of string after final slash
-#' @keywords internal
-extract_last_part <- function(name) {
-  if (!is.character(name)) {
-    stop("name must be a character string")
-  }
-  parts <- strsplit(name, "/")[[1]]
-  return(tail(parts, n=1))
-}
-
-
 #' Generate Complex High-Dimensional Data for Testing
 #'
 #' @description 
@@ -515,15 +501,6 @@ copy_reproduction_examples <- function(dest_dir = file.path(getwd(), "examples")
 #' @export
 ggsave <- function(..., bg = 'white') {
   ggplot2::ggsave(..., bg = bg)
-}
-
-#' Calculate Euclidean Distance Between Colors
-#' 
-#' @param x,y Numeric vectors representing coordinates in LAB color space
-#' @return Numeric distance between colors
-#' @keywords internal
-euclidean_dist <- function(x, y) {
-  sqrt(sum((x - y)^2))
 }
 
 
