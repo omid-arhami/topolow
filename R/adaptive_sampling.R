@@ -812,7 +812,7 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #'
 #' @param initial_samples_file Character. Path to CSV file containing initial samples.
 #'        Must contain columns: log_N, log_k0, log_cooling_rate, log_c_repulsion, NLL
-#' @param distance_matrix Matrix. Distance matrix to optimize.
+#' @param distance_matrix Matrix. Distance matrix of the input data.
 #' @param mapping_max_iter Integer. Maximum iterations per map optimization.
 #' @param relative_epsilon Numeric. Convergence threshold.
 #' @param folds Integer. Number of CV folds (default: 10).

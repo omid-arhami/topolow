@@ -148,7 +148,7 @@ check_gaussian_convergence <- function(data, window_size = 300, tolerance = 1e-2
 #' print(diag$ess)  # Should be large enough (>400) for reliable inference
 #' }
 #' @export
-calculate_diagnostics <- function(chain_files, mutual_size=2000) {
+calculate_diagnostics <- function(chain_files, mutual_size=500) {
   # Validate inputs
   if (!is.character(chain_files)) {
     stop("chain_files must be a character vector")
@@ -163,20 +163,11 @@ calculate_diagnostics <- function(chain_files, mutual_size=2000) {
       mutual_size != round(mutual_size)) {
     stop("mutual_size must be a positive integer")
   }
-
-  # Check file format
-  lapply(chain_files, function(f) {
-    tryCatch({
-      df <- read.csv(f)
-      required_cols <- c("NLL", "Holdout_MAE")
-      if (!all(required_cols %in% names(df))) {
-        stop("File ", f, " missing required columns: ",
-             paste(setdiff(required_cols, names(df)), collapse = ", "))
-      }
-    }, error = function(e) {
-      stop("Error reading file ", f, ": ", e$message)
-    })
-  })
+  
+  # Minimum recommended size for reliable diagnostics
+  if (mutual_size < 50) {
+    warning("mutual_size is very small (", mutual_size, "). Consider using at least 50 samples for reliable diagnostics.")
+  }
 
   # Read chains
   chains <- lapply(chain_files, read.csv)
@@ -186,41 +177,92 @@ calculate_diagnostics <- function(chain_files, mutual_size=2000) {
   
   # Process each chain
   for(i in 1:length(chains)) {
-    chains[[i]] <- chains[[i]] %>% 
-      filter(!is.na(NLL) & !is.na(Holdout_MAE) & 
-               is.finite(NLL) & is.finite(Holdout_MAE))
-    chains[[i]] <- na.omit(chains[[i]])
-    chains[[i]] <- chains[[i]][
-      (nrow(chains[[i]])-mutual_size-1):nrow(chains[[i]]),
-      par_names]
+    # Check if required columns exist
+    missing_cols <- setdiff(c(par_names, "NLL", "Holdout_MAE"), names(chains[[i]]))
+    if(length(missing_cols) > 0) {
+      stop("File ", chain_files[i], " missing required columns: ", 
+           paste(missing_cols, collapse = ", "))
+    }
+    
+    # Filter out rows with NA or Inf in NLL or Holdout_MAE
+    chains[[i]] <- chains[[i]][!is.na(chains[[i]]$NLL) & 
+                               !is.na(chains[[i]]$Holdout_MAE) &
+                               is.finite(chains[[i]]$NLL) & 
+                               is.finite(chains[[i]]$Holdout_MAE), ]
+    
+    # Ensure sufficient rows remain
+    if(nrow(chains[[i]]) < mutual_size) {
+      stop("Chain ", i, " has only ", nrow(chains[[i]]), 
+           " valid rows, but mutual_size=", mutual_size, 
+           ". Try reducing mutual_size.")
+    }
+    
+    # Also check for NA or Inf in parameter columns
+    chains[[i]] <- chains[[i]][apply(chains[[i]][, par_names], 1, 
+                                    function(row) all(is.finite(row))), ]
+    
+    # Final check that we still have enough data
+    if(nrow(chains[[i]]) < mutual_size) {
+      stop("Chain ", i, " has insufficient valid parameter values after filtering NAs and Infs.")
+    }
+    
+    # Take the last mutual_size rows
+    end_idx <- nrow(chains[[i]])
+    start_idx <- max(1, end_idx - mutual_size + 1)  # Prevent negative indices
+    chains[[i]] <- chains[[i]][start_idx:end_idx, par_names]
   }
   
-  # Check dimensions
+  # Check that all chains have the same parameter columns
   n_params <- unique(sapply(chains, ncol))
   if (length(n_params) != 1) {
     stop("All chains must have the same number of parameters")
   }
   
-  # Convert to mcmc.list
-  mcmc_list <- mcmc.list(lapply(chains, function(chain) {
-    mcmc(as.matrix(chain))
-  }))
+  # Try to identify any remaining issues before conversion
+  for(i in 1:length(chains)) {
+    # Check for zero variance parameters
+    variances <- apply(chains[[i]], 2, var)
+    if(any(variances < 1e-10)) {
+      warning("Chain ", i, " has near-zero variance in parameters: ", 
+             paste(names(variances)[variances < 1e-10], collapse=", "))
+    }
+  }
   
-  # Calculate diagnostics
-  gelman_result <- coda::gelman.diag(mcmc_list)
-  rhat <- gelman_result$psrf[,1]
-  
-  ess <- coda::effectiveSize(mcmc_list)
-  
-   structure(list(
-    rhat = rhat,
-    ess = ess,
-    chains = chains,
-    param_names = par_names,
-    mutual_size = mutual_size
-  ), class = "topolow_amcs_diagnostics")
+  # Convert to mcmc.list with error handling
+  tryCatch({
+    mcmc_list <- coda::mcmc.list(lapply(chains, function(chain) {
+      coda::mcmc(as.matrix(chain))
+    }))
+    
+    # Calculate diagnostics with error handling
+    gelman_result <- tryCatch({
+      coda::gelman.diag(mcmc_list)
+    }, error = function(e) {
+      stop("Error in Gelman diagnostics calculation: ", e$message, 
+           ". Try increasing mutual_size or check data quality.")
+    })
+    
+    rhat <- gelman_result$psrf[,1]
+    
+    ess <- tryCatch({
+      coda::effectiveSize(mcmc_list)
+    }, error = function(e) {
+      warning("Error calculating effective sample size: ", e$message)
+      rep(NA, length(par_names))
+    })
+    
+    structure(list(
+      rhat = rhat,
+      ess = ess,
+      chains = chains,
+      param_names = par_names,
+      mutual_size = mutual_size
+    ), class = "topolow_amcs_diagnostics")
+    
+  }, error = function(e) {
+    stop("Error converting chains to mcmc objects: ", e$message)
+  })
 }
-
 
 
 #' Calculate Cumulative Distance Metrics
