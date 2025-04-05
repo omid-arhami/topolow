@@ -50,7 +50,7 @@ opt_params <- list(
   max_topolow_iter = 1000, # Cutoff of one optimization
   topolow_opt_rounds = 1, # Optimization rounds for Topolow
   racmacs_opt_rounds = 200,  # Optimization rounds for RACMACS (You needs to do many optimizations and pick the best result)
-  topolow_params = read.csv("optimal_parameters_250points_AMC101.csv"),  # From parameter fitting
+  topolow_params = read.csv("optimal_parameters_250points_AMC102.csv"),  # From parameter fitting
   use_slurm = FALSE,
   num_cores = 87
 )
@@ -703,8 +703,8 @@ for (original_dim in sim_data$metadata$dimension) {
                                     package = "topolow"),
           args = args_list,
           num_cores = 1,
-          time = "8:00:00",
-          memory = "18G",
+          time = "5:00:00",
+          memory = "3G",
           output_file = file.path(topolow_results_dir,
                                   sprintf("%s_fold%d.out", scenario_name, i)),
           error_file = file.path(topolow_results_dir,
@@ -845,11 +845,11 @@ write.csv(topolow_errors_df,"Topolow_comparisondf.csv",
 write.csv(topolow_mapped_objects_df, "Topolow_mapped_objects.csv",
           row.names = FALSE)
 
-write.csv(racmacs_errors_df,"RACMACS_comparisondf.csv",
-          row.names = FALSE)
-
-write.csv(racmacs_Completeness, "RACMACS_mapped_objects.csv",
-          row.names = FALSE)
+# write.csv(racmacs_errors_df,"RACMACS_comparisondf.csv",
+#           row.names = FALSE)
+# 
+# write.csv(racmacs_Completeness, "RACMACS_mapped_objects.csv",
+#           row.names = FALSE)
 
 ```
 
@@ -990,7 +990,7 @@ p <- ggplot(all_mape_results, aes(x = Missing, y = MAPE, fill = Method)) +
   )
 
 # Save plot
-ggsave("Method_comparison_MAPE_plot_250points.pdf", plot = p, width = 172, height = 0.5*172, units = "mm", dpi = 300)
+ggsave("Method_comparison_MAPE_plot_250points_AMC102.pdf", plot = p, width = 172, height = 0.5*172, units = "mm", dpi = 300)
 
 print(p)
 ```

@@ -470,18 +470,17 @@ hiv_distance_matrix <- long_to_matrix(
   sort = TRUE
 )
 
-sum(!is.na(hiv_distance_matrix))
-sum(!is.na(hiv_distance_matrix))/nrow(hiv_distance_matrix)/ncol(hiv_distance_matrix)
+cat("Missing proportion in matrix form" ,100*sum(is.na(hiv_distance_matrix))/nrow(hiv_distance_matrix)/ncol(hiv_distance_matrix))
 
 # Prepare matrix for visualization
-# heatmap_data <- prepare_heatmap_data(hiv_distance_matrix, cluster_rows = FALSE)
-# 
-# # Plot heatmap
-# plot_distance_heatmap(heatmap_data, "hiv_panel")
-# 
-# # Analyze and visualize network structure
-# net_results <- analyze_network_structure(hiv_distance_matrix)
-# plot_network_structure(net_results, "hiv_network")
+heatmap_data <- prepare_heatmap_data(hiv_distance_matrix, cluster_rows = FALSE)
+
+# Plot heatmap
+plot_distance_heatmap(heatmap_data, "hiv_panel")
+
+# Analyze and visualize network structure
+net_results <- analyze_network_structure(hiv_distance_matrix)
+plot_network_structure(net_results, "hiv_network")
 
 ```
 
@@ -573,49 +572,46 @@ Using the initial results as a starting point, we'll now perform adaptive sampli
 
 ```{r eval=FALSE}
 # Transform samples (with previous code's path)
-scenario_name = "HIV_BC_AMC1"
-samples_file = "model_parameters/HIV_BC_AMC1_model_parameters.csv"
+scenario_name = "HIV_BC_AMC3"
+samples_file = "model_parameters/HIV_BC_AMC3_model_parameters.csv"
 samples <- log_transform_parameters(samples_file)
 
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_parallel_jobs = 4,  # For local execution: Number of CPU cores available; For SLURM: Number of jobs to submit
-  num_samples = 8,        # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
-  mapping_max_iter = 1000,    # Maximum iterations per map optimization
-  relative_epsilon = 1e-4
-)
-
-# Setup optimization parameters
-opt_params <- list(
-  folds = 20,         # Number of CV folds
-  num_cores = 1,      # Number of cores on the local machine, or cores per job on SLURM. Can try parallel::detectCores() on local machines. It would be best if num_cores is a multiple of folds?
+  num_samples = 10, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
+  num_parallel_jobs = parallel::detectCores()-1,  # For local execution: Number of CPU cores available (Can try parallel::detectCores() ); For SLURM: Number of jobs to submit
+  mapping_max_iter = 1000, # Maximum iterations per map optimization
+  relative_epsilon = 1e-4,
+  folds = 20, # Number of CV folds
   use_slurm = FALSE,
   cider = FALSE
 )
 
-# Run adaptive sampling
-# Workflow:
-# 1. Runs/Submits 'num_parallel_jobs' independent single-core jobs
-# 2. Each job runs for num_samples/num_parallel_jobs iterations
-# 3. Each job adds samples to a common results file
-# 4. Total: Adds num_samples samples
+# Record start time for timing report
+start_time <- Sys.time()
 
 run_adaptive_sampling(
   initial_samples_file = samples_file,
   distance_matrix = hiv_distance_matrix,
+  num_samples = amc_params$num_samples,
+  num_parallel_jobs = amc_params$num_parallel_jobs,
   mapping_max_iter = amc_params$mapping_max_iter,
   scenario_name = scenario_name,
-  num_parallel_jobs = amc_params$num_parallel_jobs,
-  num_samples = amc_params$num_samples,
   relative_epsilon = amc_params$relative_epsilon,
-  folds = opt_params$folds,
-  num_cores = opt_params$num_cores,
-  time = "6:00:00",
-  memory = "2G",
-  use_slurm = opt_params$use_slurm,
-  cider = opt_params$cider,
+  folds = amc_params$folds,
+  # time = "15:00:00",
+  # memory = "2G",
+  # use_slurm = amc_params$use_slurm,
+  # cider = amc_params$cider,
   verbose = TRUE
 )
+
+# Calculate and report total execution time
+end_time <- Sys.time()
+time_diff <- difftime(end_time, start_time, units = "auto")
+
+cat("\n completed in: ")
+time_diff
 ```
 
 ## Convergence Diagnostics
@@ -715,8 +711,8 @@ for (param in params) {
   )
   
   # Plot results
-  sens_plot <- plot(sensitivity, reference_error = 2.231)
-  #ggsave(paste0("parameter_sensitivity_", param, ".pdf"), sens_plot)
+  sens_plot <- plot(sensitivity, reference_error = 1.3) # , reference_error = 2.231
+  ggsave(paste0("parameter_sensitivity_", param, ".pdf"), sens_plot)
   print(sens_plot)
 }
 ```
