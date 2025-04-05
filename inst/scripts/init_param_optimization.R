@@ -87,7 +87,7 @@ mae_holdout <- mean(abs(df$OutSampleError), na.rm = TRUE)
 
 # Calculate negative log likelihood
 n <- sum(!is.na(df$OutSampleError))
-NLL <- n * (1 + log(2) + log(mae_holdout))
+NLL <- n * (1 + log(2*mae_holdout))
 
 # Create results data frame
 result <- data.frame(

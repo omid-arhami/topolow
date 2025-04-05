@@ -30,7 +30,11 @@
 #' Performs parameter optimization using Latin Hypercube Sampling (LHS) combined with
 #' k-fold cross-validation. Parameters are sampled from specified ranges using maximin
 #' LHS design to ensure good coverage of parameter space. Each parameter set is evaluated
-#' using k-fold cross-validation to assess prediction accuracy.
+#' using k-fold cross-validation to assess prediction accuracy. To calculate one NLL per set of
+#' parameters, the function uses a pooled errors approach which combine all validation errors into 
+#' one set, then calculate a single NLL. This approach has two main advantages:
+#' 1- It treats all validation errors equally, respecting the underlying error distribution assumption
+#' 2- It properly accounts for the total number of validation points
 #'
 #' @details
 #' The function performs these steps:
@@ -381,78 +385,86 @@ initial_parameter_optimization <- function(# Mapping related arguments:
     
     # Process each sample and fold
     process_sample <- function(i) {
-      sample_idx <- ((i - 1) %% num_samples) + 1
-      fold_idx <- floor((i - 1) / num_samples) + 1
-      
-      N <- lhs_params$N[sample_idx]
-      k0 <- lhs_params$k0[sample_idx]
-      c_repulsion <- lhs_params$c_repulsion[sample_idx]
-      cooling_rate <- lhs_params$cooling_rate[sample_idx]
-      
-      truth_matrix <- matrix_list[[fold_idx]][[1]]
-      input_matrix <- matrix_list[[fold_idx]][[2]]
-      
-      tryCatch({
-        res_train <- create_topolow_map(
-          distance_matrix = input_matrix,
-          ndim = N,
-          mapping_max_iter = mapping_max_iter,
-          k0 = k0,
-          cooling_rate = cooling_rate,
-          c_repulsion = c_repulsion,
-          relative_epsilon = relative_epsilon,
-          convergence_counter = convergence_counter,
-          initial_positions = NULL,
-          write_positions_to_csv = FALSE,
-          verbose = FALSE
-        )
+        sample_idx <- ((i - 1) %% num_samples) + 1
+        fold_idx <- floor((i - 1) / num_samples) + 1
         
-        p_dist_mat <- as.matrix(res_train$est_distances)
+        N <- lhs_params$N[sample_idx]
+        k0 <- lhs_params$k0[sample_idx]
+        c_repulsion <- lhs_params$c_repulsion[sample_idx]
+        cooling_rate <- lhs_params$cooling_rate[sample_idx]
         
-        errors <- error_calculator_comparison(
-          p_dist_mat = p_dist_mat,
-          truth_matrix = truth_matrix,
-          input_matrix = input_matrix
-        )
+        truth_matrix <- matrix_list[[fold_idx]][[1]]
+        input_matrix <- matrix_list[[fold_idx]][[2]]
         
-        df <- errors$report_df
-        mae_holdout <- mean(abs(df$OutSampleError), na.rm = TRUE)
-        
-        n <- sum(!is.na(df$OutSampleError))
-        NLL <- n * (1 + log(2) + log(mae_holdout))
-        
-        # Return valid results
-        if(is.finite(mae_holdout) && is.finite(NLL)) {
-          result <- data.frame(
-            N = N,
+        tryCatch({
+            res_train <- create_topolow_map(
+            distance_matrix = input_matrix,
+            ndim = N,
+            mapping_max_iter = mapping_max_iter,
             k0 = k0,
             cooling_rate = cooling_rate,
             c_repulsion = c_repulsion,
-            Holdout_MAE = mae_holdout,
-            NLL = NLL
-          )
-          
-          # Save individual result if requested
-          if(write_files) {
-            result_file <- file.path(run_topolow_dir,
-                                     sprintf("%d_params_%s.csv", i, scenario_name))
-            write.csv(result, result_file, row.names = FALSE)
-          }
-          
-          return(result)
-        } else {
-          if(verbose) {
-            cat(sprintf("Sample %d produced invalid results (inf/NA)\n", i))
-          }
-          return(NULL)
-        }
-        
-      }, error = function(e) {
-        if(verbose) {
-          cat(sprintf("Error processing sample %d: %s\n", i, e$message))
-        }
-        return(NULL)
-      })
+            relative_epsilon = relative_epsilon,
+            convergence_counter = convergence_counter,
+            initial_positions = NULL,
+            write_positions_to_csv = FALSE,
+            verbose = FALSE
+            )
+            
+            p_dist_mat <- as.matrix(res_train$est_distances)
+            
+            errors <- error_calculator_comparison(
+            p_dist_mat = p_dist_mat,
+            truth_matrix = truth_matrix,
+            input_matrix = input_matrix
+            )
+            
+            df <- errors$report_df
+            
+            # Store data needed for per-fold and pooled calculations
+            out_sample_errors <- df$OutSampleError[!is.na(df$OutSampleError)]
+            n_samples <- length(out_sample_errors)
+            sum_abs_errors <- sum(abs(out_sample_errors))
+            
+            # Calculate fold-specific MAE
+            mae_holdout <- if(n_samples > 0) sum_abs_errors / n_samples else NA
+            
+            # Return valid results with temporary additional columns for pooling
+            if(is.finite(mae_holdout) && n_samples > 0) {
+            # Include the pooling data as temporary columns
+            result <- data.frame(
+                N = N,
+                k0 = k0,
+                cooling_rate = cooling_rate,
+                c_repulsion = c_repulsion,
+                Holdout_MAE = mae_holdout,
+                NLL = n_samples * (1 + log(2*mae_holdout)),
+                # Temporary columns for pooling calculation
+                temp_n_samples = n_samples,
+                temp_sum_abs_errors = sum_abs_errors
+            )
+            
+            # Save individual result if requested - save only the standard columns
+            if(write_files) {
+                result_file <- file.path(run_topolow_dir,
+                                        sprintf("%d_params_%s.csv", i, scenario_name))
+                write.csv(result[1:6], result_file, row.names = FALSE)
+            }
+            
+            return(result)
+            } else {
+            if(verbose) {
+                cat(sprintf("Sample %d produced invalid results (inf/NA)\n", i))
+            }
+            return(NULL)
+            }
+            
+        }, error = function(e) {
+            if(verbose) {
+            cat(sprintf("Error processing sample %d: %s\n", i, e$message))
+            }
+            return(NULL)
+        })
     }
     
     # Create batches if num_samples*folds exceeds what we can process at once
@@ -529,44 +541,45 @@ initial_parameter_optimization <- function(# Mapping related arguments:
     if(length(res_list) == 0) {
       stop("No valid results obtained from parameter optimization")
     }
-    
+
     # Combine results
     res_list <- do.call(rbind, res_list)
-    colnames(res_list) <- c("N", "k0", "cooling_rate", "c_repulsion", "Holdout_MAE", "NLL")
-    
+
     # Remove any remaining invalid values
     res_list <- res_list[complete.cases(res_list) & 
-                           apply(res_list, 1, function(x) all(is.finite(x))), ]
-    
+                        apply(res_list, 1, function(x) all(is.finite(x))), ]
+
     if(nrow(res_list) == 0) {
-      stop("All results were invalid after filtering infinities and NAs")
+    stop("All results were invalid after filtering infinities and NAs")
     }
-    
-    # Calculate median results across folds with error checking
-    tryCatch({
-      res_list_median <- aggregate(
-        cbind(Holdout_MAE, NLL) ~ N + k0 + cooling_rate + c_repulsion,
-        data = res_list,
-        FUN = median
-      )
-    }, error = function(e) {
-      stop("Failed to aggregate results: ", e$message, 
-           "\nNumber of valid results: ", nrow(res_list))
-    })
-    
+
+    # Calculate pooled statistics using aggregate
+    pooled_results <- aggregate(
+            cbind(temp_sum_abs_errors, temp_n_samples) ~ N + k0 + cooling_rate + c_repulsion,
+            data = res_list,
+            FUN = sum
+    )
+
+    # Calculate pooled MAE and NLL
+    pooled_results$Holdout_MAE <- pooled_results$temp_sum_abs_errors / pooled_results$temp_n_samples
+    pooled_results$NLL <- pooled_results$temp_n_samples * (1 + log(2*pooled_results$Holdout_MAE))
+
+    # Remove temporary columns for final output
+    res_list_median <- pooled_results[, c("N", "k0", "cooling_rate", "c_repulsion", "Holdout_MAE", "NLL")]
+
     # Write aggregated results
     if(write_files) {
-      file_name <- file.path(param_dir,
-                             paste0(scenario_name, "_model_parameters.csv"))
-      
-      if(file.exists(file_name)) {
-        existing_data <- read.csv(file_name)
-        colnames(existing_data) <- colnames(res_list_median)  
-        updated_data <- rbind(existing_data, res_list_median)
-        write.csv(updated_data, file_name, row.names = FALSE)
-      } else {
-        write.csv(res_list_median, file_name, row.names = FALSE)
-      }
+        file_name <- file.path(param_dir,
+                                paste0(scenario_name, "_model_parameters.csv"))
+        
+        if(file.exists(file_name)) {
+            existing_data <- read.csv(file_name)
+            colnames(existing_data) <- colnames(res_list_median)  
+            updated_data <- rbind(existing_data, res_list_median)
+            write.csv(updated_data, file_name, row.names = FALSE)
+        } else {
+            write.csv(res_list_median, file_name, row.names = FALSE)
+        }
     }
     
     return(res_list_median)
@@ -1370,7 +1383,11 @@ unweighted_kde <- function(x, n = 512, from = min(x), to = max(x),
 #' 2. Fitting model on training data
 #' 3. Evaluating likelihood on validation set
 #' 4. Repeating across folds
-#'
+#' To calculate one NLL per set of parameters, the function uses a pooled errors approach which combines
+#' all validation errors into one set, then calculate a single NLL. This approach has two main advantages:
+#' 1- It treats all validation errors equally, respecting the underlying error distribution assumption
+#' 2- It properly accounts for the total number of validation points
+#' 
 #' @param distance_matrix Distance matrix to fit
 #' @param mapping_max_iter Maximum map optimization iterations
 #' @param relative_epsilon Convergence threshold
@@ -1397,6 +1414,7 @@ likelihood_function <- function(distance_matrix, mapping_max_iter,
   num_elements <- sum(!is.na(distance_matrix))
   
   holdout_size <- floor(num_elements/(folds*2)) # 2 is because for each [i,j] we also null the [j,i] element
+  
   # To cover n folds randomly, create a copy to remove fractions from it until finished:
   D_train <- distance_matrix
   
@@ -1420,7 +1438,7 @@ likelihood_function <- function(distance_matrix, mapping_max_iter,
     }
   }
   
-  # Define the function for processing each fold
+  # Define the function for processing each fold - collecting error information for pooling
   process_sample <- function(i) {
     truth_matrix <- matrix_list[[i]][[1]]
     input_matrix <- matrix_list[[i]][[2]]
@@ -1447,15 +1465,28 @@ likelihood_function <- function(distance_matrix, mapping_max_iter,
       
       errors <- error_calculator_comparison(p_dist_mat, truth_matrix, input_matrix)
       df <- errors$report_df
-      mae_holdout <- mean(abs(df$OutSampleError), na.rm = TRUE)
       
-      # Return fold results
-      data.frame(N = N, k0 = k0, cooling_rate = cooling_rate, c_repulsion = c_repulsion, 
-                 Holdout_MAE = mae_holdout)
+      # Extract actual errors for pooling
+      out_sample_errors <- df$OutSampleError[!is.na(df$OutSampleError)]
+      n_samples <- length(out_sample_errors)
+      sum_abs_errors <- sum(abs(out_sample_errors))
+      
+      # Calculate fold-specific MAE for reference
+      mae_holdout <- if(n_samples > 0) sum_abs_errors / n_samples else NA
+      
+      # Return fold results with information needed for pooling
+      data.frame(
+        Holdout_MAE = mae_holdout,
+        n_samples = n_samples,
+        sum_abs_errors = sum_abs_errors
+      )
     }, error = function(e) {
       # Return NA result on error
-      data.frame(N = N, k0 = k0, cooling_rate = cooling_rate, c_repulsion = c_repulsion, 
-                 Holdout_MAE = NA)
+      data.frame(
+        Holdout_MAE = NA,
+        n_samples = 0,
+        sum_abs_errors = 0
+      )
     })
   }
   
@@ -1489,7 +1520,7 @@ likelihood_function <- function(distance_matrix, mapping_max_iter,
     res_list <- lapply(1:folds, process_sample)
   }
   
-  # Combine results with improved error handling
+  # Combine results with error handling
   valid_results <- !sapply(res_list, is.null) & 
                    !sapply(res_list, function(x) all(is.na(x$Holdout_MAE)))
                    
@@ -1503,21 +1534,19 @@ likelihood_function <- function(distance_matrix, mapping_max_iter,
   # Combine results
   res_df <- do.call(rbind, res_list)
   
-  # Calculate medians
-  res_summary <- stats::aggregate(
-    Holdout_MAE ~ N + k0 + cooling_rate + c_repulsion, 
-    data = res_df, 
-    FUN = stats::median,
-    na.rm = TRUE
-  )
+  # Calculate pooled statistics
+  total_samples <- sum(res_df$n_samples)
+  total_abs_errors <- sum(res_df$sum_abs_errors)  
+  # Calculate pooled MAE
+  pooled_mae <- if(total_samples > 0) total_abs_errors / total_samples else NA
   
-  # Calculate NLL
-  n <- holdout_size * sum(valid_results)
-  Holdout_MAE <- res_summary$Holdout_MAE
-  NLL <- n * (1 + log(2) + log(Holdout_MAE))
+  # Calculate NLL using the correct formula and pooled MAE
+  pooled_nll <- if(!is.na(pooled_mae)) total_samples*(1+log(2*pooled_mae)) else NA
   
-  return(list(Holdout_MAE = Holdout_MAE, NLL = NLL))
+  return(list(Holdout_MAE = pooled_mae, NLL = pooled_nll))
 }
+
+
 
 
 #' Safe Wrapper for Likelihood Evaluation
