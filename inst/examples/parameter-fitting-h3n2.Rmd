@@ -119,8 +119,8 @@ opt_params <- list(
 
 
 ```{r eval=FALSE}
-scenario_name = "H3N2_2003_data_AMC102"
-samples_file = "model_parameters/H3N2_2003_data_AMC102_model_parameters.csv"
+scenario_name = "H3N2_2003_data_AMC12"
+samples_file = "model_parameters/H3N2_2003_data_AMC12_model_parameters.csv"
 
 # Record start time for timing report
 start_time <- Sys.time()
@@ -178,13 +178,13 @@ Using the initial results as a starting point, we'll now perform adaptive sampli
 
 ```{r eval=FALSE}
 # Transform samples (with previous code's path)
-scenario_name = "H3N2_2003_data_AMC101"
-samples_file = "model_parameters/H3N2_2003_data_AMC101_model_parameters.csv"
+scenario_name = "H3N2_2003_data_AMC12"
+samples_file = "model_parameters/H3N2_2003_data_AMC12_model_parameters.csv"
 samples <- log_transform_parameters(samples_file)
 
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_samples = 200, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
+  num_samples = 50, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
   num_parallel_jobs = parallel::detectCores()-1,  # For local execution: Number of CPU cores available (Can try parallel::detectCores() ); For SLURM: Number of jobs to submit
   mapping_max_iter = 1000, # Maximum iterations per map optimization
   relative_epsilon = 1e-4,
@@ -216,7 +216,7 @@ run_adaptive_sampling(
 end_time <- Sys.time()
 time_diff <- difftime(end_time, start_time, units = "auto")
 
-cat("\n Initial LHS CV sampling completed in: ")
+cat("\n AMC sampling completed in: ")
 time_diff
 ```
 

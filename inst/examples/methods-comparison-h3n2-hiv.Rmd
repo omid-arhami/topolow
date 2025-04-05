@@ -219,7 +219,7 @@ h3n2_results <- process_antigenic_data(
   is_titer = TRUE,
   metadata_cols = c("virusYear", "serumYear", "cluster", "color")
 )
-
+h3n2_long <- h3n2_results$long
 h3n2_matrix <- h3n2_results$matrix
 ```
 
