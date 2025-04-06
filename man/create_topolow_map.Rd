@@ -2,7 +2,7 @@
 % Please edit documentation in R/core.R
 \name{create_topolow_map}
 \alias{create_topolow_map}
-\title{Vectorized Process distance matrix for convergence error calculations}
+\title{Main TopoLow algorithm implementation}
 \usage{
 create_topolow_map(
   distance_matrix,
@@ -47,12 +47,8 @@ and ncol = ndim.}
 Default is TRUE.}
 
 \item{verbose}{Logical. Whether to print progress messages. Default is TRUE.}
-
-\item{p_dist_mat}{Numeric. The calculated distance matrix to compare against}
 }
 \value{
-Numeric. Returns processed distance
-
 A list with class "topolow" containing:
 \itemize{
 \item positions: Matrix of optimized point coordinates
@@ -64,8 +60,10 @@ A list with class "topolow" containing:
 }
 }
 \description{
-Helper function that processes elements of the distance matrix for calculating
-convergence error using vectorization. Handles threshold indicators and NA values.
+TopoLow (Topological Optimization for Low-Dimensional Mapping) optimizes point positions in n-dimensional
+space to match a target distance matrix. The algorithm uses a physics-inspired approach with
+spring and repulsive forces to find optimal point configurations while handling missing
+and thresholded measurements.
 }
 \details{
 The algorithm iteratively updates point positions using:
@@ -104,42 +102,3 @@ result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=1000,
 plot(result$positions)
 
 }
-\keyword{(Topological}
-\keyword{Low-Dimensional}
-\keyword{Main}
-\keyword{Mapping)}
-\keyword{Optimization}
-\keyword{The}
-\keyword{TopoLow}
-\keyword{a}
-\keyword{algorithm}
-\keyword{and}
-\keyword{approach}
-\keyword{configurations}
-\keyword{distance}
-\keyword{find}
-\keyword{for}
-\keyword{forces}
-\keyword{handling}
-\keyword{implementation}
-\keyword{in}
-\keyword{internal}
-\keyword{match}
-\keyword{matrix.}
-\keyword{measurements.}
-\keyword{missing}
-\keyword{n-dimensional}
-\keyword{optimal}
-\keyword{optimizes}
-\keyword{physics-inspired}
-\keyword{point}
-\keyword{positions}
-\keyword{repulsive}
-\keyword{space}
-\keyword{spring}
-\keyword{target}
-\keyword{thresholded}
-\keyword{to}
-\keyword{uses}
-\keyword{while}
-\keyword{with}

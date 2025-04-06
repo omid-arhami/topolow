@@ -15,7 +15,7 @@ aggregate_parameter_optimization_results(
 
 \item{write_files}{Logical. Whether to save combined results (default: TRUE).}
 
-\item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+\item{dir}{Character. Directory for output files. If NULL, uses current directory}
 }
 \value{
 Data frame of aggregated results containing median values across folds:
