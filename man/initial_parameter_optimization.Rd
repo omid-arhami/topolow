@@ -89,7 +89,11 @@ If write_files=TRUE, results are saved to CSV files in the format:
 Performs parameter optimization using Latin Hypercube Sampling (LHS) combined with
 k-fold cross-validation. Parameters are sampled from specified ranges using maximin
 LHS design to ensure good coverage of parameter space. Each parameter set is evaluated
-using k-fold cross-validation to assess prediction accuracy.
+using k-fold cross-validation to assess prediction accuracy. To calculate one NLL per set of
+parameters, the function uses a pooled errors approach which combine all validation errors into
+one set, then calculate a single NLL. This approach has two main advantages:
+1- It treats all validation errors equally, respecting the underlying error distribution assumption
+2- It properly accounts for the total number of validation points
 }
 \details{
 The function performs these steps:

@@ -656,21 +656,21 @@ submit_parameter_jobs <- function(matrix_list_file,
     
     # Prepare arguments
     args <- c(
-      matrix_list_file,
+      matrix_list_file, #1
       as.character(lhs_params$N[sample_idx]),
       as.character(mapping_max_iter),
       as.character(lhs_params$k0[sample_idx]),
-      as.character(lhs_params$cooling_rate[sample_idx]),
+      as.character(lhs_params$cooling_rate[sample_idx]), # 5
       as.character(lhs_params$c_repulsion[sample_idx]),
       as.character(relative_epsilon),
       as.character(convergence_counter),
       "NULL", # initial_positions
-      "FALSE", # write_positions
+      "FALSE", # write_positions # 10
       "FALSE", # verbose
       scenario_name,
       as.character(i),
       output_dir,
-      as.character(num_samples)
+      as.character(num_samples) # 15
     )
     
     # Create job script
@@ -725,7 +725,7 @@ submit_parameter_jobs <- function(matrix_list_file,
 #'   \item{cooling_rate}{Spring decay rate}
 #'   \item{c_repulsion}{Repulsion constant}
 #'   \item{Holdout_MAE}{Median holdout mean absolute error}
-#'   \item{NLL}{Median negative log likelihood}
+#'   \item{NLL}{negative log likelihood of the fold}
 #'
 #' @examples
 #' \dontrun{
@@ -739,15 +739,15 @@ submit_parameter_jobs <- function(matrix_list_file,
 #'
 #' @export
 aggregate_parameter_optimization_results <- function(scenario_name, write_files = TRUE,
-                                                     output_dir = NULL) {
+                                                     dir = NULL) {
   # Handle output directory
-  if (is.null(output_dir)) {
-    output_dir <- getwd()
+  if (is.null(dir)) {
+    dir <- getwd()
   }
   
   # Find result files
   pattern <- paste0("_params_", scenario_name, "\\.csv$")
-  directory_path <- file.path(output_dir, "init_param_optimization")
+  directory_path <- file.path(dir, "init_param_optimization")
   
   csv_files <- list.files(
     path = directory_path,
@@ -771,6 +771,14 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
           x
         }
       })
+      
+      # Infer the sample count (n) from the NLL and Holdout_MAE of the fold.
+      # We have to recover n from the NLL = n * (1 + log(2*MAE)) formula
+      df$n_samples <- df$NLL / (1 + log(2*df$Holdout_MAE))
+      
+      # Calculate sum of absolute errors in the fold
+      df$sum_abs_errors <- df$n_samples * df$Holdout_MAE
+      
       df
     }, error = function(e) {
       warning("Error reading file ", file, ": ", e$message)
@@ -781,33 +789,43 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
   # Remove any rows with NAs
   results <- results[complete.cases(results), ]
   
-  # Calculate median results across folds
-  results_median <- aggregate(
-    cbind(Holdout_MAE, NLL) ~ N + k0 + cooling_rate + c_repulsion,
+  # Calculate pooled statistics for each parameter combination
+  # Sum the sample counts and sum of absolute errors
+  pooled_results <- aggregate(
+    cbind(n_samples, sum_abs_errors) ~ N + k0 + cooling_rate + c_repulsion,
     data = results,
-    FUN = median
+    FUN = sum
   )
+  
+  # Calculate pooled MAE for each parameter set
+  pooled_results$Holdout_MAE <- pooled_results$sum_abs_errors / pooled_results$n_samples
+  
+  # Calculate pooled NLL using the CORRECT formula
+  pooled_results$NLL <- pooled_results$n_samples * (1 + log(2*pooled_results$Holdout_MAE))
+  
+  # Prepare final results - include only the original columns
+  results_final <- pooled_results[, c("N", "k0", "cooling_rate", "c_repulsion", 
+                                      "Holdout_MAE", "NLL")]
   
   if(write_files) {
     output_file <- file.path(
+      dir,
       "model_parameters",
       paste0(scenario_name, "_model_parameters.csv")
     )
     
     # Create directory if it doesn't exist
-    dir.create(
-      "model_parameters", 
-      showWarnings = FALSE, 
-      recursive = TRUE
-    )
+    model_params_dir <- file.path(dir, "model_parameters")
+    if (!dir.exists(model_params_dir)) {
+      dir.create(model_params_dir, showWarnings = FALSE, recursive = TRUE)
+    }
     
     # Save results
-    write.csv(results_median, output_file, row.names = FALSE)
+    write.csv(results_final, output_file, row.names = FALSE)
 
     # Delete the files
     files_to_delete <- list.files(path = directory_path, pattern = pattern, full.names = TRUE)
     file.remove(files_to_delete)
-
   }
   
   return(invisible(NULL))
