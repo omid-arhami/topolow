@@ -7,7 +7,7 @@
 aggregate_parameter_optimization_results(
   scenario_name,
   write_files = TRUE,
-  output_dir = NULL
+  dir = NULL
 )
 }
 \arguments{
@@ -24,7 +24,7 @@ Data frame of aggregated results containing median values across folds:
 \item{cooling_rate}{Spring decay rate}
 \item{c_repulsion}{Repulsion constant}
 \item{Holdout_MAE}{Median holdout mean absolute error}
-\item{NLL}{Median negative log likelihood}
+\item{NLL}{negative log likelihood of the fold}
 }
 \description{
 Combines results from multiple parameter optimization jobs executed via SLURM

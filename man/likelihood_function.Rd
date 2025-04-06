@@ -47,6 +47,10 @@ Calculates cross-validated likelihood for a set of parameters by:
 \item Fitting model on training data
 \item Evaluating likelihood on validation set
 \item Repeating across folds
+To calculate one NLL per set of parameters, the function uses a pooled errors approach which combines
+all validation errors into one set, then calculate a single NLL. This approach has two main advantages:
+1- It treats all validation errors equally, respecting the underlying error distribution assumption
+2- It properly accounts for the total number of validation points
 }
 }
 \keyword{internal}
