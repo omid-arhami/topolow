@@ -13,105 +13,6 @@
 NULL
 
 
-#' Process Threshold-Annotated Distance Values Using Pre-processed Numeric Representation
-#'
-#' @description
-#' Processes distance values with pre-processed threshold indicators for the TopoLow 
-#' optimization algorithm. This version uses numeric codes for thresholds instead of 
-#' string operations, significantly improving performance in the optimization loop.
-#'
-#' @details
-#' This function implements the threshold logic for antigenic cartography measurements
-#' using pre-processed numeric representations of threshold types:
-#' 
-#' - When threshold_type is 1 (representing ">" originally): Returns the numeric value
-#'   if the calculated distance is less than the threshold (meaning a force needs to
-#'   be applied), otherwise returns NULL (constraint is satisfied)
-#' 
-#' - When threshold_type is -1 (representing "<" originally): Returns the numeric value
-#'   if the calculated distance is greater than the threshold (meaning a force needs to
-#'   be applied), otherwise returns NULL (constraint is satisfied)
-#' 
-#' - When threshold_type is 0 (normal value): Simply returns the numeric value
-#'
-#' The return value signals to the calling function whether a force should be applied
-#' (numeric return) or if the current configuration already satisfies the constraint (NULL).
-#'
-#' @param numeric_value Numeric. The target distance value (already converted to numeric)
-#' @param threshold_type Integer. Code representing the threshold type:
-#'        1 for "greater than" (>), -1 for "less than" (<), or 0 for exact values
-#' @param distance Numeric. The calculated distance between points in the current configuration
-#'
-#' @return Numeric or NULL. Returns the numeric value if a force should be applied to
-#'         meet the threshold constraint, or NULL if the constraint is already satisfied.
-#'
-#' @examples
-#' \dontrun{
-#' # Example with regular distance (threshold_type = 0)
-#' process_ideal_distance(5, 0, 3)  # Returns 5
-#'
-#' # Example with "greater than" threshold (threshold_type = 1)
-#' process_ideal_distance(5, 1, 3)  # Returns 5 (need to apply force)
-#' process_ideal_distance(5, 1, 6)  # Returns NULL (constraint satisfied)
-#'
-#' # Example with "less than" threshold (threshold_type = -1)
-#' process_ideal_distance(5, -1, 6)  # Returns 5 (need to apply force)
-#' process_ideal_distance(5, -1, 4)  # Returns NULL (constraint satisfied)
-#' }
-#'
-#' @keywords internal
-# process_ideal_distance <- function(numeric_value, threshold_type, distance) {
-#   # if (!is.numeric(distance)) {
-#   #   stop("'distance' must be numeric")
-#   # }
-#   
-#   if(threshold_type == 1) {  # was ">"
-#     if(distance < numeric_value) {
-#       return(numeric_value)
-#     } else {
-#       return(NULL)
-#     }
-#   } else if(threshold_type == -1) {  # was "<"
-#     if(distance > numeric_value) {
-#       return(numeric_value)
-#     } else {
-#       return(NULL)
-#     }
-#   } else {  # normal value
-#     return(numeric_value)
-#   }
-# }
-
-# process_ideal_distance <- function(reported_distance, distance) {
-#   if (!is.numeric(distance)) {
-#     stop("'distance' must be numeric")
-#   }
-#   
-#   if (is.character(reported_distance) && startsWith(reported_distance, ">")) {
-#     numeric_part <- as.numeric(sub(">", "", reported_distance))
-#     if (distance < numeric_part) {
-#       return(numeric_part)
-#     } else {
-#       return(NULL)
-#     }
-#   } else if (is.character(reported_distance) && startsWith(reported_distance, "<")) {
-#     numeric_part <- as.numeric(sub("<", "", reported_distance))
-#     if (distance > numeric_part) {
-#       return(numeric_part)
-#     } else {
-#       return(NULL)
-#     }
-#   } else {
-#     tryCatch({
-#       return(as.numeric(reported_distance))
-#     }, error = function(e) {
-#       stop("'reported_distance' must be numeric or a character starting with > or <")
-#     })
-#   }
-# }
-
-
-
 #' Process distance matrix for convergence error calculations
 #' 
 #' Helper function that processes elements of the distance matrix for calculating 
@@ -222,53 +123,6 @@ vectorized_process_distance_matrix <- function(distances_numeric, threshold_mask
 
   return(result)
 }
-
-
-#' Vectorized Process distance matrix for convergence error calculations
-#' 
-#' Helper function that processes elements of the distance matrix for calculating 
-#' convergence error using vectorization. Handles threshold indicators and NA values.
-#' 
-#' @param distance_matrix Character or numeric. The reported distance value
-#' @param p_dist_mat Numeric. The calculated distance matrix to compare against
-#' @return Numeric. Returns processed distance
-#' @keywords internal
-# vectorized_process_distance_matrix_legacy <- function(distance_matrix, p_dist_mat) {
-#   # Create result matrix
-#   result <- matrix(NA, nrow = nrow(distance_matrix), ncol = ncol(distance_matrix))
-#   
-#   # Convert to character matrix for string operations
-#   char_matrix <- matrix(as.character(distance_matrix), nrow = nrow(distance_matrix))
-#   
-#   # Process greater than cases (">x")
-#   gt_mask <- grepl("^>", char_matrix)
-#   if (any(gt_mask)) {
-#     gt_indices <- which(gt_mask)
-#     numeric_parts <- suppressWarnings(as.numeric(gsub("^>", "", char_matrix[gt_indices])))
-#     valid <- !is.na(numeric_parts) & !is.na(p_dist_mat[gt_indices]) &
-#       p_dist_mat[gt_indices] < numeric_parts
-#     result[gt_indices[valid]] <- numeric_parts[valid]
-#   }
-#   
-#   # Process less than cases ("<x")
-#   lt_mask <- grepl("^<", char_matrix)
-#   if (any(lt_mask)) {
-#     lt_indices <- which(lt_mask)
-#     numeric_parts <- suppressWarnings(as.numeric(gsub("^<", "", char_matrix[lt_indices])))
-#     valid <- !is.na(numeric_parts) & !is.na(p_dist_mat[lt_indices]) &
-#       p_dist_mat[lt_indices] > numeric_parts
-#     result[lt_indices[valid]] <- numeric_parts[valid]
-#   }
-#   
-#   # Process other values (convert to numeric)
-#   other_mask <- !is.na(char_matrix) & !gt_mask & !lt_mask
-#   if (any(other_mask)) {
-#     other_indices <- which(other_mask)
-#     result[other_indices] <- suppressWarnings(as.numeric(char_matrix[other_indices]))
-#   }
-#   
-#   return(result)
-# }
 
 
 #' Main TopoLow algorithm implementation
@@ -496,12 +350,7 @@ create_topolow_map <- function(distance_matrix,
       # OPTIMIZATION 6: Use pre-computed measurement status
       if(shuffled_has_measurement[pair_idx]) {
         #ideal_distance <- distances[i, j]
-        #ideal_distance_processed <- process_ideal_distance(ideal_distance, distance)
         # OPTIMIZATION 11: Instead of this function call:
-        # ideal_distance_processed <- process_ideal_distance(
-        #                                                  distances_numeric[i, j], 
-        #                                                  threshold_mask[i, j], 
-        #                                                  distance)
         # We used this inlined version:
         if(threshold_mask[i, j] == 1) {  # ">" case
           ideal_distance_processed <- if(distance < distances_numeric[i, j]) distances_numeric[i, j] else NULL

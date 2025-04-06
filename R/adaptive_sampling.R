@@ -716,7 +716,7 @@ submit_parameter_jobs <- function(matrix_list_file,
 #' The output file is saved as:
 #' model_parameters/\{scenario_name\}_model_parameters.csv
 #'
-#' @param output_dir Character. Directory for output files. If NULL, uses current directory
+#' @param dir Character. Directory for output files. If NULL, uses current directory
 #' @param scenario_name Character. Name used in parameter optimization jobs.
 #' @param write_files Logical. Whether to save combined results (default: TRUE).
 #' @return Data frame of aggregated results containing median values across folds:
@@ -1563,26 +1563,6 @@ likelihood_function <- function(distance_matrix, mapping_max_iter,
   
   return(list(Holdout_MAE = pooled_mae, NLL = pooled_nll))
 }
-
-
-
-
-#' Safe Wrapper for Likelihood Evaluation
-#'
-#' @description
-#' Wraps likelihood calculation in error handler to return NA on failure.
-#' @param ... Arguments passed to likelihood_function
-#' @return Same as likelihood_function or NA if error
-#' @keywords internal
-# safe_likelihood_function <- function(...) {
-#   tryCatch({
-#     likelihood_function(...)
-#   }, error = function(e) {
-#     cat("Error in safe_likelihood_function:", e$message, "\n")
-#     # If an error occurs, return NA or a placeholder value
-#     NA  # You can return NA or a small likelihood if preferred, e.g. 0.01
-#   })
-# }
 
 
 #' Perform Adaptive Monte Carlo Sampling
