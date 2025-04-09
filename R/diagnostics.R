@@ -192,6 +192,8 @@ calculate_diagnostics <- function(chain_files, mutual_size=500) {
                         function(row) all(is.finite(row)))
     
     clean_df <- df[valid_rows, ]
+    # Apply clean_data to all columns of the dataframe
+    clean_df <- as.data.frame(lapply(clean_df, clean_data, k = 3))
     
     # Return only parameter columns
     return(clean_df[, par_names, drop=FALSE])
