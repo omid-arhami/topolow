@@ -2261,9 +2261,10 @@ parameter_sensitivity_analysis <- function(param, samples, bins = 30,
     stop("bins must be at least 2")
   }
   
-  # Clean the data
-  clean_samples <- as.data.frame(lapply(samples[, c(param, mae_col)], clean_data, k = 3))
-  clean_samples <- na.omit(clean_samples)
+  # Clean the input data using MAD-based outlier detection
+  # clean_samples <- as.data.frame(lapply(samples[, c(param, mae_col)], clean_data, k = 3))
+  # clean_samples <- na.omit(clean_samples)
+  clean_samples <- na.omit(samples)
   
   # Check if we have enough data
   if (nrow(clean_samples) < min_samples * 2) {
@@ -2325,10 +2326,9 @@ parameter_sensitivity_analysis <- function(param, samples, bins = 30,
 #'
 #' @description
 #' Creates a visualization of parameter sensitivity showing minimum MAE values
-#' across parameter ranges with trend lines and threshold indicators.
+#' across parameter ranges with threshold indicators.
 #'
 #' @param x A parameter_sensitivity object
-#' @param reference_error Numeric reference error value for comparison (default: NULL)
 #' @param width Numeric width of output plot in inches (default: 3.5)
 #' @param height Numeric height of output plot in inches (default: 3.5)
 #' @param save_plot Logical. Whether to save plot to file. Default: TRUE
@@ -2337,7 +2337,7 @@ parameter_sensitivity_analysis <- function(param, samples, bins = 30,
 #' @return A ggplot object
 #' @method plot parameter_sensitivity
 #' @export
-plot.parameter_sensitivity <- function(x, reference_error = NULL, width = 3.5, height = 3.5,
+plot.parameter_sensitivity <- function(x, width = 3.5, height = 3.5,
                                      save_plot = TRUE, output_dir = NULL, ...) {
   # Convert to data frame for ggplot
   plot_data <- data.frame(
@@ -2361,63 +2361,42 @@ plot.parameter_sensitivity <- function(x, reference_error = NULL, width = 3.5, h
                       "log_k0" = expression(paste("Parameter Sensitivity: ", log(k))),
                       paste("Parameter Sensitivity:", x$param_name))
   
-  # Prepare smoothed curve data
-  loess_fit <- loess(min_mae ~ param, data = plot_data)
-  smooth_data <- data.frame(
-    param = plot_data$param,
-    min_mae = predict(loess_fit, newdata = plot_data)
-  )
-  
-  # Create legend data frame
-  # Create a dummy data frame for the legend
-  legend_data <- data.frame(
-    param = rep(min(plot_data$param), 4),
-    min_mae = rep(mean(plot_data$min_mae), 4),
-    type = factor(c("Validation MAE", "Smoothed trend", "Topolow min. +5%", "MDS MAE"),
-                 levels = c("Validation MAE", "Smoothed trend", "Topolow min. +5%", "MDS MAE"))
-  )
+  # Calculate position for the threshold label
+  label_x_pos <- min(plot_data$param) + 0.03 * (max(plot_data$param) - min(plot_data$param))
   
   # Create the plot
   p <- ggplot() +
     # Main data line
     geom_line(data = plot_data, 
-              aes(x = param, y = min_mae, color = "Validation MAE"),
-              size = 0.5) +
-    # Smoothed trend line  
-    geom_line(data = smooth_data,
-              aes(x = param, y = min_mae, color = "Smoothed trend"),
-              linetype = "dashed", size = 0.5) +
-    # Threshold line
-    geom_hline(aes(yintercept = x$threshold, color = "Topolow min. +5%"),
-               linetype = "dashed", size = 0.4) +
-    geom_hline(aes(yintercept = reference_error, color = "MDS MAE"),
-               linetype = "dashed", size = 0.4) +
-    # Set colors manually
-    scale_color_manual(values = c("Validation MAE" = "steelblue", 
-                                "Smoothed trend" = "red", 
-                                "Topolow min. +5%" = "black",
-                                "MDS MAE" = "#0cbe0c"),
-                      breaks = c("Validation MAE", "Smoothed trend", "Topolow min. +5%", "MDS MAE")) +
+              aes(x = param, y = min_mae),
+              color = "steelblue",
+              size = 0.8) +
+    # Threshold line with direct label
+    geom_hline(yintercept = x$threshold,
+               linetype = "dashed", 
+               color = "black", 
+               size = 0.6) +
+    # Add label for threshold line
+    annotate("text", 
+             x = label_x_pos, 
+             y = x$threshold + 0.004, 
+             label = "Threshold (min +5%)",
+             hjust = 0, 
+             size = 3.5,
+             color = "black") +
     # Labels and theme
-    labs(title = title_expr,
+    labs(#title = title_expr,
          x = param_expr,
          y = "Validation MAE") +
     theme_minimal() +
     theme(
-      plot.title = element_text(size = 7, face = "bold", hjust = 0.5),
-      axis.title = element_text(size = 7),
-      axis.text = element_text(size = 6),
+      plot.title = element_text(size = 10, face = "bold", hjust = 0.5),
+      axis.title = element_text(size = 9),
+      axis.text = element_text(size = 8),
       panel.grid.major = element_line(color = "gray90"),
       panel.grid.minor = element_blank(),
       panel.border = element_rect(color = "black", fill = NA),
-      plot.margin = margin(0.05, 0.05, 0.05, 0.05, "cm"),
-      legend.position = c(0.85, 0.85), # Position legend inside panel
-      legend.title = element_blank(),
-      legend.text = element_text(size = 5),
-      legend.key.size = unit(0.3, "cm"),
-      legend.background = element_rect(fill = "white", color = NA),
-      legend.margin = margin(1, 1, 1, 1),
-      legend.key = element_rect(fill = NA, color = NA)
+      plot.margin = margin(0.1, 0.1, 0.1, 0.1, "cm")
     ) +
     scale_y_continuous(labels = scales::comma)
   
@@ -2435,6 +2414,7 @@ plot.parameter_sensitivity <- function(x, reference_error = NULL, width = 3.5, h
   
   return(p)
 }
+
 
 #' Print Method for Parameter Sensitivity Objects
 #'
