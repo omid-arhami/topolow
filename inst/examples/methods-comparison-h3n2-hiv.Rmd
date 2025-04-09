@@ -1064,7 +1064,7 @@ error_summary <- errors_df %>%
   # Remove possible errors in the data using clean_data function with k=10 to remove points 10 SD away.
   group_by(Dataset, Algorithm) %>%
   mutate(
-    OutSampleError = clean_data(OutSampleError, k=10)
+    OutSampleError = clean_data(OutSampleError, k=3.5)
   ) %>%
   # Calculate summary statistics
   summarise(
