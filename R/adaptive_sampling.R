@@ -2177,7 +2177,7 @@ plot.profile_likelihood <- function(x, LL_max, width = 3.5, height = 3.5,
       panel.border = element_rect(color = "black", fill = NA),
       plot.margin = margin(0.05, 0.05, 0.05, 0.05, "cm")
     ) +
-    scale_y_continuous(labels = scales::comma)
+    scale_y_continuous(labels = scales::label_number(big.mark = ""))
   
   if(save_plot) {
     if (is.null(output_dir)) {
@@ -2193,6 +2193,7 @@ plot.profile_likelihood <- function(x, LL_max, width = 3.5, height = 3.5,
   
   return(p)
 }
+
 
 #' Print Method for Profile Likelihood Objects
 #'
@@ -2333,12 +2334,15 @@ parameter_sensitivity_analysis <- function(param, samples, bins = 30,
 #' @param height Numeric height of output plot in inches (default: 3.5)
 #' @param save_plot Logical. Whether to save plot to file. Default: TRUE
 #' @param output_dir Character. Directory for output files. If NULL, uses current directory
+#' @param y_limit_factor Numeric. Factor to set the upper y-axis limit as a percentage above 
+#'        the threshold value (e.g., 1.10 for 10% above). Default: NULL (automatic scaling)
 #' @param ... Additional arguments passed to plot
 #' @return A ggplot object
 #' @method plot parameter_sensitivity
 #' @export
 plot.parameter_sensitivity <- function(x, width = 3.5, height = 3.5,
-                                     save_plot = TRUE, output_dir = NULL, ...) {
+                                     save_plot = TRUE, output_dir = NULL,
+                                     y_limit_factor = NULL, ...) {
   # Convert to data frame for ggplot
   plot_data <- data.frame(
     param = x$param_values,
@@ -2397,8 +2401,27 @@ plot.parameter_sensitivity <- function(x, width = 3.5, height = 3.5,
       panel.grid.minor = element_blank(),
       panel.border = element_rect(color = "black", fill = NA),
       plot.margin = margin(0.1, 0.1, 0.1, 0.1, "cm")
-    ) +
-    scale_y_continuous(labels = scales::comma)
+    )
+  
+  # Set y-axis limits if y_limit_factor is provided
+  if (!is.null(y_limit_factor)) {
+    if (!is.numeric(y_limit_factor) || y_limit_factor <= 1) {
+      warning("y_limit_factor must be a number greater than 1, using automatic scaling")
+    } else {
+      # Calculate upper limit based on threshold
+      upper_limit <- x$threshold * y_limit_factor
+      # Set lower limit to the minimum value or 0, whichever is smaller
+      lower_limit <- min(plot_data$min_mae, na.rm = TRUE)*0.99
+      
+      p <- p + scale_y_continuous(
+        limits = c(lower_limit, upper_limit),
+        labels = scales::label_number(big.mark = "")
+      )
+    }
+  } else {
+    # Default continuous scale with comma formatting
+    p <- p + scale_y_continuous(labels = scales::comma)
+  }
   
   if(save_plot) {
     if (is.null(output_dir)) {
