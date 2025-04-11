@@ -6,18 +6,16 @@
 \usage{
 \method{plot}{parameter_sensitivity}(
   x,
-  reference_error = NULL,
   width = 3.5,
   height = 3.5,
   save_plot = TRUE,
   output_dir = NULL,
+  y_limit_factor = NULL,
   ...
 )
 }
 \arguments{
 \item{x}{A parameter_sensitivity object}
-
-\item{reference_error}{Numeric reference error value for comparison (default: NULL)}
 
 \item{width}{Numeric width of output plot in inches (default: 3.5)}
 
@@ -27,6 +25,9 @@
 
 \item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
 
+\item{y_limit_factor}{Numeric. Factor to set the upper y-axis limit as a percentage above
+the threshold value (e.g., 1.10 for 10\% above). Default: NULL (automatic scaling)}
+
 \item{...}{Additional arguments passed to plot}
 }
 \value{
@@ -34,5 +35,5 @@ A ggplot object
 }
 \description{
 Creates a visualization of parameter sensitivity showing minimum MAE values
-across parameter ranges with trend lines and threshold indicators.
+across parameter ranges with threshold indicators.
 }

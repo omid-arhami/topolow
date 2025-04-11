@@ -10,7 +10,9 @@ plot_cluster_mapping(
   dim_config = new_dim_reduction_config(),
   aesthetic_config = new_aesthetic_config(),
   layout_config = new_layout_config(),
-  output_dir = NULL
+  output_dir = NULL,
+  show_shape_legend = TRUE,
+  cluster_legend_title = "Cluster"
 )
 }
 \arguments{
@@ -30,6 +32,10 @@ plot_cluster_mapping(
 Use x_limits and y_limits in layout_config to set axis limits.}
 
 \item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+
+\item{show_shape_legend}{Logical. Whether to show the shape legend (default: TRUE)}
+
+\item{cluster_legend_title}{Character. Custom title for the cluster legend (default: "Cluster")}
 }
 \value{
 ggplot object containing the cluster mapping visualization
