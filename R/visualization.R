@@ -688,6 +688,8 @@ plot_temporal_mapping <- function(df, ndim,
 #' @param layout_config Layout configuration object controlling plot dimensions and style.
 #'        Use x_limits and y_limits in layout_config to set axis limits.
 #' @param output_dir Character. Directory for output files. If NULL, uses current directory
+#' @param show_shape_legend Logical. Whether to show the shape legend (default: TRUE)
+#' @param cluster_legend_title Character. Custom title for the cluster legend (default: "Cluster")
 #' 
 #' @details
 #' The function performs these steps:
@@ -753,7 +755,9 @@ plot_cluster_mapping <- function(df_coords, ndim,
                                  dim_config = new_dim_reduction_config(),
                                  aesthetic_config = new_aesthetic_config(),
                                  layout_config = new_layout_config(),
-                                 output_dir = NULL) {
+                                 output_dir = NULL,
+                                 show_shape_legend = TRUE,
+                                 cluster_legend_title = "Cluster") {
   # Validate input data
   df_coords <- validate_topolow_df(df_coords, ndim, require_clusters = TRUE)
   
@@ -797,16 +801,18 @@ plot_cluster_mapping <- function(df_coords, ndim,
                                   levels = names(aesthetic_config$point_shapes))
   
   # Create plot
-  p <- ggplot(reduced_df, aes(x = plot_x, y = plot_y,
-                              colour = cluster,
-                              shape = point_type)) +
+  p <- ggplot(reduced_df, aes(x = plot_x, y = plot_y, 
+                            colour = cluster,
+                            shape = point_type)) +
     geom_point(size = aesthetic_config$point_size,
-               alpha = aesthetic_config$point_alpha) +
-    scale_colour_manual(values = colors) +
+            alpha = aesthetic_config$point_alpha) +
+    scale_colour_manual(name = cluster_legend_title,  # Use custom title
+                      values = colors) +
     scale_shape_manual(name = "Type",
-                       values = aesthetic_config$point_shapes,
-                       labels = c(antigen = "Antigen", 
-                                  antiserum = "Antiserum")) +
+                    values = aesthetic_config$point_shapes,
+                    labels = c(antigen = "Antigen", 
+                                antiserum = "Antiserum"),
+                    guide = if(show_shape_legend) "legend" else "none") +  # Control visibility
     guides(colour = if(aesthetic_config$show_legend) 
       guide_legend(ncol = n_legend_cols,
                    title.position = "top",
@@ -1598,75 +1604,59 @@ create_diagnostic_plots <- function(chain_files,
 }
 
 
-#' Create Profile Likelihood Plot (Legacy Version)
-#'
+#' Plot Method for Convergence Diagnostics
+#' 
 #' @description
-#' Creates a visualization of profile likelihood for a parameter showing maximum
-#' likelihood estimates and confidence intervals. For legacy data formats.
-#' Consider using the S3 method plot.profile_likelihood() instead.
+#' Creates visualization of convergence diagnostics from Monte Carlo sampling, including 
+#' parameter mean trajectories and covariance matrix stability over iterations. Helps assess
+#' whether parameter estimation has converged to stable distributions.
+#' 
+#' @details
+#' The function generates two types of plots:
+#' 1. Parameter mean plots: Shows how the mean value for each parameter changes over iterations.
+#'    Stabilization of these plots indicates convergence of parameter distributions.
+#'    
+#' 2. Covariance change plot: Shows relative changes in the covariance matrix using the 
+#'    Frobenius norm (also called Hilbert-Schmidt norm), which is defined as the square root of the 
+#'    sum of the absolute squares of all matrix elements: \eqn{\sqrt{\sum|a_{ij}|^2}}. 
+#'    A decreasing trend approaching zero indicates stable relationships between parameters.
 #'
-#' @param LL_list_param Data frame with parameter values and log-likelihoods
-#' @param param_name Character name of parameter being profiled
-#' @param LL_max Numeric maximum log-likelihood value
-#' @return A ggplot object
+#' @param x A topolow_convergence object from check_gaussian_convergence().
+#' @param param_names Optional character vector of parameter names to use in plot titles.
+#'        If NULL (default), uses the param_names from the topolow_convergence object.
+#' @param ... Additional arguments passed to underlying plot functions (currently not used).
+#' @return A grid of plots showing convergence metrics.
 #' @examples
 #' \dontrun{
-#' LL_data <- data.frame(
-#'   param = seq(0, 1, 0.1),
-#'   LL = dnorm(seq(0, 1, 0.1), 0.5, 0.2)
+#' # Example with simulated data
+#' chain_data <- data.frame(
+#'   log_N = rnorm(1000, mean = 1.5, sd = 0.1),
+#'   log_k0 = rnorm(1000, mean = -0.5, sd = 0.2)
 #' )
-#' plot_profile_likelihood(LL_data, "mu", max(LL_data$LL))
-#' }
-#' @export 
-plot_profile_likelihood <- function(LL_list_param, param_name, LL_max) {
-  CI_95_LL <- LL_max - 3.84 / 2
-  ggplot(LL_list_param, aes_string(x = "param", y = "LL")) +
-    geom_line(color = "steelblue", size = 0.5) +
-    geom_hline(yintercept = CI_95_LL, 
-               linetype = "dashed", color = "black", size = 0.4) +
-    geom_text(aes(x = min(param), y = CI_95_LL + 0.02, 
-                  label = "95% CI"),
-              color = "black", vjust = -0.5, hjust = -0.05) +
-    labs(title = paste("Profile Likelihood:", param_name),
-         x = param_name,
-         y = "Log Likelihood") +
-    theme_minimal() +
-    theme(
-      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
-      axis.title = element_text(size = 12),
-      axis.text = element_text(size = 10),
-      panel.grid.major = element_line(color = "gray90"),
-      panel.grid.minor = element_blank(),
-      panel.border = element_rect(color = "black", fill = NA),
-      plot.margin = margin(1, 1, 1, 1, "cm")
-    ) +
-    scale_y_continuous(labels = scales::comma)
-}
-
-
-#' Plot Convergence Analysis Results
-#'
-#' @description
-#' Visualizes convergence diagnostics including parameter mean trajectories
-#' and covariance changes over iterations. Covariance norm changes measured by 
-#' Frobenius norm (also called Hilbert-Schmidt norm), the square root of the 
-#' sum of the absolute squares of all matrix elements = sqrt(sum|a_ij|²)
-#'
-#' @param conv_results List output from check_gaussian_convergence()
-#' @param param_names Character vector of parameter names
-#' @return A grid of plots showing convergence metrics
-#' @examples
-#' \dontrun{
+#' 
+#' # Check convergence
 #' results <- check_gaussian_convergence(chain_data)
-#' plot_convergence_analysis(results, c("mu", "sigma"))
+#' 
+#' # Plot diagnostics
+#' plot(results)
+#' 
+#' # With custom parameter names
+#' plot(results, param_names = c("Dimensions (log)", "Spring constant (log)"))
 #' }
+#' @seealso \code{\link{check_gaussian_convergence}} for generating the convergence object
+#' @method plot topolow_convergence
 #' @export
-plot_convergence_analysis <- function(conv_results, param_names) {
+plot.topolow_convergence <- function(x, param_names = NULL, ...) {
+  # Use param_names from object if not provided
+  if (is.null(param_names)) {
+    param_names <- x$param_names
+  }
+  
   # Parameter mean plots
   mean_plots <- lapply(seq_along(param_names), function(i) {
     plot_data <- data.frame(
-      Iteration = seq_len(nrow(conv_results$mean_history)),
-      Value = conv_results$mean_history[,i]
+      Iteration = seq_len(nrow(x$mean_history)),
+      Value = x$mean_history[,i]
     )
     
     ggplot(plot_data, aes(x = Iteration, y = Value)) +
@@ -1683,8 +1673,8 @@ plot_convergence_analysis <- function(conv_results, param_names) {
   # Covariance change plot
   cov_plot <- {
     plot_data <- data.frame(
-      Iteration = seq_along(conv_results$cov_changes),
-      Change = conv_results$cov_changes
+      Iteration = seq_along(x$cov_changes),
+      Change = x$cov_changes
     )
     
     ggplot(plot_data, aes(x = Iteration, y = Change)) +
@@ -1705,21 +1695,6 @@ plot_convergence_analysis <- function(conv_results, param_names) {
   )
 }
 
-
-#' Plot Method for Convergence Diagnostics
-#' 
-#' @description
-#' Plots convergence diagnostics including parameter mean trajectories and 
-#' covariance changes over iterations.
-#'
-#' @param x A topolow_convergence object from check_gaussian_convergence()
-#' @param ... Additional arguments passed to underlying plot functions
-#' @return A grid of plots showing convergence metrics
-#' @method plot topolow_convergence
-#' @export
-plot.topolow_convergence <- function(x, ...) {
-  plot_convergence_analysis(x, x$param_names)
-}
 
 #' Print Method for Convergence Diagnostics
 #'
