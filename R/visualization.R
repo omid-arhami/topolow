@@ -30,6 +30,71 @@
 "_PACKAGE"
 
 
+#' Plot Annotation Configuration Class
+#'
+#' @description
+#' S3 class for configuring point annotations in plots, including labels,
+#' connecting lines, and visual properties.
+#'
+#' @param notable_points Character vector of notable points to highlight
+#' @param size Numeric. Size of annotations for notable points
+#' @param color Character. Color of annotations for notable points
+#' @param alpha Numeric. Alpha transparency of annotations
+#' @param fontface Character. Font face of annotations ("plain", "bold", "italic", etc.)
+#' @param box Logical. Whether to draw a box around annotations
+#' @param segment_size Numeric. Size of segments connecting annotations to points
+#' @param segment_alpha Numeric. Alpha transparency of connecting segments
+#' @param min_segment_length Numeric. Minimum length of connecting segments
+#' @param max_overlaps Numeric. Maximum number of overlaps allowed for annotations
+#' @param outline_size Numeric. Size of the outline for annotations
+#' @return An annotation_config object
+#' @export
+new_annotation_config <- function(
+    notable_points = NULL,
+    size = 4.9,
+    color = "black",
+    alpha = 0.9,
+    fontface = "plain",
+    box = FALSE,
+    segment_size = 0.3,
+    segment_alpha = 0.6,
+    min_segment_length = 0,
+    max_overlaps = Inf,
+    outline_size = 0.4
+) {
+    config <- list(
+        notable_points = notable_points,
+        size = size,
+        color = color,
+        alpha = alpha,
+        fontface = fontface, 
+        box = box,
+        segment_size = segment_size,
+        segment_alpha = segment_alpha,
+        min_segment_length = min_segment_length,
+        max_overlaps = max_overlaps,
+        outline_size = outline_size
+    )
+    
+    # Validate inputs
+    stopifnot(
+        is.null(notable_points) || is.character(notable_points),
+        is.numeric(size), size > 0,
+        is.character(color),
+        is.numeric(alpha), alpha >= 0, alpha <= 1,
+        is.character(fontface),
+        is.logical(box),
+        is.numeric(segment_size), segment_size >= 0,
+        is.numeric(segment_alpha), segment_alpha >= 0, segment_alpha <= 1,
+        is.numeric(min_segment_length), min_segment_length >= 0,
+        is.numeric(max_overlaps), max_overlaps >= 0,
+        is.numeric(outline_size), outline_size >= 0
+    )
+    
+    structure(config, class = "annotation_config")
+}
+
+
 #' Plot Aesthetic Configuration Class
 #'
 #' @description
@@ -752,12 +817,19 @@ plot_temporal_mapping <- function(df, ndim,
 #'
 #' @export
 plot_cluster_mapping <- function(df_coords, ndim,
-                                 dim_config = new_dim_reduction_config(),
-                                 aesthetic_config = new_aesthetic_config(),
-                                 layout_config = new_layout_config(),
-                                 output_dir = NULL,
-                                 show_shape_legend = TRUE,
-                                 cluster_legend_title = "Cluster") {
+                                  dim_config = new_dim_reduction_config(),
+                                  aesthetic_config = new_aesthetic_config(),
+                                  layout_config = new_layout_config(),
+                                  annotation_config = new_annotation_config(),
+                                  output_dir = NULL,
+                                  show_shape_legend = TRUE,
+                                  cluster_legend_title = "Cluster") {
+  
+  # Ensure ggrepel is available
+  if (!requireNamespace("ggrepel", quietly = TRUE)) {
+    warning("The ggrepel package is required for optimal label placement. Install with: install.packages('ggrepel')")
+  }
+  
   # Validate input data
   df_coords <- validate_topolow_df(df_coords, ndim, require_clusters = TRUE)
   
@@ -793,30 +865,72 @@ plot_cluster_mapping <- function(df_coords, ndim,
     theme()  # Empty theme if no legend
   }
   
-  # Create point type with explicit factor levels
+  # Flag notable points
+  if (!is.null(annotation_config$notable_points) && length(annotation_config$notable_points) > 0) {
+    # Process row names to get strain names
+    reduced_df$clean_name <- sub("^(V/|S/)", "", reduced_df$name)
+    reduced_df$is_notable <- reduced_df$clean_name %in% annotation_config$notable_points
+    annotation_df <- reduced_df[reduced_df$is_notable, ]
+    
+    if (nrow(annotation_df) == 0) {
+      warning("None of the specified notable points found in the data")
+    }
+  } else {
+    reduced_df$is_notable <- FALSE
+    annotation_df <- reduced_df[0, ]  # Empty dataframe
+  }
+  
+  # Create point type with explicit factor levels - this is just for regular points
   reduced_df$point_type <- NA_character_  # Initialize
-  reduced_df$point_type[reduced_df$antigen] <- "antigen"    # Use lowercase to match names
-  reduced_df$point_type[reduced_df$antiserum] <- "antiserum"
+  reduced_df$point_type[reduced_df$antigen & !reduced_df$is_notable] <- "antigen"
+  reduced_df$point_type[reduced_df$antiserum & !reduced_df$is_notable] <- "antiserum"
   reduced_df$point_type <- factor(reduced_df$point_type, 
-                                  levels = names(aesthetic_config$point_shapes))
+                                levels = names(aesthetic_config$point_shapes))
   
   # Create plot
-  p <- ggplot(reduced_df, aes(x = plot_x, y = plot_y, 
-                            colour = cluster,
-                            shape = point_type)) +
-    geom_point(size = aesthetic_config$point_size,
-            alpha = aesthetic_config$point_alpha) +
-    scale_colour_manual(name = cluster_legend_title,  # Use custom title
-                      values = colors) +
-    scale_shape_manual(name = "Type",
-                    values = aesthetic_config$point_shapes,
-                    labels = c(antigen = "Antigen", 
-                                antiserum = "Antiserum"),
-                    guide = if(show_shape_legend) "legend" else "none") +  # Control visibility
+  p <- ggplot() +
+    # Plot regular points (using the original shapes)
+    geom_point(
+      data = reduced_df[!reduced_df$is_notable, ],
+      aes(x = plot_x, y = plot_y, 
+          color = cluster,
+          shape = point_type),
+      size = aesthetic_config$point_size,
+      alpha = aesthetic_config$point_alpha
+    ) +
+    # Plot notable points with filled shapes and outlines
+    geom_point(
+      data = reduced_df[reduced_df$is_notable & reduced_df$antigen, ],
+      aes(x = plot_x, y = plot_y, 
+          fill = cluster),
+      shape = 21,  # Filled circle with outline
+      color = "black",  # Outline color
+      size = aesthetic_config$point_size * 1.2,
+      stroke = annotation_config$outline_size,
+      alpha = aesthetic_config$point_alpha
+    ) +
+    # Notable antisera with different filled shape
+    geom_point(
+      data = reduced_df[reduced_df$is_notable & reduced_df$antiserum, ],
+      aes(x = plot_x, y = plot_y, 
+          fill = cluster),
+      shape = 22,  # Filled square with outline
+      color = "black",  # Outline color
+      size = aesthetic_config$point_size * 1.2,
+      stroke = annotation_config$outline_size,
+      alpha = aesthetic_config$point_alpha
+    ) +
+    # Configure scales
+    scale_colour_manual(name = cluster_legend_title, values = colors) +
+    scale_fill_manual(name = cluster_legend_title, values = colors, guide = "none") +
+    scale_shape_manual(
+      name = "Type",
+      values = aesthetic_config$point_shapes,
+      labels = c(antigen = "Antigen", antiserum = "Antiserum"),
+      guide = if(show_shape_legend) "legend" else "none"
+    ) +
     guides(colour = if(aesthetic_config$show_legend) 
-      guide_legend(ncol = n_legend_cols,
-                   title.position = "top",
-                   byrow = TRUE)
+      guide_legend(ncol = n_legend_cols, title.position = "top", byrow = TRUE)
       else "none") +
     base_theme +
     legend_theme +
@@ -824,6 +938,63 @@ plot_cluster_mapping <- function(df_coords, ndim,
          x = "Dimension 1", 
          y = "Dimension 2",
          colour = "Cluster")
+  
+  # Add labels to notable points if any exist
+  if (nrow(annotation_df) > 0) {
+    if (requireNamespace("ggrepel", quietly = TRUE)) {
+      if (annotation_box) {
+        # Use label boxes with background
+        p <- p + ggrepel::geom_label_repel(
+          data = annotation_df,
+          aes(x = plot_x, y = plot_y, label = clean_name),
+          size = annotation_config$size / ggplot2::.pt,
+          color = annotation_config$color,
+          alpha = annotation_config$alpha,
+          fontface = annotation_config$fontface,
+          segment.size = annotation_config$segment_size,
+          segment.alpha = annotation_config$segment_alpha,
+          min.segment.length = annotation_config$min_segment_length,
+          max.overlaps = annotation_config$max_overlaps,
+          box.padding = unit(0.4, "lines"),
+          point.padding = unit(0.3, "lines"),
+          force = 1,
+          direction = "both"
+        )
+      } else {
+        # Use simple text without background
+        p <- p + ggrepel::geom_text_repel(
+          data = annotation_df,
+          aes(x = plot_x, y = plot_y, label = clean_name),
+          size = annotation_config$size / ggplot2::.pt,
+          color = annotation_config$color,
+          alpha = annotation_config$alpha,
+          fontface = annotation_config$fontface,
+          segment.size = annotation_config$segment_size,
+          segment.alpha = annotation_config$segment_alpha,
+          min.segment.length = annotation_config$min_segment_length,
+          max.overlaps = annotation_config$max_overlaps,
+          box.padding = unit(0.4, "lines"),
+          point.padding = unit(0.3, "lines"),
+          force = 1,
+          direction = "both"
+        )
+      }
+    } else {
+      # Fallback if ggrepel is not available - basic text labels
+      warning("ggrepel package not available - using basic text labels without repulsion")
+      p <- p + geom_text(
+        data = annotation_df,
+        aes(x = plot_x, y = plot_y, label = clean_name),
+        size = annotation_config$size / ggplot2::.pt,
+        color = annotation_config$color,
+        alpha = annotation_config$alpha,
+        fontface = annotation_config$fontface,
+        nudge_x = 0.1,
+        nudge_y = 0.1,
+        check_overlap = TRUE
+      )
+    }
+  }
   
   # Add axis limits if specified in layout_config
   if (!is.null(layout_config$x_limits)) {
@@ -847,6 +1018,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
   
   return(p)
 }
+
 
 
 #' Create 3D Visualization

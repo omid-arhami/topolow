@@ -5,6 +5,7 @@ test_that("plot_temporal_mapping creates valid plot", {
     V2 = rnorm(10),
     antigen = rep(c(TRUE, FALSE), 5),
     antiserum = rep(c(FALSE, TRUE), 5),
+    name = paste0(ifelse(rep(c(TRUE, FALSE), 5), "V/", "S/"), "strain", 1:10),
     year = 2000:2009
   )
   
@@ -28,7 +29,8 @@ test_that("plot_cluster_mapping creates valid plot", {
     V2 = rnorm(10),
     antigen = rep(c(TRUE, FALSE), 5),
     antiserum = rep(c(FALSE, TRUE), 5),
-    cluster = rep(c("A", "B"), 5)
+    cluster = rep(c("A", "B"), 5),
+    name = paste0(ifelse(rep(c(TRUE, FALSE), 5), "V/", "S/"), "strain", 1:10)
   )
   
   plot <- plot_cluster_mapping(test_df, ndim=2)
