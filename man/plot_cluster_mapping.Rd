@@ -10,6 +10,7 @@ plot_cluster_mapping(
   dim_config = new_dim_reduction_config(),
   aesthetic_config = new_aesthetic_config(),
   layout_config = new_layout_config(),
+  annotation_config = new_annotation_config(),
   output_dir = NULL,
   show_shape_legend = TRUE,
   cluster_legend_title = "Cluster"
