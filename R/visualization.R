@@ -942,7 +942,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
   # Add labels to notable points if any exist
   if (nrow(annotation_df) > 0) {
     if (requireNamespace("ggrepel", quietly = TRUE)) {
-      if (annotation_box) {
+      if (annotation_config$box) {
         # Use label boxes with background
         p <- p + ggrepel::geom_label_repel(
           data = annotation_df,
