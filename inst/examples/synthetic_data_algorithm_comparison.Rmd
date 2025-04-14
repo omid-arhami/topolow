@@ -49,10 +49,10 @@ opt_params <- list(
   n_folds = 20,
   max_topolow_iter = 1000, # Cutoff of one optimization
   topolow_opt_rounds = 1, # Optimization rounds for Topolow
-  racmacs_opt_rounds = 200,  # Optimization rounds for RACMACS (You needs to do many optimizations and pick the best result)
-  topolow_params = read.csv("optimal_parameters_250points_AMC102.csv"),  # From parameter fitting
+  racmacs_opt_rounds = 100,  # Optimization rounds for RACMACS (You needs to do many optimizations and pick the best result)
+  topolow_params = read.csv("optimal_parameters_250points.csv"),  # From parameter fitting
   use_slurm = FALSE,
-  num_cores = 87
+  num_cores = 83
 )
 
 #  optimal dimensions of RACMACS
@@ -702,9 +702,9 @@ for (original_dim in sim_data$metadata$dimension) {
           script_path = system.file("scripts/run_topolow_comparison.R",
                                     package = "topolow"),
           args = args_list,
-          num_cores = 1,
+          num_cores = 21,
           time = "5:00:00",
-          memory = "3G",
+          memory = "1G",
           output_file = file.path(topolow_results_dir,
                                   sprintf("%s_fold%d.out", scenario_name, i)),
           error_file = file.path(topolow_results_dir,
@@ -714,7 +714,7 @@ for (original_dim in sim_data$metadata$dimension) {
         submit_job(slurm_script, use_slurm = opt_params$use_slurm,
                    cider = TRUE)
       } else{
-        cat(sprintf("\n##########################\n##Scenario %d out of %d \n", cc, length(sim_data$metadata$dimension)*length(matrix_variants)))
+        cat(sprintf("\n#####################\n##Scenario %d out of %d \n", cc, length(sim_data$metadata$dimension)*length(matrix_variants)))
         # Run Topolow locally and collect results in same format as RACMACS
         truth_matrix <- matrix_list[[i]][[1]]
         input_matrix <- matrix_list[[i]][[2]]
@@ -728,7 +728,7 @@ for (original_dim in sim_data$metadata$dimension) {
           cooling_rate = best_params$cooling_rate,
           c_repulsion = best_params$c_repulsion,
           write_positions_to_csv = FALSE,
-          verbose = TRUE
+          verbose = FALSE
         )
 
         p_dist_mat <- result$est_distances
@@ -766,73 +766,73 @@ for (original_dim in sim_data$metadata$dimension) {
       
                 #################RACMACS ######################
       
-      # cat(sprintf("Scenario %d out of %d \n", cc, length(sim_data$metadata$dimension)*length(matrix_variants)))
-      # 
-      # # Run RACMACS locally
-      # truth_matrix <- matrix_list[[i]][[1]]
-      # input_matrix <- matrix_list[[i]][[2]]
-      # 
-      # # Convert to titer format for RACMACS
-      # titer_table <- dist_to_titer_table(input_matrix, base=2, tens=10)
-      # 
-      # # Run RACMACS optimization
-      # map <- create_and_optimize_RACMACS_map(
-      #   titer_table = titer_table,
-      #   dim = optimal_dim,  # Use the optimal dimension
-      #   optimization_number = opt_params$racmacs_opt_rounds,
-      #   num_cores = opt_params$num_cores,
-      #   scenario_name = scenario_name
-      # )
-      # 
-      # save.coords(map, filename = "RACMACS_coords.csv",
-      #            optimization_number = 1, antigens = TRUE, sera = TRUE)
-      # 
-      # # Process RACMACS results
-      # positions_racmacs <- read.csv("RACMACS_coords.csv")
-      # #positions_racmacs <- na.omit(positions_racmacs)
-      # count_mapped_rows <- positions_racmacs %>%
-      #   filter(rowSums(is.na(.)) == 0) %>%
-      #   nrow()
-      # 
-      # positions_racmacs <- positions_racmacs %>%
-      #   mutate(name = case_when(
-      #     type == "antigen" ~ paste0("V/", name),
-      #     type == "sera" ~ paste0("S/", name),
-      #     TRUE ~ name
-      #   ))
-      # 
-      # rownames(positions_racmacs) <- positions_racmacs$name
-      # positions_racmacs <- positions_racmacs[,3:ncol(positions_racmacs)]
-      # 
-      # # Calculate performance metrics
-      # p_dist_mat <- coordinates_to_matrix(as.matrix(positions_racmacs))
-      # 
-      # racmacs_errors <- error_calculator_comparison(
-      #   p_dist_mat = p_dist_mat,
-      #   truth_matrix = truth_matrix,
-      #   input_matrix = input_matrix
-      # )
-      # 
-      # # Store results
-      # racmacs_df <- racmacs_errors$report_df
-      # racmacs_df$Dimension = optimal_dim
-      # racmacs_df$Algorithm = "MDS"
-      # racmacs_df$Scenario = scenario_name
-      # racmacs_df$Fold <- i
-      # racmacs_errors_df <- rbind(racmacs_errors_df, racmacs_df)
-      # 
-      # racmacs_Completeness <- rbind(
-      #   racmacs_Completeness,
-      #   data.table(
-      #     Dimension = optimal_dim,
-      #     Mapped = count_mapped_rows,
-      #     Total = nrow(truth_matrix),
-      #     Validation_Completeness = racmacs_errors$Completeness,
-      #     Algorithm = "MDS",
-      #     Scenario = scenario_name,
-      #     Fold = i
-      #   )
-      # )
+      cat(sprintf("Scenario %d out of %d \n", cc, length(sim_data$metadata$dimension)*length(matrix_variants)))
+
+      # Run RACMACS locally
+      truth_matrix <- matrix_list[[i]][[1]]
+      input_matrix <- matrix_list[[i]][[2]]
+
+      # Convert to titer format for RACMACS
+      titer_table <- dist_to_titer_table(input_matrix, base=2, tens=10)
+
+      # Run RACMACS optimization
+      map <- create_and_optimize_RACMACS_map(
+        titer_table = titer_table,
+        dim = optimal_dim,  # Use the optimal dimension
+        optimization_number = opt_params$racmacs_opt_rounds,
+        num_cores = opt_params$num_cores,
+        scenario_name = scenario_name
+      )
+
+      save.coords(map, filename = "RACMACS_coords.csv",
+                 optimization_number = 1, antigens = TRUE, sera = TRUE)
+
+      # Process RACMACS results
+      positions_racmacs <- read.csv("RACMACS_coords.csv")
+      #positions_racmacs <- na.omit(positions_racmacs)
+      count_mapped_rows <- positions_racmacs %>%
+        filter(rowSums(is.na(.)) == 0) %>%
+        nrow()
+
+      positions_racmacs <- positions_racmacs %>%
+        mutate(name = case_when(
+          type == "antigen" ~ paste0("V/", name),
+          type == "sera" ~ paste0("S/", name),
+          TRUE ~ name
+        ))
+
+      rownames(positions_racmacs) <- positions_racmacs$name
+      positions_racmacs <- positions_racmacs[,3:ncol(positions_racmacs)]
+
+      # Calculate performance metrics
+      p_dist_mat <- coordinates_to_matrix(as.matrix(positions_racmacs))
+
+      racmacs_errors <- error_calculator_comparison(
+        p_dist_mat = p_dist_mat,
+        truth_matrix = truth_matrix,
+        input_matrix = input_matrix
+      )
+
+      # Store results
+      racmacs_df <- racmacs_errors$report_df
+      racmacs_df$Dimension = optimal_dim
+      racmacs_df$Algorithm = "MDS"
+      racmacs_df$Scenario = scenario_name
+      racmacs_df$Fold <- i
+      racmacs_errors_df <- rbind(racmacs_errors_df, racmacs_df)
+
+      racmacs_Completeness <- rbind(
+        racmacs_Completeness,
+        data.table(
+          Dimension = optimal_dim,
+          Mapped = count_mapped_rows,
+          Total = nrow(truth_matrix),
+          Validation_Completeness = racmacs_errors$Completeness,
+          Algorithm = "MDS",
+          Scenario = scenario_name,
+          Fold = i
+        )
+      )
       
     }
   }
@@ -845,11 +845,11 @@ write.csv(topolow_errors_df,"Topolow_comparisondf.csv",
 write.csv(topolow_mapped_objects_df, "Topolow_mapped_objects.csv",
           row.names = FALSE)
 
-# write.csv(racmacs_errors_df,"RACMACS_comparisondf.csv",
-#           row.names = FALSE)
-# 
-# write.csv(racmacs_Completeness, "RACMACS_mapped_objects.csv",
-#           row.names = FALSE)
+write.csv(racmacs_errors_df,"RACMACS_comparisondf.csv",
+          row.names = FALSE)
+
+write.csv(racmacs_Completeness, "RACMACS_mapped_objects.csv",
+          row.names = FALSE)
 
 ```
 
@@ -964,12 +964,14 @@ all_mape_results <- all_mape_results %>% dplyr::mutate(MAPE=Mean)
 all_mape_results$Variant <- factor(all_mape_results$Variant, 
                                  levels = c("Original", "+Noise", "+Noise+Bias"))
 
+
 # Create MAPE plot
 p <- ggplot(all_mape_results, aes(x = Missing, y = MAPE, fill = Method)) +
   geom_bar(stat = "identity", position = position_dodge()) +
   geom_errorbar(aes(ymin = MAPE - SD, ymax = MAPE + SD),
                 position = position_dodge(width = 0.9), width = 0.25) +
-  facet_grid(Dimension ~ Variant) +
+  facet_grid(Dimension ~ Variant, 
+             labeller = labeller(Dimension = function(x) paste("Dim. =", x))) +
   scale_fill_manual(values = c("Topolow" = "#4dbedf", "MDS" = "#e59572")) +
   theme_minimal() +
   theme(
@@ -986,11 +988,11 @@ p <- ggplot(all_mape_results, aes(x = Missing, y = MAPE, fill = Method)) +
   ) +
   labs(
     x = "Missing Data Level",
-    y = "Validation Mean Absolute Percentage Error (±SD)"
+    y = "Validation MAPE (±SD)"
   )
 
 # Save plot
-ggsave("Method_comparison_MAPE_plot_250points_AMC102.pdf", plot = p, width = 172, height = 0.5*172, units = "mm", dpi = 300)
+ggsave("Method_comparison_MAPE_plot_250points.pdf", plot = p, width = 172, height = 0.5*172, units = "mm", dpi = 300)
 
 print(p)
 ```
@@ -1007,7 +1009,8 @@ p <- ggplot(all_mae_results, aes(x = Missing, y = MAE, fill = Method)) +
   geom_bar(stat = "identity", position = position_dodge()) +
   geom_errorbar(aes(ymin = MAE - SD, ymax = MAE + SD),
                 position = position_dodge(width = 0.9), width = 0.25) +
-  facet_grid(Dimension ~ Variant) +
+  facet_grid(Dimension ~ Variant, 
+             labeller = labeller(Dimension = function(x) paste("Dim. =", x))) +
   scale_fill_manual(values = c("Topolow" = "#4dbedf", "MDS" = "#e59572")) +
   theme_minimal() +
   theme(
@@ -1031,7 +1034,7 @@ p <- ggplot(all_mae_results, aes(x = Missing, y = MAE, fill = Method)) +
   ) +
   labs(
     x = "Missing Data Level",
-    y = "Mean Absolute Error (±SD)"
+    y = "Validation MAE (±SD)"
   )
 
 # Save with adjusted dimensions to accommodate smaller text
