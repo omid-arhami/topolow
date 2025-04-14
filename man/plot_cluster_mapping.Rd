@@ -32,6 +32,8 @@ plot_cluster_mapping(
 \item{layout_config}{Layout configuration object controlling plot dimensions and style.
 Use x_limits and y_limits in layout_config to set axis limits.}
 
+\item{annotation_config}{Annotation configuration object for labeling notable points}
+
 \item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
 
 \item{show_shape_legend}{Logical. Whether to show the shape legend (default: TRUE)}

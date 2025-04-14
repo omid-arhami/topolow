@@ -755,6 +755,7 @@ plot_temporal_mapping <- function(df, ndim,
 #' @param output_dir Character. Directory for output files. If NULL, uses current directory
 #' @param show_shape_legend Logical. Whether to show the shape legend (default: TRUE)
 #' @param cluster_legend_title Character. Custom title for the cluster legend (default: "Cluster")
+#' @param annotation_config Annotation configuration object for labeling notable points
 #' 
 #' @details
 #' The function performs these steps:
