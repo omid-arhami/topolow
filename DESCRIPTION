@@ -14,7 +14,7 @@ Description: An implementation of the TopoLow algorithm for antigenic cartograph
     * Network structure analysis
     The algorithm uses a physics-inspired approach combining spring forces and 
     repulsive interactions to find optimal point configurations.
-    Methods are described in Arhami and Rohani (2025) <doi:https://doi.org/10.1101/2025.02.09.637307>.
+    Methods are described in Arhami and Rohani (2025) <doi:10.1101/2025.02.09.637307>.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -36,7 +36,9 @@ Imports:
     lhs,
     umap,
     gridExtra,
-    scales
+    scales,
+    Rtsne,
+    knitr
 Suggests:
     covr,
     Rtsne,
@@ -45,7 +47,6 @@ Suggests:
     rmarkdown,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
-VignetteBuilder: knitr
 URL: https://github.com/omid-arhami/topolow
 BugReports: https://github.com/omid-arhami/topolow/issues
 LazyData: true

@@ -30,10 +30,10 @@ The output of all processes are provided as csv files in model_parameters direct
 You can also use the optimal parameters:
 
 optimal_params <- list(
-    N = 4,
-    k0 = 14.76214,
-    cooling_rate = 0.03641074, 
-    c_repulsion = 0.002943064
+    N = 5,
+    k0 = 6.862815,
+    cooling_rate = 0.02549249, 
+    c_repulsion = 0.01039692
   )
 
 We'll cover:
@@ -98,7 +98,7 @@ We'll first explore the parameter space using Latin Hypercube Sampling combined 
 # Define parameter ranges
 param_ranges <- list(
   N_min = 2,          # Minimum dimensions 
-  N_max = 20,         # Maximum dimensions
+  N_max = 10,         # Maximum dimensions
   k0_min = 1,         # Minimum spring constant
   k0_max = 20,        # Maximum spring constant 
   cooling_rate_min = 1e-4, # Minimum decay rate
@@ -111,16 +111,17 @@ param_ranges <- list(
 opt_params <- list(
   mapping_max_iter = 1000,    # Maximum mapping optimization iterations
   folds = 20,         # Number of CV folds
-  num_samples = 40, 
-  use_slurm = FALSE,
-  cider = FALSE
+  num_samples = 50, 
+  use_slurm = TRUE,
+  cider = FALSE,
+  write_files = TRUE # Only set TRUE on SLURM
 )
 ```
 
 
 ```{r eval=FALSE}
-scenario_name = "H3N2_2003_data_AMC12"
-samples_file = "model_parameters/H3N2_2003_data_AMC12_model_parameters.csv"
+scenario_name = "H3N2_2003_data_AMC202"
+samples_file = "model_parameters/H3N2_2003_data_AMC202_model_parameters.csv"
 
 # Record start time for timing report
 start_time <- Sys.time()
@@ -142,7 +143,7 @@ results <- initial_parameter_optimization(
   cooling_rate_max = param_ranges$cooling_rate_max,
   num_samples = opt_params$num_samples,
   folds = opt_params$folds,
-  write_files = FALSE, # Only set TRUE on SLURM
+  write_files = opt_params$write_files,
   # time = "6:00:00",
   # memory = "2G",
   # use_slurm = opt_params$use_slurm,
@@ -178,19 +179,19 @@ Using the initial results as a starting point, we'll now perform adaptive sampli
 
 ```{r eval=FALSE}
 # Transform samples (with previous code's path)
-scenario_name = "H3N2_2003_data_AMC12"
-samples_file = "model_parameters/H3N2_2003_data_AMC12_model_parameters.csv"
+scenario_name = "H3N2_2003_data_AMC201"
+samples_file = "model_parameters/H3N2_2003_data_AMC201_model_parameters.csv"
 samples <- log_transform_parameters(samples_file)
 
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_samples = 50, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
+  num_samples = 500, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
   num_parallel_jobs = parallel::detectCores()-1,  # For local execution: Number of CPU cores available (Can try parallel::detectCores() ); For SLURM: Number of jobs to submit
   mapping_max_iter = 1000, # Maximum iterations per map optimization
   relative_epsilon = 1e-4,
   folds = 20, # Number of CV folds
-  use_slurm = FALSE,
-  cider = FALSE
+  use_slurm = TRUE,
+  cider = TRUE
 )
 
 # Record start time for timing report
@@ -205,11 +206,11 @@ run_adaptive_sampling(
   scenario_name = scenario_name,
   relative_epsilon = amc_params$relative_epsilon,
   folds = amc_params$folds,
-  # time = "15:00:00",
-  # memory = "2G",
-  # use_slurm = amc_params$use_slurm,
-  # cider = amc_params$cider,
-  verbose = TRUE
+  time = "5:00:00",
+  memory = "2G",
+  use_slurm = amc_params$use_slurm,
+  cider = amc_params$cider,
+  verbose = FALSE
 )
 
 # Calculate and report total execution time
@@ -219,6 +220,7 @@ time_diff <- difftime(end_time, start_time, units = "auto")
 cat("\n AMC sampling completed in: ")
 time_diff
 ```
+
 
 ## Convergence Diagnostics
 
@@ -230,16 +232,18 @@ Let's run the previous parts twice and check if our chains have converged:
 ```{r}
 # List chain files
 chain_files <- c(
-  "model_parameters/H3N2_2003_data_AMC2_model_parameters.csv",
-  "model_parameters/H3N2_2003_data_AMC3_model_parameters.csv"
-  #"model_parameters/H3N2_2003_data_MC7_model_parameters.csv",
-  #"model_parameters/H3N2_2003_data_MC8_model_parameters.csv"
+  "model_parameters/H3N2_2003_data_AMC201_model_parameters.csv",
+  "model_parameters/H3N2_2003_data_AMC202_model_parameters.csv",
+  "model_parameters/H3N2_2003_data_AMC203_model_parameters.csv",
+  "model_parameters/H3N2_2003_data_AMC205_model_parameters.csv"
 )
+
+mutual_size = 1000  # Number of samples to use from end of chains
 
 # Calculate diagnostics
 diagnostics <- calculate_diagnostics(
   chain_files = chain_files,
-  mutual_size = 150  # Number of samples to use from end of chains
+  mutual_size = mutual_size
 )
 
 # Print results
@@ -248,8 +252,8 @@ print(diagnostics)
 # Create and display diagnostic plots
 diag_plots <- create_diagnostic_plots(
   chain_files = chain_files,
-  mutual_size = 150,
-  output_file = "output_figures/H3N2_2003_data_diagnostic_plots.png"
+  mutual_size = mutual_size,
+  output_file = "H3N2_2003_data_diagnostic_plots.png"
 )
 print(diag_plots)
 ```
@@ -269,12 +273,12 @@ samples <- samples %>%
 samples <- samples[samples$log_N >= log(2),]
 
 # Apply clean_data to all columns of the dataframe
-samples <- as.data.frame(lapply(samples, clean_data, k = 10))
+samples <- as.data.frame(lapply(samples, clean_data, k = 3))
 samples <- na.omit(samples)
-# Calculate maximum likelihood (average over top n to smooth out any outlier situation)
+# Calculate maximum likelihood (average over top n to smooth out any peculiar situation)
 samples$LL <- -samples$NLL
-top_ll <- sort(samples$LL, decreasing = TRUE)[1:5]
-max_ll <- max(top_ll) + log(sum(exp(top_ll - max(top_ll)))) - log(5)
+top_ll <- sort(samples$LL, decreasing = TRUE)[1:10]
+max_ll <- max(top_ll) + log(sum(exp(top_ll - max(top_ll)))/10)
 
 # Parameters to analyze
 params <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
@@ -284,10 +288,10 @@ for (param in params) {
   pl_result <- profile_likelihood(
     param = param,
     samples = samples,
-    grid_size = 20,
-    bandwidth_factor = 0.07,
-    start_factor = 0.3, 
-    end_factor = 1.5
+    grid_size = 65,
+    bandwidth_factor = 0.04,
+    start_factor = 0.7, 
+    end_factor = 1.3
   )
   
   # Plot results
@@ -298,18 +302,16 @@ for (param in params) {
 ```
 
 ```{r}
-source("C:/Users/LibraryUser/OneDrive - University of Georgia/code/R package/topolow1/R/adaptive_sampling.R")
-
 # Analyze parameter sensitivity
 for (param in params) {
   sensitivity <- parameter_sensitivity_analysis(
     param = param,
     samples = samples,
-    bins = 30
+    bins = 40
   )
   
   # Plot results
-  sens_plot <- plot(sensitivity, reference_error = 0.939)
+  sens_plot <- plot(sensitivity, y_limit_factor=NULL)
   #ggsave(paste0("parameter_sensitivity_", param, ".pdf"), sens_plot)
   print(sens_plot)
 }
@@ -324,19 +326,19 @@ Based on our analysis, we can extract optimal parameter values. Modes of margina
 ```{r}
 # Case 1: Modes of marginal sampling probability distributions
 
-# Calculate weighted marginals
-weighted_marginals <- calculate_weighted_marginals(samples)
-# Extract optimal parameters
-optimal_params <- list(
-  N = round(exp(find_mode(weighted_marginals[['log_N']]))),
-  k0 = exp(find_mode(weighted_marginals[['log_k0']])),
-  cooling_rate = exp(find_mode(weighted_marginals[['log_cooling_rate']])),
-  c_repulsion = exp(find_mode(weighted_marginals[['log_c_repulsion']]))
-)
+# # Calculate weighted marginals
+# weighted_marginals <- calculate_weighted_marginals(samples)
+# # Extract optimal parameters
+# optimal_params <- list(
+#   N = round(exp(find_mode(weighted_marginals[['log_N']]))),
+#   k0 = exp(find_mode(weighted_marginals[['log_k0']])),
+#   cooling_rate = exp(find_mode(weighted_marginals[['log_cooling_rate']])),
+#   c_repulsion = exp(find_mode(weighted_marginals[['log_c_repulsion']]))
+# )
 
 # Case 2: Parameters with the maximum likelihood 
 
-best_params <- samples[which.min(samples$NLL),]
+best_params <- samples[which.min(samples$Holdout_MAE),]
 optimal_params <- list(
   N = round(exp(as.numeric(best_params$log_N))),
   k0 = exp(as.numeric(best_params$log_k0)),
@@ -355,11 +357,14 @@ Finally, let's validate our optimal parameters:
 (The internal variable convergence_error is the objective of the algorithm. It is slightly different from MAE. MAE is calculated between the predicted distances and measured distances in the assays wherever the measurement is reported as an exact number. However, convergence_error adds the thresholded measurements, only when the fitted distance does not satisfy the inequality.)
 
 ```{r}
+# Record start time for timing report
+start_time <- Sys.time()
+
 # Run topolow with optimal parameters
 result <- create_topolow_map(
   distance_matrix = h3n2_distance_matrix,
   ndim = optimal_params$N,
-  mapping_max_iter = 3000,
+  mapping_max_iter = 1000,
   k0 = optimal_params$k0,
   cooling_rate = optimal_params$cooling_rate,
   c_repulsion = optimal_params$c_repulsion,
@@ -367,6 +372,13 @@ result <- create_topolow_map(
   convergence_counter = 5,
   verbose = TRUE
 )
+
+# Calculate and report total execution time
+end_time <- Sys.time()
+time_diff <- difftime(end_time, start_time, units = "auto")
+
+cat("\n Mapping completed in: ")
+time_diff
 
 # Print performance metrics
 cat("MAE:", round(result$mae, 4), "\n")
@@ -425,7 +437,7 @@ aesthetic_config <- new_aesthetic_config(
 
 # To mirror the maps to make them comparable with other maps set the reverse parameter to -1
 layout_config <- new_layout_config(
-  save_format = "png",
+  save_format = "pdf",
   reverse_x = -1,  # Reverse x-axis
   reverse_y = -1   # Reverse y-axis
 )
