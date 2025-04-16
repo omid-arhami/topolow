@@ -70,17 +70,18 @@ V/2 at (0, 4)
 
 The pairwise Euclidean distances between these points are computed as follows:
 
-\( d(S/1,S/2) = \sqrt{(3-0)^2 + (0-0)^2} = \sqrt{9 + 0} = \sqrt{9} = 3. \)
+<!-- For inline equations, use single $ -->
+$d(S/1,S/2) = \sqrt{(3-0)^2 + (0-0)^2} = \sqrt{9 + 0} = \sqrt{9} = 3.$
 
-\( d(S/1,V/1) = \sqrt{(2-0)^2 + (2-0)^2} = \sqrt{4 + 4} = \sqrt{8} = 2\sqrt{2} \approx 2.828. \)
+$d(S/1,V/1) = \sqrt{(2-0)^2 + (2-0)^2} = \sqrt{4 + 4} = \sqrt{8} = 2\sqrt{2} \approx 2.828.$
 
-\( d(S/1,V/2) = \sqrt{(0-0)^2 + (4-0)^2} = \sqrt{0 + 16} = \sqrt{16} = 4. \)
+$d(S/1,V/2) = \sqrt{(0-0)^2 + (4-0)^2} = \sqrt{0 + 16} = \sqrt{16} = 4.$
 
-\( d(S/2,V/1) = \sqrt{(2-3)^2 + (2-0)^2} = \sqrt{1 + 4} = \sqrt{5} \approx 2.236. \)
+$d(S/2,V/1) = \sqrt{(2-3)^2 + (2-0)^2} = \sqrt{1 + 4} = \sqrt{5} \approx 2.236.$
 
-\( d(S/2,V/2) = \sqrt{(0-3)^2 + (4-0)^2} = \sqrt{9 + 16} = \sqrt{25} = 5. \)
+$d(S/2,V/2) = \sqrt{(0-3)^2 + (4-0)^2} = \sqrt{9 + 16} = \sqrt{25} = 5.$
 
-\( d(V/1,V/2) = \sqrt{(0-2)^2 + (4-2)^2} = \sqrt{4 + 4} = \sqrt{8} = 2\sqrt{2} \approx 2.828. \)
+$d(V/1,V/2) = \sqrt{(0-2)^2 + (4-2)^2} = \sqrt{4 + 4} = \sqrt{8} = 2\sqrt{2} \approx 2.828.$
 
 
 Imagine we have measured the distances of V/1 against S/1 and S/2, and V/2 against S/1 and S/2. We use Topolow to find the distance between V/1 and V/2 which is missing in the distance matrix (dist_mat in code below). From the analytical calculations we expect d(V/1,V/2) = 2.828. 
