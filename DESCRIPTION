@@ -37,13 +37,12 @@ Imports:
     umap,
     gridExtra,
     scales,
-    Rtsne,
-    knitr
+    Rtsne
 Suggests:
     covr,
-    Rtsne,
-    rgl (>= 1.0.0),
+    ggrepel,
     knitr,
+    rgl (>= 1.0.0),
     rmarkdown,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3

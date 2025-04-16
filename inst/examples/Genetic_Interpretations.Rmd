@@ -63,23 +63,13 @@ library(dplyr)
 
 ## Load Antigenic Map Positions from Topolow
 
-```{r load-positions}
-# Read positions data from the example_positions.csv file
-positions <- read.csv("data_files/topolow_H3N2_positions.csv")
-
-# Display the structure of the data frame
-str(positions)
-
-# Look at the first few rows
-head(positions)
-
-# Get summary statistics
-summary(positions)
-```
 
 ## Clustering Data Points Based on Coordinates
 
 ```{r determine-clusters}
+# Read positions data from the example_positions.csv file
+positions <- read.csv("data_files/topolow_H3N2_positions.csv")
+
 # Extract coordinate columns (V1 to V5)
 coord_data <- positions[, paste0("V", 1:4)]
 
@@ -167,15 +157,6 @@ plots_dir <- "plots"
 if (!dir.exists(plots_dir)) {
   dir.create(plots_dir, recursive = TRUE)
 }
-
-# Save plot with consistent parameters
-save_plot(
-  file.path(plots_dir, "topolow_kmeans_clusters.pdf"),
-  topolow_cluster_plot,
-  base_width = layout_config$width,
-  base_height = layout_config$height
-)
-
 ```
 
 ## Finding and Processing Amino Acid Sequences
@@ -188,50 +169,36 @@ calc_length <- function(seq) {
   nchar(gsub("[- ]", "", seq))
 }
 
-#' Process and Clean Sequence Data from StringSet
-#'
-#' @description
-#' Cleans and processes DNA or protein sequence data from a Biostrings StringSet object.
-#' Parses FASTA headers, standardizes naming, extracts metadata, and selects the most
-#' complete sequence for each strain.
-#'
-#' @param seq_set A Biostrings StringSet object (DNAStringSet or AAStringSet)
-#' @return A data frame with columns:
-#'   \item{sequence}{Character string of the sequence}
-#'   \item{FASTA_Name}{Original FASTA header}
-#'   \item{Accession}{Extracted accession number}
-#'   \item{name}{Cleaned strain name}
-#'   \item{date}{Date information}
-#'   \item{year}{Extracted or derived year}
-#'   \item{gene}{Gene information if available}
-#'
-#' @details
-#' This function processes sequence data by:
-#' 1. Converting StringSet to a data frame
-#' 2. Cleaning FASTA headers and parsing components
-#' 3. Standardizing strain names
-#' 4. Extracting and normalizing dates and years
-#' 5. Identifying genes
-#' 6. Selecting the most complete sequence for each strain
-#'
-#' The function expects FASTA headers in a format like:
-#' >ID|Accession|StrainName|Date|Gene
-#' but handles variations in this format flexibly.
-#'
-#' @examples
-#' \dontrun{
-#' # For DNA sequences
-#' library(Biostrings)
-#' dna_set <- readDNAStringSet("sequences.fasta")
-#' cleaned_data <- cleaner_sequences(dna_set)
-#'
-#' # For protein sequences
-#' aa_set <- readAAStringSet("proteins.fasta")
-#' cleaned_data <- cleaner_sequences(aa_set)
-#' }
-#'
-#' @importFrom dplyr %>% group_by filter slice ungroup select
-#' @export
+# Process and Clean Sequence Data from StringSet
+
+# description:
+# Cleans and processes DNA or protein sequence data from a Biostrings StringSet object.
+# Parses FASTA headers, standardizes naming, extracts metadata, and selects the most
+# complete sequence for each strain.
+
+# @param seq_set A Biostrings StringSet object (DNAStringSet or AAStringSet)
+# @return A data frame with columns:
+#   \item{sequence}{Character string of the sequence}
+#   \item{FASTA_Name}{Original FASTA header}
+#   \item{Accession}{Extracted accession number}
+#   \item{name}{Cleaned strain name}
+#   \item{date}{Date information}
+#   \item{year}{Extracted or derived year}
+#   \item{gene}{Gene information if available}
+
+# details:
+# This function processes sequence data by:
+# 1. Converting StringSet to a data frame
+# 2. Cleaning FASTA headers and parsing components
+# 3. Standardizing strain names
+# 4. Extracting and normalizing dates and years
+# 5. Identifying genes
+# 6. Selecting the most complete sequence for each strain
+
+# The function expects FASTA headers in a format like:
+# >ID|Accession|StrainName|Date|Gene
+# but handles variations in this format flexibly.
+
 cleaner_sequences <- function(seq_set) {
   # Function to calculate sequence length ignoring gaps and spaces
   calc_length <- function(seq) {
@@ -331,95 +298,31 @@ find_matches <- function(pattern, names) {
 
 Now, let us try to find amino acid sequences for the strains in our positions data. 
 
-Note: This part assumes you have amino acid sequence files available. If not, you will need to obtain them from public databases like NCBI or GISAID.
+Note: This part assumes you have amino acid sequence files available. If not, you will need to obtain them from public databases like NCBI or GISAID. We have aligned the AA sequences using an external
+program like MAFFT or MUSCLE.
 
-```{r find-sequences}
-seq_set <- readAAStringSet("unaligned_AA_seq.fasta")
-# Process sequences
-aa_df <- cleaner_sequences(seq_set)
-
-# Only keep HA sequences:
-aa_df <- aa_df[aa_df$gene=="HA",]
-
-# Extract strain names from antigens in positions data
-antigens <- positions[positions$antigen==TRUE,]
-
-strain_names <- antigens$name
-strain_names <- gsub("^(V/|S/)", "", strain_names)  # Remove V/ or S/ prefix
-strain_names <- toupper(strain_names)
-
-# Find sequences that match strains in antigens data
-matched_sequences <- data.frame(
-  FASTA_Name = character(),
-  name = character(),
-  sequence = character(),
-  stringsAsFactors = FALSE
-)
-
-for (strain in strain_names) {
-  # Clean strain name
-  clean_strain <- gsub("[-_\\\\]+", "", strain)
-  
-  # Find matching sequence
-  idx <- which(aa_df$name == clean_strain)
-  
-  if (length(idx) > 0) {
-    matched_sequences <- rbind(
-      matched_sequences,
-      data.frame(
-        FASTA_Name = aa_df$FASTA_Name[idx[1]],
-        name = strain,
-        sequence = aa_df$sequence[idx[1]],
-        stringsAsFactors = FALSE
-      )
-    )
-  }
-}
-
-# Save matched sequences to file
-#write.csv(matched_sequences, "data_files/matched_sequences.csv", row.names = FALSE)
-
-# Create a StringSet for alignment
-matched_aa <- AAStringSet(matched_sequences$sequence)
-names(matched_aa) <- matched_sequences$name
-
-# Save unaligned sequences to FASTA
-writeXStringSet(matched_aa, "data_files/unaligned_matched_sequences.fasta", format = "fasta")
-
-# Note: At this point, you would typically align the sequences using an external
-# program like MAFFT or MUSCLE. After alignment, you would read the aligned sequences back.
-```
 
 ## Calculating Distance Matrices
 
 For this example, I will create placeholder distance matrices. In practice, you would calculate these from actual aligned sequences and coordinate data.
 
 ```{r calculate-distances}
-#' Calculate Amino Acid Distances from Aligned Sequences
+# Calculate Amino Acid Distances from Aligned Sequences
+
+# @description
+# Calculates pairwise distances between aligned amino acid sequences based on
+# the proportion of different amino acids at homologous positions, ignoring gaps.
 #'
-#' @description
-#' Calculates pairwise distances between aligned amino acid sequences based on
-#' the proportion of different amino acids at homologous positions, ignoring gaps.
-#'
-#' @param aligned_sequences An AAStringSet or DNAStringSet object containing aligned sequences
-#' @return A symmetric matrix of pairwise distances between sequences
-#'
-#' @details
-#' The function:
-#' 1. Takes aligned sequences (must be of equal length)
-#' 2. For each pair, considers only positions where neither sequence has a gap
-#' 3. Calculates the proportion of mismatched amino acids as the distance
-#' 4. Returns a symmetric matrix with sequence names as row/column names
-#'
-#' @examples
-#' \dontrun{
-#' library(Biostrings)
-#' aligned_aa <- readAAStringSet("aligned_sequences.fasta")
-#' dist_matrix <- calculate_aa_distances(aligned_sequences = aligned_aa)
-#' }
-#'
-#' @importFrom Biostrings AAStringSet DNAStringSet
-#' @export
+# @param aligned_sequences An AAStringSet or DNAStringSet object containing aligned sequences
+# @return A symmetric matrix of pairwise distances between sequences
+
+# @details
+# The function:
+# 1. Takes aligned sequences (must be of equal length)
+# 2. For each pair, considers only positions where neither sequence has a gap
+# 3. Calculates the proportion of mismatched amino acids as the distance
+# 4. Returns a symmetric matrix with sequence names as row/column names
+
 calculate_aa_distances <- function(aligned_sequences) {
   n <- length(aligned_sequences)
   dist_matrix <- matrix(0, n, n)
@@ -465,137 +368,27 @@ aligned_aa <- readAAStringSet("data_files/matched_sequences alignment.fasta")
 aa_dist_matrix <- calculate_aa_distances(aligned_sequences=aligned_aa)
 
 # 2. Calculate antigenic distances from Topolow coordinates
+# Extract strain names from antigens in positions data
+antigens <- positions[positions$antigen==TRUE,]
+
+strain_names <- antigens$name
+strain_names <- gsub("^(V/|S/)", "", strain_names)  # Remove V/ or S/ prefix
+strain_names <- toupper(strain_names)
+
 topolow_antigenic_dist <- as.matrix(dist(antigens[, paste0("V", 1:5)]))
 rownames(topolow_antigenic_dist) <- toupper(antigens$name)
 colnames(topolow_antigenic_dist) <- toupper(antigens$name)
 
 # 3. Load RACMACS coordinates 
+# Use 2D to create RACMACS maps because: 
+# 1- its clusters have been determined in 2D results in the literature, 
+# 2- We need to be sure that all antigens are present on the map
 racmacs_coords <- read.csv("data_files/racmacs_H3N2_coords.csv")
 racmacs_coords <- racmacs_coords[racmacs_coords$type=="antigen",]
 # Calculate antigenic distances from RACMACS coordinates
 racmacs_antigenic_dist <- as.matrix(dist(racmacs_coords[, c("X", "X.1")]))
 rownames(racmacs_antigenic_dist) <- toupper(racmacs_coords$name)
 colnames(racmacs_antigenic_dist) <- toupper(racmacs_coords$name)
-```
-
-## Comparing Antigenic and Genetic Distances
-
-Now let us create scatter plots to compare antigenic distances (from both methods) with genetic distances.
-
-```{r compare-distances}
-# Convert distance matrices to long format for plotting
-create_comparison_data <- function(antigen_dist, aa_dist, method_name) {
-  # Ensure matrix dimensions match
-  shared_names <- intersect(rownames(antigen_dist), rownames(aa_dist))
-  
-  antigen_dist <- antigen_dist[shared_names, shared_names]
-  aa_dist <- aa_dist[shared_names, shared_names]
-  
-  # Convert to long format
-  comparison_data <- data.frame(
-    Strain1 = character(),
-    Strain2 = character(),
-    Antigenic = numeric(),
-    Genetic = numeric(),
-    Method = character(),
-    stringsAsFactors = FALSE
-  )
-  
-  for (i in 1:(length(shared_names)-1)) {
-    for (j in (i+1):length(shared_names)) {
-      comparison_data <- rbind(
-        comparison_data,
-        data.frame(
-          Strain1 = shared_names[i],
-          Strain2 = shared_names[j],
-          Antigenic = antigen_dist[shared_names[i], shared_names[j]],
-          Genetic = aa_dist[shared_names[i], shared_names[j]],
-          Method = method_name,
-          stringsAsFactors = FALSE
-        )
-      )
-    }
-  }
-  
-  return(comparison_data)
-}
-
-# Create comparison data for both methods
-topolow_comparison <- create_comparison_data(
-  antigen_dist = topolow_antigenic_dist, 
-  aa_dist = aa_dist_matrix, 
-  method_name = "Topolow"
-)
-
-racmacs_comparison <- create_comparison_data(
-  racmacs_antigenic_dist, 
-  aa_dist_matrix, 
-  "RACMACS"
-)
-
-# Combine data for plotting
-all_comparison <- rbind(topolow_comparison, racmacs_comparison)
-
-# Plot for Topolow
-topolow_plot <- ggplot(topolow_comparison, aes(x = Genetic, y = Antigenic)) +
-  geom_point(alpha = 0.6, color = "steelblue") +
-  geom_smooth(method = "lm", color = "red", se = TRUE) +
-  labs(
-    title = "Topolow: Antigenic vs. Genetic Distance",
-    x = "Genetic Distance (Amino Acid Differences)",
-    y = "Antigenic Distance"
-  ) +
-  annotate(
-    "text", x = Inf, y = -Inf, hjust = 1.1, vjust = -0.5,
-    label = paste("Correlation:", round(cor(topolow_comparison$Genetic, topolow_comparison$Antigenic), 3))
-  ) +
-  theme_minimal() +
-  theme(
-    panel.border = element_rect(color = "black", fill = NA),
-    panel.grid.minor = element_blank()
-  )
-
-# Plot for RACMACS
-racmacs_plot <- ggplot(racmacs_comparison, aes(x = Genetic, y = Antigenic)) +
-  geom_point(alpha = 0.6, color = "darkgreen") +
-  geom_smooth(method = "lm", color = "red", se = TRUE) +
-  labs(
-    title = "RACMACS: Antigenic vs. Genetic Distance",
-    x = "Genetic Distance (Amino Acid Differences)",
-    y = "Antigenic Distance"
-  ) +
-  annotate(
-    "text", x = Inf, y = -Inf, hjust = 1.1, vjust = -0.5,
-    label = paste("Correlation:", round(cor(racmacs_comparison$Genetic, racmacs_comparison$Antigenic), 3))
-  ) +
-  theme_minimal() +
-  theme(
-    panel.border = element_rect(color = "black", fill = NA),
-    panel.grid.minor = element_blank()
-  )
-
-# Display plots
-print(topolow_plot)
-print(racmacs_plot)
-
-# Combined plot with both methods
-combined_plot <- ggplot(all_comparison, aes(x = Genetic, y = Antigenic, color = Method)) +
-  geom_point(alpha = 0.6) +
-  geom_smooth(method = "lm", se = TRUE) +
-  labs(
-    title = "Comparison of Methods: Antigenic vs. Genetic Distance",
-    x = "Genetic Distance (Amino Acid Differences)",
-    y = "Antigenic Distance"
-  ) +
-  scale_color_manual(values = c("RACMACS" = "darkgreen", "Topolow" = "steelblue")) +
-  theme_minimal() +
-  theme(
-    panel.border = element_rect(color = "black", fill = NA),
-    panel.grid.minor = element_blank(),
-    legend.position = "bottom"
-  )
-
-print(combined_plot)
 ```
 
 ## Important Amino Acid Changes by Cluster
@@ -781,7 +574,6 @@ all_HA_positions <- 1:567
 all_literature_positions <- unique(c(antigenic_sites_positions,
                                    receptor_binding_sites_positions))
 
-
 # Function to determine the correct position offset
 determine_position_offset <- function(aligned_aa, cluster_data, all_literature_positions) {
   # Extract sequence data as character matrix
@@ -850,165 +642,6 @@ cat("Original top positions:", paste(offset_results$top_positions, collapse=", "
 cat("Adjusted positions:", paste(offset_results$adjusted_positions, collapse=", "), "\n")
 cat("Matching literature positions:", paste(offset_results$matches, collapse=", "), "\n")
 
-# Re-run the important AA changes analysis with the offset correction
-find_important_aa_changes_with_offset <- function(aligned_aa, cluster_data, offset) {
-  # This follows the same logic as the original function but adds the offset to position numbers
-  # Extract sequence data as character matrix
-  seq_data <- as.character(aligned_aa)
-  seq_matrix <- do.call(rbind, strsplit(seq_data, ""))
-  
-  # Assign row names to match the sequence names
-  rownames(seq_matrix) <- names(aligned_aa)
-  
-  # Store mutual information for each position
-  n_positions <- ncol(seq_matrix)
-  position_mi <- numeric(n_positions)
-  
-  # Match sequence names with cluster data
-  matched_indices <- match(toupper(rownames(seq_matrix)), toupper(names(cluster_data)))
-  matched_clusters <- cluster_data[matched_indices]
-  matched_clusters <- matched_clusters[!is.na(matched_clusters)]
-  
-  # Filter sequence matrix to only include rows with matching clusters
-  seq_matrix <- seq_matrix[!is.na(matched_indices),]
-  
-  # Calculate mutual information for each position
-  for (pos in 1:n_positions) {
-    position_aas <- seq_matrix[, pos]
-    # Skip positions that are 100% gaps
-    if (all(position_aas == "-")) {
-      position_mi[pos] <- 0
-      next
-    }
-    position_mi[pos] <- calculate_position_mi(position_aas, matched_clusters)
-  }
-  
-  # Identify top positions by mutual information
-  top_positions <- order(position_mi, decreasing = TRUE)[1:min(50, n_positions)]
-  
-  # Identify specific amino acid changes at important positions
-  aa_changes <- data.frame(
-    AlignPos = integer(),
-    Position = integer(),
-    Change = character(),
-    MutualInfo = numeric(),
-    Clusters = character(),
-    InLiterature = logical(),
-    stringsAsFactors = FALSE
-  )
-  
-  for (pos in top_positions) {
-    if (position_mi[pos] <= 0) next
-    
-    # Apply the offset to get the corrected position
-    corrected_pos <- pos + offset
-    
-    # Check if this position is in the literature
-    in_literature <- corrected_pos %in% all_literature_positions
-    
-    # Get amino acids at this position
-    pos_data <- data.frame(
-      AA = seq_matrix[, pos],
-      Cluster = matched_clusters,
-      stringsAsFactors = FALSE
-    )
-    
-    # Find dominant amino acids per cluster
-    cluster_dominant_aa <- aggregate(AA ~ Cluster, data = pos_data, 
-                                    FUN = function(x) names(sort(table(x), decreasing = TRUE)[1]))
-    
-    # Skip if fewer than 2 distinct amino acids across clusters (excluding gaps)
-    distinct_aas <- unique(cluster_dominant_aa$AA)
-    distinct_aas <- distinct_aas[distinct_aas != "-"]
-    if (length(distinct_aas) < 2) next
-    
-    # Create pairwise combinations of amino acids at this position
-    aa_pairs <- combn(cluster_dominant_aa$AA, 2)
-    for (i in 1:ncol(aa_pairs)) {
-      aa1 <- aa_pairs[1, i]
-      aa2 <- aa_pairs[2, i]
-      
-      # Skip if both are gaps or identical
-      if (aa1 == "-" && aa2 == "-") next
-      if (aa1 == aa2) next
-      
-      # Identify which clusters have these amino acids
-      clusters_aa1 <- cluster_dominant_aa$Cluster[cluster_dominant_aa$AA == aa1]
-      clusters_aa2 <- cluster_dominant_aa$Cluster[cluster_dominant_aa$AA == aa2]
-      
-      if (length(clusters_aa1) > 0 && length(clusters_aa2) > 0) {
-        # Record this change
-        aa_changes <- rbind(aa_changes, data.frame(
-          AlignPos = pos,
-          Position = corrected_pos,
-          Change = paste0(corrected_pos, aa1, aa2),
-          MutualInfo = position_mi[pos],
-          Clusters = paste(paste(clusters_aa1, collapse=","), "vs", 
-                          paste(clusters_aa2, collapse=",")),
-          InLiterature = in_literature,
-          stringsAsFactors = FALSE
-        ))
-      }
-    }
-  }
-  
-  # Sort by mutual information and return top changes
-  aa_changes <- aa_changes[order(aa_changes$MutualInfo, decreasing = TRUE),]
-  return(aa_changes)
-}
-
-# Find important amino acid changes with the offset
-important_changes_corrected <- find_important_aa_changes_with_offset(
-  aligned_aa, 
-  cluster_data, 
-  offset_results$best_offset
-)
-
-# Display top 20 important changes with corrected positions
-top_changes <- head(important_changes_corrected, 500)
-
-# Create a more readable table for display
-kable_table <- data.frame(
-  AlignPosition = top_changes$AlignPos,
-  CorrectedPosition = top_changes$Position,
-  Change = top_changes$Change,
-  MutualInfo = round(top_changes$MutualInfo, 4),
-  ClusterComparison = top_changes$Clusters,
-  InLiterature = top_changes$InLiterature
-)
-
-# Format table
-library(knitr)
-kable(kable_table, caption = "Top 20 Amino Acid Changes Discriminating Between Clusters (With Position Correction)")
-
-# Create a visualization highlighting positions found in literature
-if (nrow(important_changes_corrected) > 0) {
-  # Prepare data for plotting
-  plot_data <- data.frame(
-    Position = important_changes_corrected$Position,
-    MutualInfo = important_changes_corrected$MutualInfo,
-    InLiterature = important_changes_corrected$InLiterature
-  )
-  
-  # Create plot
-  position_plot <- ggplot(plot_data, aes(x = Position, y = MutualInfo, fill = InLiterature)) +
-    geom_bar(stat = "identity") +
-    scale_fill_manual(values = c("gray", "steelblue"), 
-                     labels = c("New Position", "Known in Literature")) +
-    theme_minimal() +
-    labs(
-      title = "Important Amino Acid Positions for Cluster Discrimination",
-      x = "Corrected Sequence Position",
-      y = "Mutual Information",
-      fill = "Position Status"
-    ) +
-    theme(
-      plot.title = element_text(size = 14, face = "bold"),
-      axis.text.x = element_text(angle = 45, hjust = 1)
-    )
-  
-  print(position_plot)
-}
 ```
 
 ## Discrimination power of important sites re Topolow clustering and Smith clusters
@@ -1118,10 +751,9 @@ kable(head(comparison_table, 20),
 
 sum(comparison_table$TopoLow_All_MI - comparison_table$Cluster_All_MI)
 
+
 # Create a visualization comparing the discrimination power
 # Reshape data for plotting
-# If you have tidyr installed, this is a more modern approach
-library(tidyr)
 
 subset_data <- comparison_table[comparison_table$TopoLow_All_MI > 0.05, 
                                c("Position", "Cluster_All_MI", "TopoLow_All_MI")]

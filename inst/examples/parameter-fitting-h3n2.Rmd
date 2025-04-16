@@ -109,19 +109,19 @@ param_ranges <- list(
 
 # Setup optimization parameters
 opt_params <- list(
-  mapping_max_iter = 1000,    # Maximum mapping optimization iterations
+  mapping_max_iter = 500,    # Maximum mapping optimization iterations
   folds = 20,         # Number of CV folds
-  num_samples = 50, 
-  use_slurm = TRUE,
+  num_samples = 5, 
+  use_slurm = FALSE,
   cider = FALSE,
-  write_files = TRUE # Only set TRUE on SLURM
+  write_files = FALSE # Only set TRUE on SLURM
 )
 ```
 
 
 ```{r eval=FALSE}
-scenario_name = "H3N2_2003_data_AMC202"
-samples_file = "model_parameters/H3N2_2003_data_AMC202_model_parameters.csv"
+scenario_name = "H3N2_2003_data_AMC01"
+samples_file = "model_parameters/H3N2_2003_data_AMC01_model_parameters.csv"
 
 # Record start time for timing report
 start_time <- Sys.time()
@@ -158,8 +158,9 @@ time_diff <- difftime(end_time, start_time, units = "auto")
 cat("\n Initial LHS CV sampling completed in: ")
 time_diff
 
-write.csv(results, samples_file, row.names=FALSE)
-
+if(!opt_params$use_slurm){
+  write.csv(results, samples_file, row.names=FALSE)
+}
 ```
 
 ## Aggregate the results
@@ -179,19 +180,19 @@ Using the initial results as a starting point, we'll now perform adaptive sampli
 
 ```{r eval=FALSE}
 # Transform samples (with previous code's path)
-scenario_name = "H3N2_2003_data_AMC201"
-samples_file = "model_parameters/H3N2_2003_data_AMC201_model_parameters.csv"
+scenario_name = "H3N2_2003_data_AMC01"
+samples_file = "model_parameters/H3N2_2003_data_AMC01_model_parameters.csv"
 samples <- log_transform_parameters(samples_file)
 
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_samples = 500, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
+  num_samples = 5, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
   num_parallel_jobs = parallel::detectCores()-1,  # For local execution: Number of CPU cores available (Can try parallel::detectCores() ); For SLURM: Number of jobs to submit
-  mapping_max_iter = 1000, # Maximum iterations per map optimization
+  mapping_max_iter = 500, # Maximum iterations per map optimization
   relative_epsilon = 1e-4,
   folds = 20, # Number of CV folds
-  use_slurm = TRUE,
-  cider = TRUE
+  use_slurm = FALSE,
+  cider = FALSE
 )
 
 # Record start time for timing report
@@ -206,11 +207,11 @@ run_adaptive_sampling(
   scenario_name = scenario_name,
   relative_epsilon = amc_params$relative_epsilon,
   folds = amc_params$folds,
-  time = "5:00:00",
+  time = "2:00:00",
   memory = "2G",
   use_slurm = amc_params$use_slurm,
   cider = amc_params$cider,
-  verbose = FALSE
+  verbose = TRUE
 )
 
 # Calculate and report total execution time
@@ -324,20 +325,6 @@ Based on our analysis, we can extract optimal parameter values. Modes of margina
 (If the Profile Likelihood surfaces are too ragged and the optimal point appeared as a sharp peak, choosing the parameters with the maximum likelihood is a better approach than using the mode.)
 
 ```{r}
-# Case 1: Modes of marginal sampling probability distributions
-
-# # Calculate weighted marginals
-# weighted_marginals <- calculate_weighted_marginals(samples)
-# # Extract optimal parameters
-# optimal_params <- list(
-#   N = round(exp(find_mode(weighted_marginals[['log_N']]))),
-#   k0 = exp(find_mode(weighted_marginals[['log_k0']])),
-#   cooling_rate = exp(find_mode(weighted_marginals[['log_cooling_rate']])),
-#   c_repulsion = exp(find_mode(weighted_marginals[['log_c_repulsion']]))
-# )
-
-# Case 2: Parameters with the maximum likelihood 
-
 best_params <- samples[which.min(samples$Holdout_MAE),]
 optimal_params <- list(
   N = round(exp(as.numeric(best_params$log_N))),
@@ -349,6 +336,7 @@ optimal_params <- list(
 # Print optimal parameters
 print(optimal_params)
 ```
+
 
 ## Validation Run
 
@@ -364,12 +352,13 @@ start_time <- Sys.time()
 result <- create_topolow_map(
   distance_matrix = h3n2_distance_matrix,
   ndim = optimal_params$N,
-  mapping_max_iter = 1000,
+  mapping_max_iter = 500,
   k0 = optimal_params$k0,
   cooling_rate = optimal_params$cooling_rate,
   c_repulsion = optimal_params$c_repulsion,
   relative_epsilon = 1e-10,
   convergence_counter = 5,
+  write_positions_to_csv = FALSE,
   verbose = TRUE
 )
 
@@ -412,7 +401,7 @@ positions <- positions %>%
 # Remove any rows that didn't get metadata matched
 positions <- na.omit(positions)
 
-#write.csv(positions, "../data-raw/example_positions.csv", row.names=FALSE)
+#write.csv(positions, "data_files/H3N2_Positions.csv", row.names=FALSE)
 ```
 
 ## The resulting map

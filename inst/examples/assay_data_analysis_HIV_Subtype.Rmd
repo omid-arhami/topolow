@@ -14,7 +14,7 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
   fig.width = 8,
-  fig.height = 6,
+  #fig.height = 16,
   warning = TRUE,
  message = TRUE,    # Show messages
   error = TRUE      # Continue on error
@@ -23,36 +23,26 @@ knitr::opts_chunk$set(
 
 ## Introduction
 
-This vignette demonstrates how to analyze HIV neutralization data, as a sample antigenic assay, using the topolow package. We'll cover:
+This vignette demonstrates how to use the topolow package to analyze HIV neutralization assay data as a real-world example of antigenic cartography. We'll perform a comprehensive analysis workflow including:
 
-* Loading and preprocessing IC50 data for HIV subtypes "B" and "C"
-* Analyzing coverage patterns across years 
-* Selecting representative virus panels
-* Optimizing topolow parameters using Latin Hypercube Sampling (LHS)
-* Running Adaptive Monte Carlo (AMC) sampling
-* Analyzing convergence and profile likelihood
-* Creating antigenic maps
+* Loading and preprocessing IC50 neutralization data for HIV subtypes "B" and "C"
+* Cleaning outliers using robust median absolute deviation (MAD) methods
+* Analyzing measurement coverage and connectivity patterns
+* Selecting representative virus panels with good measurement coverage
+* Optimizing topolow parameters using Latin Hypercube Sampling (LHS) with cross-validation
+* Refining parameter estimates using Adaptive Monte Carlo (AMC) sampling
+* Assessing convergence and parameter sensitivity through profile likelihood analysis
+* Creating antigenic maps with cluster, temporal, and geographic visualizations
+* Annotating significant viral strains and creating interactive visualizations
 
-To find the optimal parameters of Topolow, you can either run sufficient number of Monte Carlo simulations in the corresponding secttion in this file, or use the results of simulations we have provided on Github (the csv files used in this script), or use the optimal parameters provided below:
+The vignette provides both code to perform these analyses from scratch as well as pre-computed results. If you don't want to run the computationally intensive parameter optimization sections, you can use the provided optimal parameters:
 
-optimal_params <- list(
+roptimal_params <- list(
     N = 2,
-    k0 = 3.550036,
-    cooling_rate = 0.04130713, 
-    c_repulsion = 0.0007038619
-  )
-
-$N
-[1] 2
-
-$k0
-[1] 8.358897
-
-$cooling_rate
-[1] 0.03522593
-
-$c_repulsion
-[1] 0.02885818
+    k0 = 8.20368,
+    cooling_rate = 0.03099211, 
+    c_repulsion = 0.01944336
+)
 
 ## Required Packages
 
@@ -176,32 +166,32 @@ coverage_stats <- hiv_long %>%
 summary(coverage_stats$n_measurements)
 ```
 
-
+Make sure the data is connected (there are not isolated islands with no links between them.)
 ```{r}
 # Prepare matrix for visualization
-# heatmap_data <- prepare_heatmap_data(hiv_distance_matrix, cluster_rows = FALSE)
-# 
-# # Plot heatmap
-# plot_distance_heatmap(heatmap_data, "hiv_panel")
-# 
-# # Analyze and visualize network structure
-# net_results <- analyze_network_structure(hiv_distance_matrix)
-# plot_network_structure(net_results, "hiv_network")
+heatmap_data <- prepare_heatmap_data(hiv_distance_matrix, cluster_rows = FALSE)
+
+# Plot heatmap
+plot_distance_heatmap(heatmap_data, "hiv_panel")
+
+# Analyze and visualize network structure
+net_results <- analyze_network_structure(hiv_distance_matrix)
+plot_network_structure(net_results, "hiv_network")
 
 ```
 
 
 ### Selecting Representative Virus Panels 
 
-To create reliable antigenic maps, we want to select viruses with good measurement coverage. Considering the large size of this dataset, and its median, we decide to choose top N viruses and antibodies in each year with at least 10 measurements. Let's analyze how different cutoffs (N) for minimum measurements affect our dataset:
+To create reliable antigenic maps, we want to select viruses with good measurement coverage. Considering the large size of this dataset, and its median, we decide to choose top N viruses and antibodies in each year with at least 5 measurements. Let's analyze how different cutoffs (N) for minimum measurements affect our dataset:
 
-The threshold for the minimum number of measurements per point must be greater than the dimensionality of the data. For example here, our initial estimates show that this data needs 2 to 6 dimensions, so, we define 5 measurements or less as insufficient.
+The threshold for the minimum number of measurements per point must be greater than the dimensionality of the data. For example here, our initial estimates show that this data may need 2 to 6 dimensions, so, we define 5 measurements or less as insufficient.
 
 ```{r}
 insufficient_thresh <- 5
 
 # Function to analyze panel composition at different cutoffs
-analyze_panel_sizes <- function(data, max_cutoff = 30) {
+analyze_panel_sizes <- function(data, max_cutoff = 20) {
   cutoff_stats <- list()
   
   for(i in 1:max_cutoff) {
@@ -251,47 +241,6 @@ analyze_panel_sizes <- function(data, max_cutoff = 30) {
 
 # Analyze panels
 panel_analysis <- analyze_panel_sizes(hiv_long, max_cutoff=30)
-
-# Create visualization
-p <- ggplot() +
-  # counts (left y-axis)
-  geom_line(data = panel_analysis, 
-            aes(x = cutoff, y = virus_low_coverage+sera_low_coverage, color = "Count"), 
-            size = 1) +
-  geom_point(data = panel_analysis,
-             aes(x = cutoff, y = virus_low_coverage+sera_low_coverage), 
-             color = "blue", size = 3) +
-  
-  # % (right y-axis) 
-  geom_line(data = panel_analysis,
-            aes(x = cutoff, y = (virus_pct_low+sera_pct_low)/2, color = "Percentage"),
-            size = 1) +
-  geom_point(data = panel_analysis,
-             aes(x = cutoff, y = (virus_pct_low+sera_pct_low)/2),
-             color = "red", size = 3) +
-  
-  # Add reference line at optimal cutoff
-  geom_vline(xintercept = 8, linetype = 2) +
-  
-  scale_y_continuous(
-    name = "Points with ≤5 measurements"
-    #sec.axis = sec_axis(~ . * 1, name = "Percentage", breaks = seq(0, 100, by = 50))
-  ) +
-  scale_x_continuous(breaks = unique(panel_analysis$cutoff)) +
-  scale_color_manual(values = c("Count" = "blue", "Percentage" = "red")) +
-  
-  theme_minimal() +
-  theme(
-    axis.title.y = element_text(color = "black"),
-    axis.text.y = element_text(color = "black"),
-    legend.position = "top"
-  ) +
-  labs(
-    x = "Top N viruses/sera kept per year",
-    title = "Coverage Analysis by Panel Size",
-    color = "Metric"
-  )
-
 q <- ggplot() +
   geom_line(data = panel_analysis,
             aes(x = cutoff, y = (virus_pct_low+sera_pct_low)/2, color = "Percentage"),
@@ -301,7 +250,7 @@ q <- ggplot() +
              color = "red", size = 3) +
   
   # Add reference line at optimal cutoff
-  geom_vline(xintercept = 11, linetype = 2) +
+  #geom_vline(xintercept = 11, linetype = 2) +
   
   scale_y_continuous(
     name = "% Points with measurements ≤ 5"
@@ -484,15 +433,15 @@ hiv_distance_matrix <- long_to_matrix(
 
 cat("Missing proportion in matrix form" ,100*sum(is.na(hiv_distance_matrix))/nrow(hiv_distance_matrix)/ncol(hiv_distance_matrix))
 
-# # Prepare matrix for visualization
-# heatmap_data <- prepare_heatmap_data(hiv_distance_matrix, cluster_rows = FALSE)
-# 
-# # Plot heatmap
-# plot_distance_heatmap(heatmap_data, "hiv_panel")
-# 
-# # Analyze and visualize network structure
-# net_results <- analyze_network_structure(hiv_distance_matrix)
-# plot_network_structure(net_results, "hiv_network")
+# Prepare matrix for visualization
+heatmap_data <- prepare_heatmap_data(hiv_distance_matrix, cluster_rows = FALSE)
+
+# Plot heatmap
+plot_distance_heatmap(heatmap_data, "hiv_panel")
+
+# Analyze and visualize network structure
+net_results <- analyze_network_structure(hiv_distance_matrix)
+plot_network_structure(net_results, "hiv_network")
 
 ```
 
@@ -516,9 +465,9 @@ param_ranges <- list(
 
 # Setup optimization parameters
 opt_params <- list(
-  mapping_max_iter = 1000,    # Maximum optimization iterations
+  mapping_max_iter = 500,    # Maximum optimization iterations
   folds = 20,         # Number of CV folds
-  num_samples = 40, 
+  num_samples = 8, 
   use_slurm = FALSE,
   cider = FALSE
 )
@@ -526,8 +475,8 @@ opt_params <- list(
 
 
 ```{r eval=FALSE}
-scenario_name = "HIV_BC_AMC201"
-samples_file = "model_parameters/HIV_BC_AMC201_model_parameters.csv"
+scenario_name = "HIV_BC_AMC01"
+samples_file = "model_parameters/HIV_BC_AMC01_model_parameters.csv"
 
 # Record start time for timing report
 start_time <- Sys.time()
@@ -564,8 +513,9 @@ time_diff <- difftime(end_time, start_time, units = "auto")
 cat("\n Initial LHS CV sampling completed in: ")
 time_diff
 
-write.csv(results, samples_file, row.names=FALSE)
-
+if(!opt_params$use_slurm){
+  write.csv(results, samples_file, row.names=FALSE)
+}
 ```
 
 ## Aggregate the results
@@ -584,15 +534,15 @@ Using the initial results as a starting point, we'll now perform adaptive sampli
 
 ```{r eval=FALSE}
 # Transform samples (with previous code's path)
-scenario_name = "HIV_BC_AMC201"
-samples_file = "model_parameters/HIV_BC_AMC201_model_parameters.csv"
+scenario_name = "HIV_BC_AMC01"
+samples_file = "model_parameters/HIV_BC_AMC01_model_parameters.csv"
 samples <- log_transform_parameters(samples_file)
 
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_samples = 500, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
+  num_samples = 7, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
   num_parallel_jobs = parallel::detectCores()-1,  # For local execution: Number of CPU cores available (Can try parallel::detectCores() ); For SLURM: Number of jobs to submit
-  mapping_max_iter = 1000, # Maximum iterations per map optimization
+  mapping_max_iter = 500, # Maximum iterations per map optimization
   relative_epsilon = 1e-4,
   folds = 20, # Number of CV folds
   use_slurm = FALSE,
@@ -704,7 +654,6 @@ for(param in params) {
   
   # Plot results
   pl_plot <- plot(pl_result, max_ll)
-  #ggsave(paste0("profile_likelihood_HIV_", param, ".pdf"), pl_plot)
   print(pl_plot)
 }
 ```
@@ -733,19 +682,7 @@ Based on our analysis, we can extract optimal parameter values. Modes of margina
 (If the Profile Likelihood surfaces are too ragged and the optimal point appeared as a sharp peak, choosing the parameters with the maximum likelihood is a better approach than using the mode.)
 
 ```{r}
-# Case 1: Modes of marginal sampling probability distributions
-
-# # Calculate weighted marginals
-# weighted_marginals <- calculate_weighted_marginals(samples)
-# # Extract optimal parameters
-# optimal_params <- list(
-#   N = round(exp(find_mode(weighted_marginals[['log_N']]))),
-#   k0 = exp(find_mode(weighted_marginals[['log_k0']])),
-#   cooling_rate = exp(find_mode(weighted_marginals[['log_cooling_rate']])),
-#   c_repulsion = exp(find_mode(weighted_marginals[['log_c_repulsion']]))
-# )
-
-#Case 2: Parameters with the maximum likelihood
+# Parameters with the maximum likelihood
 best_params <- samples[which.min(samples$Holdout_MAE),]
 optimal_params <- list(
   N = round(exp(as.numeric(best_params$log_N))),
@@ -769,7 +706,7 @@ Finally, let's validate our optimal parameters:
 result <- create_topolow_map(
   distance_matrix = hiv_distance_matrix,
   ndim = optimal_params$N,
-  mapping_max_iter = 1000,
+  mapping_max_iter = 500,
   k0 = optimal_params$k0,
   cooling_rate = optimal_params$cooling_rate,
   c_repulsion = optimal_params$c_repulsion,
@@ -810,7 +747,7 @@ positions <- positions %>%
 
 positions <- na.omit(positions)
 positions$cluster <- positions$Subtype
-write.csv(positions, "data_files/hiv_positions.csv", row.names = FALSE)
+#write.csv(positions, "data_files/hiv_positions.csv", row.names = FALSE)
 ```
 
 
@@ -923,7 +860,8 @@ annotation_config <- new_annotation_config(
   outline_size = 0.4                       # Size of point outlines
 )
 
-
+positions <- read.csv("data_files/HIV_coordinates_metadata.csv")
+# Non annotated
 topolow_plot <- plot_cluster_mapping(
   positions,
   ndim = optimal_params$N,
@@ -949,119 +887,22 @@ topolow_plot <- plot_cluster_mapping(
 ```
 
 
-Figures:
+Temporal figure:
 ```{r}
-positions <- read.csv("data_files/hiv_positions.csv")
-positions$cluster <- positions$Subtype
-
-library(Polychrome)
-P60 = Polychrome::createPalette(2,  c("#ff0000", "#00ff00", "#0000ff"))
-P60 = unname(P60)
-
-aesthetic_config <- new_aesthetic_config(
-  point_shapes = c(antigen = 16, antiserum = 4),
-  point_size = 1.5,
-  point_alpha = 0.6,
-  color_palette = P60,
-  gradient_colors = list(low = "blue", high = "red"),
-  title_size = 7,
-  subtitle_size = 6,
-  axis_title_size = 6,
-  axis_text_size = 6,
-  legend_text_size =  6,
-  legend_title_size = 6,
-  show_legend = TRUE,
-  #legend_position = "none",
-  show_title = FALSE
-)
-
-layout_config <- new_layout_config(
-  width = 3.26772,
-  height = 2.6,
-  dpi = 300,
-  x_limits = c(-3.1, 3.1),
-  y_limits = c(-3, 4),
-  plot_margin = margin(0.05, 0.05, 0.05, 0.05, "cm"),
-  save_format = "pdf"
-)
-
 cart_plot <- plot_temporal_mapping(positions, ndim = 2, 
                                    layout_config=layout_config,
                                    aesthetic_config = aesthetic_config)
 print(cart_plot)
 ```
 
-```{r}
-plot_subtypes <- plot_cluster_mapping(positions, ndim = 2,
-                                      layout_config = layout_config,
-                                   aesthetic_config = aesthetic_config)
-
-print(plot_subtypes)
-```
-
-```{r}
-#set.seed(2209345) # for reproducibility
-
-# Create and display temporal mapping
-umap_config <- new_dim_reduction_config(
-  method = "umap",
-  n_components = 2,
-  scale = FALSE
-)
-
-umap_plot_temporal <- plot_temporal_mapping(
-  positions, ndim = optimal_params$N,
-  layout_config = layout_config,
-  aesthetic_config = aesthetic_config,
-  dim_config = umap_config)
-print(umap_plot_temporal)
-```
-
-```{r}
-umap_plot_temporal_interac <- make_interactive(umap_plot_temporal, tooltip_vars = c("year", "text"))
-umap_plot_temporal_interac
-```
-
-```{r}
-
-umap_plot_subtypes <- plot_cluster_mapping(positions, ndim = optimal_params$N,
-                                      layout_config = layout_config,
-                                   aesthetic_config = aesthetic_config,
-                                   dim_config = umap_config)
-
-print(umap_plot_subtypes)
-```
-
-Combining the 3 plots used in papers supplementary.
-```{r}
-
-# Create combined plot
-combined_plot_HIV <- plot_grid(
-  cart_plot, umap_plot_temporal, umap_plot_subtypes,
-  labels = c("A. PCA: Temporal", "B. UMAP: Temporal", "C. UMAP: Subtypes"),
-  label_size = 7,
-  nrow = 1,
-  align = 'h',
-  axis = 'tb',
-  rel_widths = c(1, 1, 1)  # Make the last panel slightly wider to accommodate legend
-)
-
-# Save combined plot
-save_plot(
-  "combined_HIV_S_plots.pdf",
-  combined_plot_HIV,
-  ncol = 3,
-  nrow = 1,
-  base_width = layout_config$width*2/2.7,  # or Slightly wider to accommodate legend
-  base_height = layout_config$height
-)
-```
 
 ```{r}
 temporal_interac <- make_interactive(cart_plot, tooltip_vars = c("cluster", "text"))
 temporal_interac
 ```
 
+
+Topolow shows interesting separation in the antigenic space based on the location of isolates.
 ```{r}
 positions$cluster <- positions$Country
 
@@ -1081,17 +922,37 @@ p_geo
 
 ## Conclusion
 
-This vignette demonstrated how to:
+This vignette demonstrated a complete workflow for analyzing HIV neutralization data using the topolow package, including:
 
-1. Load and preprocess HIV neutralization data
+1- Data preparation and quality control:
 
-2. Analyze measurement coverage and select optimal panels
+* Processing and cleaning IC50 neutralization data
+* Applying robust outlier detection with the MAD method
+* Analyzing and visualizing measurement coverage
 
-3. Create and visualize distance matrices
+2- Strategic panel selection:
 
-4. Run topolow optimization
+* Identifying viruses and antibodies with sufficient measurement coverage
+* Creating a balanced dataset with representation across years
+* Generating and visualizing the distance matrix and network structure
 
-5. Visualize the results
+3- Parameter optimization through multiple approaches:
+
+* Initial exploration using Latin Hypercube Sampling with cross-validation
+* Parameter refinement using Adaptive Monte Carlo sampling
+* Convergence assessment across multiple independent chains
+* Uncertainty quantification through profile likelihood analysis
+
+4- Result visualization and analysis:
+
+* Creating antigenic maps with subtype-based clustering
+* Annotating significant viral isolates of interest
+* Generating temporal progression visualizations
+* Exploring geographic patterns in the antigenic landscape
+* Creating interactive visualizations for deeper exploration
+
+
+The resulting low-dimensional antigenic map effectively captures the relationships between HIV viral isolates, showing clear separation between subtypes and revealing patterns that align with both evolutionary relationships and geographic origins. These visualizations provide valuable insights into HIV antigenic structure that can inform vaccine design and epidemiological studies.
 
 
 ```{r}

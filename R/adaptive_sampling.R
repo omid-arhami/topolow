@@ -2163,7 +2163,7 @@ plot.profile_likelihood <- function(x, LL_max, width = 3.5, height = 3.5,
                linetype = "dashed", color = "black", size = 0.4) +
     geom_text(aes(x = min(param), y = CI_95_LL + 0.02, 
                   label = "95% CI"),
-              color = "black", vjust = -0.5, hjust = -0.05, size = 6/ggplot2::.pt) +
+              color = "black", vjust = -0.5, hjust = -0.05, size = 2.1) +
     labs(title = title_expr,
          x = param_expr,
          y = "Log Likelihood") +
@@ -2186,9 +2186,19 @@ plot.profile_likelihood <- function(x, LL_max, width = 3.5, height = 3.5,
     filename <- file.path(output_dir, 
                           paste0("profile_likelihood_", x$param_name, ".pdf"))
     
-    # Save as PDF with specified dimensions
-    ggsave(filename, p, width = width, height = height, 
-           device = cairo_pdf, units = "in")
+    # Try to save using standard PDF device first (most compatible approach)
+    tryCatch({
+      ggsave(filename, p, width = width, height = height, 
+             device = "pdf", units = "in")
+    }, error = function(e) {
+      # If standard PDF fails, try without specifying device (system default)
+      message("Standard PDF device failed. Trying system default device.")
+      tryCatch({
+        ggsave(filename, p, width = width, height = height, units = "in")
+      }, error = function(e) {
+        message("Failed to save plot: ", e$message)
+      })
+    })
   }
   
   return(p)
@@ -2430,13 +2440,23 @@ plot.parameter_sensitivity <- function(x, width = 3.5, height = 3.5,
     filename <- file.path(output_dir, 
                          paste0("parameter_sensitivity_", x$param_name, ".pdf"))
     
-    # Save as PDF with specified dimensions
-    ggsave(filename, p, width = width, height = height, 
-          device = cairo_pdf, units = "in")
+    # Use safe saving approach to handle device compatibility issues
+    tryCatch({
+      ggsave(filename, p, width = width, height = height, 
+             device = "pdf", units = "in")
+    }, error = function(e) {
+      message("Standard PDF device failed. Trying system default device.")
+      tryCatch({
+        ggsave(filename, p, width = width, height = height, units = "in")
+      }, error = function(e) {
+        message("Failed to save plot: ", e$message)
+      })
+    })
   }
   
   return(p)
 }
+
 
 
 #' Print Method for Parameter Sensitivity Objects

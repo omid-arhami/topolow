@@ -104,26 +104,11 @@ For detailed documentation of a specific function in Topolow package:
 This package includes computationally intensive examples in the `inst/examples` 
 directory. These examples demonstrate complete use cases in the paper but require computational time and resources.
 
-To access these examples after installation:
-```r
-example_path <- system.file("examples", package="topolow")
-# View available examples
-list.files(example_path)
-```
-
-- `parameter-fitting-h3n2.Rmd`
-- `assay_data_analysis_HIV_Subtype.Rmd`
-- `methods-comparison-h3n2-hiv.Rmd`
-- `synthetic-parameter-fitting.Rmd`
-- `synthetic_data_algorithm_comparison.Rmd`
-- `procrustes_vignette.Rmd`
-
 To run these studies after installing Topolow, you can copy all associated files, subdirectories, and the Rmd files to your machine by calling function below:
 
 ```r
 library(topolow)
-copy_reproduction_examples()
-# Or to a specific location:
+# Copy to a specific location:
 copy_reproduction_examples("path/to/my/examples")
 ```
 

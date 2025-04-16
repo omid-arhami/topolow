@@ -32,17 +32,17 @@ We conduct 20-fold cross-validation and evaluate performance using multiple metr
 You will need to find the optimal parameters for Topolow first. You can either use parameter fitting scripts to run sufficient number of Monte Carlo simulations on your computers, or use the results of simulations we have provided on Github (the csv files used in this script), or use the parameters provided below:
 
 h3n2_topolow_params <- list(
-    N = 4,
-    k0 = 14.76214,
-    cooling_rate = 0.03641074, 
-    c_repulsion = 0.002943064
+    N = 5,
+    k0 = 6.862815,
+    cooling_rate = 0.02549249, 
+    c_repulsion = 0.01039692
   )
 
 hiv_topolow_params <- list(
     N = 2,
-    k0 = 3.550036,
-    cooling_rate = 0.04130713, 
-    c_repulsion = 0.0007038619
+    k0 = 8.20368,
+    cooling_rate = 0.03099211, 
+    c_repulsion = 0.01944336
   )
   
 ## Setup
@@ -63,10 +63,10 @@ library(cowplot)
 # Parameters
 opt_setting <- list(
   n_folds = 20,
-  max_topolow_iter = 1000,
+  max_topolow_iter = 500,
   topolow_opt_rounds = 1,
   racmacs_opt_rounds = 100,
-  num_cores = 83
+  num_cores = 7
 )
 
 # Setup output directory
@@ -87,7 +87,7 @@ for (dir in c(coords_dir, plots_dir)) {
 
 ## Load and Process Data
 
-Load and prepare both datasets:
+Load and prepare both input datasets of titers:
 
 ```{r}
 # Combine the two files downloaded from Los Alamos website:
@@ -117,7 +117,7 @@ hiv_titers <- na.omit(hiv_titers)
 hiv_titers <- hiv_titers[order(hiv_titers$virusYear), ]
 
 # Save the merged and prepared raw data into a csv:
-write.csv(hiv_titers, "data_files/hiv_assay_full.csv")
+write.csv(hiv_titers, "data_files/hiv_assay_full.csv", row.names = FALSE)
 
 # Load and process HIV data
 hiv_results <- process_antigenic_data(
@@ -186,7 +186,7 @@ filtered_data <- filtered_data %>%
   filter(Antibody %in% pairing_counts$antibodies$Antibody,
          Virus %in% pairing_counts$viruses$Virus)
 
-write.csv(filtered_data, "data_files/hiv_filtered_long_data.csv")
+write.csv(filtered_data, "data_files/hiv_filtered_long_data.csv", row.names = FALSE)
 
 hiv_matrix <- long_to_matrix(filtered_data,
                             chnames = "Virus",
@@ -230,6 +230,30 @@ na_count <- sum(is.na(h3n2_matrix))
 missing_percentage <- (na_count / total_elements) * 100
 cat("Percentage of missing values in H3N2 matrix:", round(missing_percentage, 2), "%\n")
 ```
+
+
+```{r}
+datasets <- list(
+  H3N2 = list(
+    matrix = h3n2_matrix,
+    topolow_params = h3n2_topolow_params,
+    racmacs_dim = 4,
+    base = 2,        # For titer conversion
+    tens = 10,       # For titer conversion
+    has_clusters = TRUE
+  ),
+  HIV = list(
+    matrix = hiv_matrix,
+    topolow_params = hiv_topolow_params,
+    racmacs_dim = 2,
+    base = exp(1),   # For titer conversion
+    tens = 1,        # For titer conversion
+    has_clusters = FALSE
+  )
+)
+
+```
+
 
 
 ## Load Optimal Parameters
@@ -292,30 +316,11 @@ print(h3n2_topolow_params)
 ```
 
 
-```{r}
-datasets <- list(
-  H3N2 = list(
-    matrix = h3n2_matrix,
-    topolow_params = h3n2_topolow_params,
-    racmacs_dim = 4,
-    base = 2,        # For titer conversion
-    tens = 10,       # For titer conversion
-    has_clusters = TRUE
-  ),
-  HIV = list(
-    matrix = hiv_matrix,
-    topolow_params = hiv_topolow_params,
-    racmacs_dim = 2,
-    base = exp(1),   # For titer conversion
-    tens = 1,        # For titer conversion
-    has_clusters = FALSE
-  )
-)
-
-```
-
-
 ## Find optimal dimensionality for RACMACS
+
+!!! Extremely time consuming:
+This code block may take more than 7 hours. The results are provided in file 'comparison_results/racmacs_dimension_results.csv'
+
 ```{r}
 # Find optimal dimensionality for MDS/RACMACS
 dimensions_to_test <- 2:10  # Test dimensions from 1D to 10D
@@ -429,13 +434,11 @@ for(dataset_name in names(datasets)) {
 }
 
 # Save dimension results
-write.csv(dim_results, file.path(output_dir, "racmacs_dimension_results.csv"))
-
+write.csv(dim_results, file.path(output_dir, "racmacs_dimension_results.csv"), row.names = FALSE)
 
 ```
 
-
-## RACMACS error vs dimension plots
+## Plot MDS error vs dimension 
 ```{r}
 # Create dual axis plots
 plot_dimension_results <- function(results, dataset_name) {
@@ -481,6 +484,7 @@ plot_dimension_results <- function(results, dataset_name) {
     )
 }
 
+dim_results <- read.csv('comparison_results/racmacs_dimension_results.csv')
 # Generate individual plots
 h3n2_plot <- plot_dimension_results(dim_results, "H3N2")
 hiv_plot <- plot_dimension_results(dim_results, "HIV")
@@ -505,7 +509,6 @@ save_plot(
   base_height = 3
 )
 ```
-
 
 
 ## Finding coordinates
@@ -706,8 +709,8 @@ racmacs_plot <- plot_cluster_mapping(
 # Combine plots
 combined_plot <- plot_grid(
   topolow_plot, racmacs_plot,
-  labels = c("A", "B"),
-  label_size = 8,
+  labels = c("A. Topolow", "B. RACMACS"),
+  label_size = 6,
   nrow = 1,
   align = 'h',
   axis = 'tb'
@@ -720,278 +723,11 @@ save_plot(
   ncol = 2,
   nrow = 1,
   base_width = 3.26772*0.5,
-  base_height = layout_config$height
+  base_height = layout_config$height+0.5
 )
 ```
 
-### HIV
-```{r}
-### Create plots from saved coordinates ###
 
-# Get HIV metadata once
-hiv_metadata <- NULL
-hiv_metadata <- hiv_long %>%
-  select(Virus, Subtype) %>%
-  distinct()
-
-
-# First verify files exist and check their content
-topo_file <- file.path(coords_dir, "topolow_HIV_coords.csv")
-rac_file <- file.path(coords_dir, "racmacs_HIV_coords.csv")
-
-if (!file.exists(topo_file)) {
-  stop("TopoLow coordinates file not found at: ", topo_file)
-}
-if (!file.exists(rac_file)) {
-  stop("RACMACS coordinates file not found at: ", rac_file)
-}
-
-# Read and process TopoLow coordinates
-positions_topolow <- read.csv(topo_file)
-if (nrow(positions_topolow) == 0) {
-  stop("TopoLow coordinates file is empty")
-}
-
-# Process TopoLow coordinates
-positions_topolow$name <- positions_topolow$X  # Restore rownames
-positions_topolow$X <- NULL
-positions_topolow$antigen <- startsWith(positions_topolow$name, "V/")
-positions_topolow$antiserum <- startsWith(positions_topolow$name, "S/")
-#positions_topolow$year <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", positions_topolow$name))
-positions_topolow$name <- sub("^[VS]/", "", positions_topolow$name)
-
-# Add cluster information
-if (!exists("hiv_metadata")) {
-  stop("hiv_metadata not found. Please ensure it's loaded.")
-}
-positions_topolow <- merge(positions_topolow, hiv_metadata, 
-                         by.x = "name", by.y = "Virus", all.x = TRUE)
-positions_topolow <- na.omit(positions_topolow)
-positions_topolow$cluster <- positions_topolow$Subtype
-
-# Read and process RACMACS coordinates
-positions_racmacs <- read.csv(rac_file)
-if (nrow(positions_racmacs) == 0) {
-  stop("RACMACS coordinates file is empty")
-}
-
-# Process RACMACS coordinates
-positions_racmacs$name <- ifelse(
-  positions_racmacs$type == "antigen",
-  paste0("V/", positions_racmacs$name),
-  paste0("S/", positions_racmacs$name)
-)
-positions_racmacs$antigen <- startsWith(positions_racmacs$name, "V/")
-positions_racmacs$antiserum <- startsWith(positions_racmacs$name, "S/")
-#positions_racmacs$year <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", positions_racmacs$name))
-positions_racmacs$name <- sub("^[VS]/", "", positions_racmacs$name)
-positions_racmacs$V1 <- positions_racmacs$X
-positions_racmacs$V2 <- positions_racmacs$X.1
-
-# Add cluster information
-positions_racmacs <- merge(positions_racmacs, hiv_metadata,
-                         by.x = "name", by.y = "Virus", all.x = TRUE)
-positions_racmacs <- na.omit(positions_racmacs)
-positions_racmacs$cluster <- positions_racmacs$Subtype
-
-# Print dimensions to verify data
-print(dim(positions_topolow))
-print(dim(positions_racmacs))
-
-# # Create the individual plots
-# topolow_plot <- plot_cluster_mapping(
-#   positions_topolow,
-#   ndim = datasets$HIV$topolow_params$N,
-#   dim_config = dim_config,
-#   aesthetic_config = aesthetic_config,
-#   layout_config = layout_config
-# ) + ggtitle("TopoLow")
-# 
-# racmacs_plot <- plot_cluster_mapping(
-#   positions_racmacs,
-#   ndim = datasets$HIV$racmacs_dim,
-#   dim_config = dim_config,
-#   aesthetic_config = aesthetic_config,
-#   layout_config = layout_config
-# ) + ggtitle("RACMACS")
-# 
-# # Combine plots
-# combined_plot <- plot_grid(
-#   topolow_plot, racmacs_plot,
-#   labels = c("A", "B"),
-#   label_size = 8,
-#   nrow = 1,
-#   align = 'h',
-#   axis = 'tb'
-# )
-# 
-# # Save combined plot
-# save_plot(
-#   file.path(plots_dir, "combined_HIV_clusters.pdf"),
-#   combined_plot,
-#   ncol = 2,
-#   nrow = 1,
-#   base_width = 3.26772*0.5,
-#   base_height = layout_config$height
-# )
-```
-
-```{r}
-
-# list of notable HIV-1 strains from subtypes B and C
-notable_hiv1_isolates <- list(
-  # Well-characterized laboratory-adapted viral isolates
-  lab_adapted_isolates = list(
-    strains = c("JRCSF", "JRFL", "YU2"),
-    references = c(
-      "JRCSF/JRFL" = "Das et al. (2016) demonstrated that JRCSF Env glycoprotein is efficiently cleaved on the cell surface and displays broadly neutralizing epitopes. Both JRCSF and JRFL were isolated from the same patient and are widely used clade B viral isolates in HIV-1 neutralization studies.",
-      "YU2" = "A well-characterized primary HIV-1 isolate used extensively in neutralization assays and vaccine research, particularly for studying CD4 binding site interactions."
-    )
-  ),
-  
-  # Important subtype B viral isolates
-  subtype_b_isolates = list(
-    strains = c("92BR020", "92BR025_9"),
-    references = c(
-      "92BR020/92BR025_9" = "Brazilian viral isolates that have been incorporated into standard neutralization panels for subtype B HIV-1."
-    )
-  ),
-  
-  # Important Zambian clade C Env-pseudotyped viruses used in vaccine research
-  zambian_env_pseudoviruses = list(
-    strains = c("ZM247_V1", "ZM214_15", "ZM246F", "ZM249_1"),
-    references = c(
-      "ZM247_V1" = "Clade C Env-pseudotyped virus used in HIV vaccine research and included in standardized panels for neutralizing antibody assessments (Hraber et al., 2017).",
-      "ZM strains" = "Env-pseudotyped viruses that form part of standardized HIV-1 subtype C reference panels for neutralization assessments representing diverse African viral sequences."
-    )
-  ),
-  
-  # Transmitted/founder (T/F) viral isolates important for research
-  transmitted_founder_isolates = list(
-    strains = c("CH505_TF", "TRJO4551_58", "REJO4541_67"),
-    references = c(
-      "CH505_TF" = "Transmitted/founder virus studied extensively in the context of HIV-1 antibody development and evolution; the env gene was used to create SHIV.CH505 for nonhuman primate models.",
-      "TRJO4551_58/REJO4541_67" = "Important transmitted/founder viral isolates used in neutralization studies to characterize antibody responses."
-    )
-  ),
-  
-  # Viral isolates important for broadly neutralizing antibody research
-  bnAb_characterization_isolates = list(
-    strains = c("CAP256_SU"),
-    # references = c(
-    #   "CAP256_SU" = "Viral isolate extensively studied for broadly neutralizing antibody research targeting the V1/V2 epitopes."
-    # )
-    references = c(
-      "CAP256_SU" = "Superinfecting viral isolate from donor CAP256 (from the Centre for the AIDS Programme of Research in South Africa) that was pivotal in eliciting the development of the potent V2-directed bNAb lineage CAP256-VRC26. This superinfecting virus and the potent antibodies it induced have been extensively characterized (Doria-Rose et al., 2014; Sacks et al., 2019; Moshoette et al., 2019)."
-    )
-  ),
-  
-  # Important recombinant viral forms
-  recombinant_isolates = list(
-    strains = c("BF1266_431A"),
-    references = c(
-      "BF1266_431A" = "Represents an important HIV-1 recombinant viral isolate used in genetic diversity studies."
-    )
-  )
-)
-
-citation_info <- c(
-  "Doria-Rose, N. A., Schramm, C. A., Gorman, J., Moore, P. L., Bhiman, J. N., DeKosky, B. J., ... & Mascola, J. R. (2014). Developmental pathway for potent V1V2-directed HIV-neutralizing antibodies. Nature, 509(7498), 55-62.",
-  "Sacks, D., Bhiman, J. N., Wiehe, K., Gorman, J., Kwong, P. D., Morris, L., & Moore, P. L. (2019). Somatic hypermutation to counter a globally rare viral immunotype drove off-track antibodies in the CAP256-VRC26 HIV-1 V2-directed bNAb lineage. PLoS Pathogens, 15(9), e1008005.",
-  "Moshoette, T., Ali, S. A., Papathanasopoulos, M. A., & Killick, M. A. (2019). Engineering and characterising a novel, highly potent bispecific antibody iMab-CAP256 that targets HIV-1. Retrovirology, 16, 1-12."
-  )
-
-all_notable_strains <- unique(unlist(notable_hiv1_isolates))
-
-
-```
-
-
-```{r}
-dim_config <- new_dim_reduction_config(
-  method = "pca",
-  n_components = 2,
-  scale = FALSE
-)
-
-layout_config <- new_layout_config(
-  width = 3.26772,
-  height = 2.6,
-  dpi = 300,
-  x_limits = c(-3.1, 3.1),
-  y_limits = c(-3, 4),
-  plot_margin = margin(0.05, 0.05, 0.05, 0.05, "cm"),
-  save_format = "pdf"
-)
-
-aesthetic_config <- new_aesthetic_config(
-  point_shapes = c(antigen = 16, antiserum = 4),
-  point_size = 1.5,
-  point_alpha = 0.65,
-  title_size = 7,
-  subtitle_size = 6,
-  axis_title_size = 6,
-  axis_text_size = 6,
-  legend_text_size =  6,
-  legend_title_size = 6,
-  show_legend = TRUE,
-  legend_position = "right",
-  show_title = FALSE
-)
-
-annotation_config <- new_annotation_config(
-  notable_points = all_notable_strains,         # Points to annotate
-  size = 4.9,                              # Text size
-  color = "black",                         # Text color
-  fontface = "bold",                       # Text style
-  outline_size = 0.4                       # Size of point outlines
-)
-
-
-topolow_plot <- plot_cluster_mapping(
-  positions_topolow,
-  ndim = datasets$HIV$topolow_params$N,
-  dim_config = dim_config,
-  aesthetic_config = aesthetic_config,
-  layout_config = layout_config,
-  show_shape_legend = FALSE,
-  cluster_legend_title = "Subtype"
-) 
-
-racmacs_plot <- plot_cluster_mapping(
-  positions_racmacs,
-  ndim = datasets$HIV$racmacs_dim,
-  dim_config = dim_config,
-  aesthetic_config = aesthetic_config,
-  layout_config = layout_config,
-  show_shape_legend = FALSE,
-  cluster_legend_title = "Subtype"
-) 
-
-# annotated
-topolow_plot <- plot_cluster_mapping(
-  positions_topolow,
-  ndim = datasets$HIV$topolow_params$N,
-  dim_config = dim_config,
-  aesthetic_config = aesthetic_config,
-  layout_config = layout_config,
-  show_shape_legend = FALSE,
-  annotation_config = annotation_config,
-  cluster_legend_title = "Subtype"
-)
-
-# annotated
-racmacs_plot <- plot_cluster_mapping(
- positions_racmacs,
-  ndim = datasets$HIV$racmacs_dim,
-  dim_config = dim_config,
-  aesthetic_config = aesthetic_config,
-  layout_config = layout_config,
-  show_shape_legend = FALSE,
- annotation_config = annotation_config,
-  cluster_legend_title = "Subtype"
-)
-```
 
 ## Run Error Comparison
 
@@ -1025,6 +761,7 @@ Completeness_df <- data.table(
 ```
 
 Process each dataset through cross-validation:
+This may take 15 to 60 minutes. The results needed for next steps are provided in csv file.
 
 ```{r eval=FALSE}
 # Process each dataset
@@ -1161,12 +898,13 @@ for(dataset_name in names(datasets)) {
   }
 }
 
-write.csv(errors_df, file.path(output_dir, "errors_df_loop.csv") )
-write.csv(Completeness_df, file.path(output_dir, "Completeness_df_loop.csv") )
+write.csv(errors_df, file.path(output_dir, "errors_df_loop.csv") , row.names = FALSE)
+write.csv(Completeness_df, file.path(output_dir, "Completeness_df_loop.csv") , row.names = FALSE)
 ```
 
 
 ## Statistical Analysis
+The results needed for next steps are provided in csv files, in case you have not run the previous block to create errors_df_loop.
 
 ```{r}
 # Read the CSV files back into dataframes
@@ -1178,12 +916,24 @@ Completeness_df <- read.csv(file.path(output_dir, "Completeness_df_loop.csv"))
 Perform paired t-tests to compare algorithm performance:
 
 ```{r}
-# Calculate fold-level statistics
+# Or read from file
+fold_stats <- read.csv(file.path(output_dir, "fold_stats.csv"))
+
+# Or Calculate fold-level statistics
 fold_stats <- aggregate(
   OutSampleError ~ Dataset + Algorithm + Fold,
   data = errors_df,
   FUN = function(x) mean(abs(x), na.rm = TRUE)
 )
+
+# Calculate summary statistics
+summary_stats <- fold_stats %>%
+  group_by(Dataset, Algorithm) %>%
+  summarize(
+    Mean = mean(OutSampleError),
+    SD = sd(OutSampleError),
+    .groups = 'drop'
+  )
 
 # Perform paired t-tests for each dataset
 stat_tests <- fold_stats %>%
@@ -1209,6 +959,7 @@ stat_tests <- fold_stats %>%
 print("Statistical Test Results:")
 knitr::kable(stat_tests)
 ```
+
 
 ## Results Visualization
 
@@ -1239,14 +990,19 @@ error_summary <- errors_df %>%
     label = sprintf("%.3f\n%.3f", MAE, SD)
   )
 
+#write.csv(error_summary, file.path(output_dir, "error_summary.csv") , row.names = FALSE)
+
+# Or read from file
+error_summary <- read.csv( file.path(output_dir, "error_summary.csv"))
+
 # Calculate the y-axis range needed
-y_range <- range(clean_data(errors_df$OutSampleError, k=3.5), na.rm = TRUE)
+y_range <- c(-5.12, 3.68 ) # range(clean_data(errors_df$OutSampleError, k=3.5), na.rm = TRUE)
 y_padding <- abs(diff(y_range)) * 0.22  # 20% padding
 
 # Calculate the y-position for the labels (same as existing labels)
 label_y_pos <- y_range[1] - y_padding/2 - 0.2
 
-p1 <- ggplot() +
+p0 <- ggplot() +
   # Add box plots with outliers removed
   geom_boxplot(
     data = errors_df,
@@ -1318,95 +1074,9 @@ p1 <- ggplot() +
   )
 
 ggsave(file.path(plots_dir,"comparison_real_data.pdf"),
-       p1, width = 83, height = 80, units = "mm")
-print(p1)
+       p0, width = 83, height = 80, units = "mm")
 
-
-
-# Calculate the y-axis range limits
-y_range <- range(clean_data(errors_df$OutSampleError, k=3.5), na.rm = TRUE)  # Even stricter outlier removal
-y_padding <- abs(diff(y_range)) * 0.22
-
-# Calculate the y-position for the labels (adjusted for tighter spacing)
-label_y_pos <- y_range[1] - y_padding/2 - 0.1
-
-p1 <- ggplot() +
-  # Add box plots with reduced width and height
-  geom_boxplot(
-    data = errors_df,
-    aes(x = Dataset, y = OutSampleError, 
-        fill = Algorithm),
-    position = position_dodge(width = 0.7),  # Narrower dodge width (from 0.8)
-    outlier.shape = NA,
-    alpha = 0.8,
-    width = 0.5,  # Even smaller width (from 0.6)
-    fatten = 0.7  # Thinner median line (from 0.8)
-  ) +
-  # Add text labels for MAE and SD
-  geom_text(
-    data = error_summary,
-    aes(x = Dataset, y = label_y_pos, 
-        label = label, group = Algorithm),
-    position = position_dodge(width = 0.7),  # Match the boxplot dodge width
-    vjust = 1,
-    size = stat_text_size,
-    color = "black"
-  ) +
-  # Add MAE/SD label on the left side
-  annotate(
-    "text",
-    x = 0.5,
-    y = label_y_pos,
-    label = "MAE=\nSD=",
-    size = stat_text_size,
-    vjust = 1,
-    color = "black"
-  ) +
-  # Customize appearance
-  scale_fill_manual(values = c("Topolow" = "#4dbedf", "MDS" = "#e59572")) +
-  # Very tight y-axis limits
-  scale_y_continuous(
-    limits = c(y_range[1] - y_padding, y_range[2] + y_padding/10),  # Extremely tight upper limit
-    expand = c(0, 0)
-  ) +
-  # Don't use coord_fixed - it was causing the opposite effect
-  theme_minimal(base_size = base_size) +  
-  theme(
-    axis.title = element_text(size = axis_title_size),
-    axis.text = element_text(size = axis_text_size),
-    axis.text.x = element_text(hjust = 1),
-    
-    # Reduce the plot margins
-    #plot.margin = margin(2, 5, 2, 5),  # Smaller margins (top, right, bottom, left)
-    
-    panel.grid.major = element_line(color = "gray90"),
-    panel.grid.minor = element_blank(),
-    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5),
-    
-    plot.title = element_text(size = plot_title_size, hjust = 0.5),
-    
-    # Keep legend adjustments from previous update
-    legend.position = c(0.5, 0.98),  # Move legend even higher (from 0.97)
-    legend.direction = "horizontal",
-    legend.background = element_rect(fill = "white", color = NA),
-    legend.box.background = element_rect(fill = "white", color = NA),
-    legend.margin = margin(0.1, 0.5, 0.1, 0.5),  # Tighter margins (from 0.3, 0.7)
-    legend.key.size = unit(0.7, "lines"),  # Smaller key size (from 0.8)
-    legend.title = element_text(size = legend_title_size),
-    legend.text = element_text(size = legend_text_size),
-    legend.box.margin = margin(0, 0, 0, 0),
-    
-    # Reduce space between legend and plot
-    legend.box.spacing = unit(0.1, "lines")
-  ) +
-  labs(
-    x = NULL,
-    y = "Error (validation data)",
-    fill = "Algorithm"
-  )
-
-ggsave(file.path(plots_dir,"comparison_real_data.pdf"),
-       p1, width = 83, height = 73, units = "mm")
+print(p0)
 
 # Print summary table
 knitr::kable(
@@ -1416,55 +1086,11 @@ knitr::kable(
 )
 ```
 
-```{r}
-# Calculate fold-level statistics
-fold_stats <- aggregate(
-  OutSampleError ~ Dataset + Algorithm + Fold,
-  data = errors_df,
-  FUN = function(x) mean(abs(x), na.rm = TRUE)
-)
 
-# Calculate summary statistics
-summary_stats <- fold_stats %>%
-  group_by(Dataset, Algorithm) %>%
-  summarize(
-    Mean = mean(OutSampleError),
-    SD = sd(OutSampleError),
-    .groups = 'drop'
-  )
-
-# Calculate dataset statistics
-data_stats <- list(
-  HIV = summary(as.numeric(hiv_matrix), na.rm=TRUE),
-  H3N2 = summary(as.numeric(h3n2_matrix), na.rm=TRUE)
-)
-
-# Add mean distance to summary_stats
-summary_stats$MeanDist <- sapply(summary_stats$Dataset, 
-                                function(d) mean(as.numeric(datasets[[d]]$matrix), na.rm=TRUE))
-summary_stats$RelativeMAE <- summary_stats$Mean / summary_stats$MeanDist * 100
-
-```
 
 Create comparison plots:
 
 ```{r}
-# Calculate fold-level statistics
-fold_stats <- aggregate(
-  OutSampleError ~ Dataset + Algorithm + Fold,
-  data = errors_df,
-  FUN = function(x) mean(abs(x), na.rm = TRUE)
-)
-
-# Calculate summary statistics
-summary_stats <- fold_stats %>%
-  group_by(Dataset, Algorithm) %>%
-  summarize(
-    Mean = mean(OutSampleError),
-    SD = sd(OutSampleError),
-    .groups = 'drop'
-  )
-
 # Calculate quantile-based statistics for each dataset
 data_ranges <- list(
   HIV = quantile(as.numeric(hiv_matrix), 
@@ -1482,37 +1108,6 @@ range_data <- data.frame(
   ymax = sapply(data_ranges, function(x) x["95%"])
 )
 
-# Create the plot
-p1 <- ggplot() +
-  # Add MAE bars
-  geom_bar(data = summary_stats,
-           aes(x = Dataset, y = Mean, fill = Algorithm),
-           stat = "identity", position = position_dodge()) +
-  geom_errorbar(data = summary_stats,
-                aes(x = Dataset, y = Mean, 
-                    ymin = Mean - SD, ymax = Mean + SD,
-                    group = Algorithm),
-                position = position_dodge(width = 0.9),
-                width = 0.25) +
-  scale_fill_manual(values = c("Topolow" = "#3366CC", "MDS" = "#DC3912")) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    panel.grid.major = element_line(color = "gray90"),
-    panel.grid.minor = element_blank(),
-    legend.position = "top"
-  ) +
-  labs(
-    title = "Out-of-Sample Mean Absolute Error",
-    subtitle = paste(
-      "Data Ranges (5th-95th percentiles):",
-      sprintf("\nHIV: (%.2f - %.2f)", range_data$ymin[[1]], range_data$ymax[[1]]),
-      sprintf("\nH3N2: (%.2f - %.2f)", range_data$ymin[[2]], range_data$ymax[[2]])
-    ),
-    y = "MAE (±SD)"
-  )
-
-print(p1)
 
 # Print context statistics
 for(dataset in names(data_ranges)) {
@@ -1544,6 +1139,8 @@ knitr::kable(error_summary)
 
 
 # Completeness summary
+Completeness_df <- read.csv(file.path(output_dir, "Completeness_df_loop.csv"))
+
 Completeness_summary <- Completeness_df %>%
   group_by(Dataset, Algorithm) %>%
   summarize(
@@ -1580,6 +1177,11 @@ error_dist <- errors_df %>%
     Q3 = quantile(OutSampleError, 0.75, na.rm = TRUE),
     .groups = 'drop'
   )
+
+# Or read from the provided results in the file:
+write.csv(error_dist, file.path(output_dir, "error_distribution_HIV_H3N2.csv") , row.names = FALSE)
+
+error_dist <- read.csv(file.path(output_dir, "error_distribution_HIV_H3N2.csv"))
 
 print("Error Distribution Summary:")
 knitr::kable(error_dist)
