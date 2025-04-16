@@ -112,52 +112,6 @@ print(dist_mat)
 print(result$est_distances)
 ```
 
-## How Topolow Works
-
-Topolow employs a novel physical model where:
-
-1. **Antigens as particles**: Test and reference antigens are represented as particles in an N-dimensional space
-2. **Spring-based connections**: Pairs with known measurements are connected by springs with free lengths equal to their antigenic distance
-3. **Repulsive forces**: Pairs without direct measurements apply repulsive forces to each other, following an inverse square law
-4. **Mass-weighted motion**: Each antigen receives an effective mass proportional to its number of measurements, providing natural regularization
-5. **Cooling schedule**: Spring and repulsion constants gradually decrease during optimization, allowing fine-scale adjustments in final stages
-
-This approach allows Topolow to effectively optimize antigenic positions through a series of one-dimensional calculations, eliminating the need for complex gradient computations required by traditional MDS methods.
-
-## Using on HPC or SLURM Clusters
-
-When using topolow on HPC systems with SLURM, additional setup might be needed:
-
-1. Ensure the correct R version is loaded (4.3.2 or newer):
-```bash
-module load R/4.4.1
-```
-
-2. Install required dependencies:
-```r
-install.packages(c("reshape2", "data.table", "dplyr", "ggplot2"))
-```
-
-3. When submitting SLURM jobs, set the correct R module in the script:
-```r
-initial_parameter_optimization(
-  # ... other parameters ...
-  r_module = "R/4.4.1", # Set this to match your cluster's R module
-  use_slurm = TRUE
-)
-```
-
-## Documentation
-
-See the full documentation of the package and all functionalities in https://github.com/omid-arhami/topolow/blob/main/build/topolow-manual.pdf
-
-For detailed documentation of a specific function in Topolow package:
-
-```r
-# View documentation
-?function_name
-```
-
 ## Reproduction Studies
 
 This package includes computationally intensive examples in the `inst/examples` 
@@ -174,6 +128,18 @@ copy_reproduction_examples("path/to/my/examples")
 Then read through the markdown notebooks and choose which parts you wish to run. There are usually options to use the provided parameters to bypass some parts of the simulations.
 
 Note: Results of time-intensive sections are also provided in csv files and explained at the beginning of each Rmd file. 
+
+## How Topolow Works
+
+Topolow employs a novel physical model where:
+
+1. **Antigens as particles**: Test and reference antigens are represented as particles in an N-dimensional space
+2. **Spring-based connections**: Pairs with known measurements are connected by springs with free lengths equal to their antigenic distance
+3. **Repulsive forces**: Pairs without direct measurements apply repulsive forces to each other, following an inverse square law
+4. **Mass-weighted motion**: Each antigen receives an effective mass proportional to its number of measurements, providing natural regularization
+5. **Cooling schedule**: Spring and repulsion constants gradually decrease during optimization, allowing fine-scale adjustments in final stages
+
+This approach allows Topolow to effectively optimize antigenic positions through a series of one-dimensional calculations, eliminating the need for complex gradient computations required by traditional MDS methods.
 
 ## Features
 
@@ -225,6 +191,41 @@ Topolow is particularly valuable for:
 - Predicting antigenic phenotypes for under-characterized strains
 - Amplifying training data for downstream machine learning models
 - Analyzing any continuous and relational phenotype under directional selection pressure
+
+
+## Using on HPC or SLURM Clusters
+
+When using topolow on HPC systems with SLURM, additional setup might be needed:
+
+1. Ensure the correct R version is loaded (4.3.2 or newer):
+```bash
+module load R/4.4.1
+```
+
+2. Install required dependencies:
+```r
+install.packages(c("reshape2", "data.table", "dplyr", "ggplot2"))
+```
+
+3. When submitting SLURM jobs, set the correct R module in the script:
+```r
+initial_parameter_optimization(
+  # ... other parameters ...
+  r_module = "R/4.4.1", # Set this to match your cluster's R module
+  use_slurm = TRUE
+)
+```
+
+## Documentation
+
+See the full documentation of the package and all functionalities in https://github.com/omid-arhami/topolow/blob/main/build/topolow-manual.pdf
+
+For detailed documentation of a specific function in Topolow package:
+
+```r
+# View documentation
+?function_name
+```
 
 ## Contributing
 
