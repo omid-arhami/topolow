@@ -1,8 +1,17 @@
-# Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assay results
+# Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assays
 
 ## Overview
 
-`topolow` is an R package that implements a novel algorithm for antigenic cartography mapping and analysis. The package uses a physics-inspired approach combining spring forces and repulsive interactions to find optimal point configurations in high-dimensional spaces.
+`topolow` is an R package that implements a novel, physics-inspired algorithm for antigenic cartography mapping and analysis. The algorithm addresses critical challenges in mapping antigenic relationships from incomplete experimental data, particularly for rapidly evolving pathogens like influenza, SARS-CoV-2, HIV, and dengue viruses.
+
+### Key Advantages
+
+- **Superior handling of missing data**: Effectively processes datasets with even more than 95% missing values
+- **Complete positioning**: Maps all antigens regardless of dimensionality or data sparsity
+- **Improved accuracy**: Achieves better prediction accuracy than traditional MDS approaches
+- **Stability**: Demonstrates orders of magnitude better consistency across multiple runs
+- **Automatic dimensionality optimization**: Determines optimal mapping dimensions through likelihood-based estimation
+- **Noise reduction**: Effectively reduces experimental noise and bias through network-based error dampening
 
 ## Installation
 
@@ -47,23 +56,72 @@ Even without rgl, you can use all core functionality of topolow. The package wil
 
 ## Quick Start
 
-Here's a basic example:
+Here's a simple example to check if Topolow is working and to analytically validate its result.
+
+Let us take 4 points in a 2D space, two reference antigens S/1 and S/2 and two test antigens V/1 and V/2.
+
+S/1 at (0, 0)
+
+S/2 at (3, 0)
+
+V/1 at (2, 2)
+
+V/2 at (0, 4)
+
+The pairwise Euclidean distances between these points are computed as follows:
+
+\( d(S/1,S/2) = \sqrt{(3-0)^2 + (0-0)^2} = \sqrt{9 + 0} = \sqrt{9} = 3. \)
+
+\( d(S/1,V/1) = \sqrt{(2-0)^2 + (2-0)^2} = \sqrt{4 + 4} = \sqrt{8} = 2\sqrt{2} \approx 2.828. \)
+
+\( d(S/1,V/2) = \sqrt{(0-0)^2 + (4-0)^2} = \sqrt{0 + 16} = \sqrt{16} = 4. \)
+
+\( d(S/2,V/1) = \sqrt{(2-3)^2 + (2-0)^2} = \sqrt{1 + 4} = \sqrt{5} \approx 2.236. \)
+
+\( d(S/2,V/2) = \sqrt{(0-3)^2 + (4-0)^2} = \sqrt{9 + 16} = \sqrt{25} = 5. \)
+
+\( d(V/1,V/2) = \sqrt{(0-2)^2 + (4-2)^2} = \sqrt{4 + 4} = \sqrt{8} = 2\sqrt{2} \approx 2.828. \)
+
+
+Imagine we have measured the distances of V/1 against S/1 and S/2, and V/2 against S/1 and S/2. We use Topolow to find the distance between V/1 and V/2 which is missing in the distance matrix (dist_mat in code below). From the analytical calculations we expect d(V/1,V/2) = 2.828. 
+
+Remember that this is the simplest example with an analytical solution that lets us verify the result. The true value of using Topolow to find missing distances is when there are many points and many missing distances in the data.
 
 ```r
 library(topolow)
 
-# Create a simple distance matrix
-dist_mat <- matrix(c(0, 2, 3, 2, 0, NA, 3, NA, 0), nrow=3)
-rownames(dist_mat) <- colnames(dist_mat) <- c("V/1", "V/2", "S/1")
+# Create a 4×4 simple distance matrix
+
+dist_mat <- matrix(c(
+  # S/1  S/2  V/1  V/2
+     0,   3,   2.828,   4,    # S/1
+     3,   0,  2.236, 5,   # S/2
+     2.828,  2.236,   0,   NA,    # V/1
+     4, 5 ,  NA,   0     # V/2
+), nrow=4)
+rownames(dist_mat) <- colnames(dist_mat) <- c("S/1", "S/2", "V/1", "V/2")
 
 # Run TopoLow in 2D
-result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=100, 
-                      k0=1.0, cooling_rate=0.01, c_repulsion=0.01)
+result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=1000, 
+                             k0=1, cooling_rate=0.0001, c_repulsion=0.001, 
+                             write_positions_to_csv = FALSE, verbose = TRUE)
 
 # Investigate the results
 print(dist_mat)
 print(result$est_distances)
 ```
+
+## How Topolow Works
+
+Topolow employs a novel physical model where:
+
+1. **Antigens as particles**: Test and reference antigens are represented as particles in an N-dimensional space
+2. **Spring-based connections**: Pairs with known measurements are connected by springs with free lengths equal to their antigenic distance
+3. **Repulsive forces**: Pairs without direct measurements apply repulsive forces to each other, following an inverse square law
+4. **Mass-weighted motion**: Each antigen receives an effective mass proportional to its number of measurements, providing natural regularization
+5. **Cooling schedule**: Spring and repulsion constants gradually decrease during optimization, allowing fine-scale adjustments in final stages
+
+This approach allows Topolow to effectively optimize antigenic positions through a series of one-dimensional calculations, eliminating the need for complex gradient computations required by traditional MDS methods.
 
 ## Using on HPC or SLURM Clusters
 
@@ -114,30 +172,28 @@ copy_reproduction_examples("path/to/my/examples")
 
 Then read through the markdown notebooks and choose which parts you wish to run. There are usually options to use the provided parameters to bypass some parts of the simulations.
 
-Note: Results of time-intensive sections are provided and explained at the beginning of each Rmd file. 
-
-To generate supplementary figure S-1, the pairwise distances in the original space (10D) versus the pairwise distances after reducing the dimensions to 2, use file `inst/examples/10d_2d_pairwise_distance_comparison_plot.R`
+Note: Results of time-intensive sections are also provided in csv files and explained at the beginning of each Rmd file. 
 
 ## Features
 
-- Optimized point configuration in high-dimensional spaces
-- Handling of missing and thresholded measurements
-- Processing of antigenic assay data
-- Interactive visualization of antigenic maps
-- Cross-validation and error analysis
-- Network structure analysis
-- Support for parallel processing and high-performance computing environments
+- **Physics-inspired optimization**: Employs a spring-mass system for robust positioning in high-dimensional spaces
+- **Optimal dimensionality detection**: Automatically determines the best dimensionality through likelihood-based estimation
+- **Complete antigenic positioning**: Maps all antigens
+- **Noise reduction**: Decreases measurement errors through network-based dampening
+- **Threshold handling**: Properly incorporates low and high reactor thresholds (e.g., <40) as equality constraints
+- **Cross-validation**: Built-in validation framework for performance assessment
+- **Parallel processing**: Support for multi-core and HPC environments
+- **Visualization tools**: Interactive and publication-ready map generation
 
 ## Input Data Format
 
-The algorithm can handle input data in various formats - if the raw input consists of one or multiple long tables with references on columns (rows) and challenges on rows (columns), they are converted to the standard matrix form.
+The algorithm can handle input data in various formats - if the raw input consists of one or multiple long tables with references on columns and challenges on rows, they are converted to the standard matrix form. (See the example scripts in `inst/examples`)
 
 The package accepts distance matrices with the following characteristics:
 
 * Square symmetric matrices
 * Can contain NA values for missing measurements
 * Can contain threshold indicators (< or >) for bounded measurements
-* Row and column names should identify antigens (V/) and antisera (S/)
 
 ## Algorithm Parameters
 
@@ -147,6 +203,27 @@ Key parameters for the TopoLow algorithm:
 * k0: Initial spring constant (typical range: 0.1-30)
 * cooling_rate: Spring decay rate (typical range: 0.0001-0.1)
 * c_repulsion: Repulsion constant (typical range: 0.00001-0.1)
+
+The optimal values for each data can be determined through adaptive Monte Carlo simulations done by functions `initial_parameter_optimization` and `run_adaptive_sampling`. (See the example scripts in `inst/examples`)
+
+## Performance
+
+Topolow demonstrates significant improvements over traditional MDS approaches:
+
+- **H3N2 influenza data (1968 - 2003)**: Similar prediction accuracy to the extensively tested maps in the literature
+- **HIV neutralization data (Subtypes B and C tested)**: 41% improved prediction accuracy
+- **Run-to-run stability**: Orders of magnitude better consistency across multiple runs
+- **Parameter sensitivity**: Performance remains robust across a wide range of parameter values
+
+## Applications
+
+Topolow is particularly valuable for:
+
+- Understanding antigenic evolution of rapidly evolving viral pathogens
+- Early detection of emerging antigenic variants
+- Predicting antigenic phenotypes for under-characterized strains
+- Amplifying training data for downstream machine learning models
+- Analyzing any continuous and relational phenotype under directional selection pressure
 
 ## Contributing
 
@@ -165,7 +242,7 @@ The license will transition upon publication - see the LICENSE file for details.
 
 If you use this package, please cite:
 
-Arhami and Rohani, 2025 [doi:to be added]
+Arhami and Rohani, 2025 <doi:10.1101/2025.02.09.637307>
 
 ## Contact
 
