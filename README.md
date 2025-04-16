@@ -177,6 +177,7 @@ The optimal values for each data can be determined through adaptive Monte Carlo 
 
 Topolow demonstrates significant improvements over traditional MDS approaches:
 
+- **27 simulated datasets with varying missingness and complexity**: Between 50% to 1000% improved prediction accuracy
 - **H3N2 influenza data (1968 - 2003)**: Similar prediction accuracy to the extensively tested maps in the literature
 - **HIV neutralization data (Subtypes B and C tested)**: 41% improved prediction accuracy
 - **Run-to-run stability**: Orders of magnitude better consistency across multiple runs
