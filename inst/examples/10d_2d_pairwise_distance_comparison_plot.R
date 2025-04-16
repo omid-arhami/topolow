@@ -4,7 +4,7 @@ library(tidyverse)
 library(stats)
 
 # Read the data
-data <- read_csv("sample_points_in_10D.csv")
+data <- read_csv("data_files/sample_points_in_10D.csv")
 
 # Set row names and remove the first column
 rownames(data) <- data$...1
@@ -32,7 +32,7 @@ print(as.matrix(distances_reduced))
 hist(distances_reduced)
 
 
-# Convert distance objects to matrices and then to data frames
+# Convert distance objects to data frames
 distances_original_df <- as.data.frame(as.matrix(distances_original))
 distances_reduced_df <- as.data.frame(as.matrix(distances_reduced))
 

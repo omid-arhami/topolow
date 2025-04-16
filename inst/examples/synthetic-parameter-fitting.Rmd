@@ -28,7 +28,7 @@ This vignette demonstrates parameter fitting for synthetic datasets across diffe
 * Missing data patterns (S, M, L levels)
 * Noise types (random noise & biased noise)
 
-Here we create 80 points for a faster analysis, but in the paper results with 250 points are shown.
+There are 27 combinations. Therefore, to run the simulation in this script, distributed processing is certainly needed.
 
 ## Required Packages
 

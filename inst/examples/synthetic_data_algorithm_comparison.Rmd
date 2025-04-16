@@ -25,7 +25,7 @@ knitr::opts_chunk$set(
 
 This vignette demonstrates how to perform a rigorous comparison between Topolow and RACMACS algorithms for antigenic cartography. We conduct k-fold cross-validation and evaluate performance using multiple metrics including mean absolute error (MAE), Mean Absolute Percentage Error (MAPE), and Completeness.
 
-You need the optimal parameters to create topolow maps. They are in csv files named "optimal_parameters_80points.csv" or "optimal_parameters_250points.csv" which are provided on Github or you can generate them by running sufficient Monte Carlo simulations (on a machine with tens of CPU cores for faster calculations) in file synthetic-parameter-fitting.Rmd in the same folder is current file.
+You need the optimal parameters to create topolow maps. They are in csv files named "optimal_parameters_250points.csv" which are provided on Github or you can generate them by running sufficient Monte Carlo simulations (on a distributed cluster or a machine with tens of CPU cores for faster calculations) in file synthetic-parameter-fitting.Rmd in the same folder as current file.
 
 ##Setup
 
@@ -117,18 +117,18 @@ print(matrix_variants)
 ```
 
 
-## Find RACMACS optimal dimensions (semi-manual)
+## Find mds optimal dimensions (semi-manual)
 ```{r}
-#' Find Optimal Dimensionality for RACMACS with Early Stopping
-#' 
-#' Analyzes each simulated dataset with increasing dimensionality until Completeness
-#' falls below 95% or max dimension is reached.
-#'
-#' @param sim_data The sim_data from generate_synthetic_datasets 
-#' @param matrix_variants Vector of matrix variant names to test
-#' @param opt_setting List of optimization settings
-#' @param output_dir Directory of the outputs
-#' @return Data table with dimension results across all variants
+# Find Optimal Dimensionality for RACMACS MDS with Early Stopping
+# S
+# Analyzes each simulated dataset with increasing dimensionality until Completeness
+# falls below 95% or max dimension is reached.
+#
+# @param sim_data The sim_data from generate_synthetic_datasets 
+# @param matrix_variants Vector of matrix variant names to test
+# @param opt_setting List of optimization settings
+# @param output_dir Directory of the outputs
+# @return Data table with dimension results across all variants
 find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setting, output_dir) {
   # Initialize results storage
   dim_results <- data.table(
@@ -278,23 +278,23 @@ find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setti
 }
 
 
-#' Plot Dimension Results with Highlighted Optimal Dimensions
-#'
-#' @param results The dimension results dataframe
-#' @param output_dir Directory to save plots
-#' @param optimal_dims Vector of 27 numbers indicating optimal dimension for each panel
-#' @return The improved faceted plot with highlighted optimal dimensions
-#'
-#' @details
-#' The optimal_dims parameter should contain 27 values in this order:
-#' - First grouped by original dimension (2D, 5D, 10D)
-#' - Then by completeness (70%, 85%, 95%)
-#' - Then by variant type (Missing Data, Noise, Noise+Bias)
-#'
-#' Example: optimal_dims[1] = optimal dimension for 2D original, 70% completeness, Missing Data
-#'          optimal_dims[2] = optimal dimension for 2D original, 70% completeness, Noise
-#'          optimal_dims[3] = optimal dimension for 2D original, 70% completeness, Noise+Bias
-#'          ...and so on
+# Plot Dimension Results with Highlighted Optimal Dimensions
+#
+# @param results The dimension results dataframe
+# @param output_dir Directory to save plots
+# @param optimal_dims Vector of 27 numbers indicating optimal dimension for each panel
+# @return The improved faceted plot with highlighted optimal dimensions
+#
+# @details
+# The optimal_dims parameter should contain 27 values in this order:
+# - First grouped by original dimension (2D, 5D, 10D)
+# - Then by completeness (70%, 85%, 95%)
+# - Then by variant type (Missing Data, Noise, Noise+Bias)
+#
+# Example: optimal_dims[1] = optimal dimension for 2D original, 70% completeness, Missing Data
+#          optimal_dims[2] = optimal dimension for 2D original, 70% completeness, Noise
+#          optimal_dims[3] = optimal dimension for 2D original, 70% completeness, Noise+Bias
+#          ...and so on
 plot_dimension_results <- function(results, output_dir, optimal_dims = NULL) {
   plots_dir <- file.path(output_dir, "plots")
   if (!dir.exists(plots_dir)) {
@@ -1429,7 +1429,7 @@ save_plot(
 )
 ```
 
-### Topolow vs RACMACS on 10D scenarios
+### Topolow vs MDS on 10D scenarios
 
 Run this block after previous block.
 
