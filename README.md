@@ -243,9 +243,12 @@ The license will transition upon publication - see the LICENSE file for details.
 
 ## Citation
 
-If you use this package, please cite:
+If you use this package, please cite the article:
 
 Arhami and Rohani, 2025 <doi:10.1101/2025.02.09.637307>
+
+Software doi:
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15231882.svg)](https://doi.org/10.5281/zenodo.15231882)
 
 ## Contact
 
