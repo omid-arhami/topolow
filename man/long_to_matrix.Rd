@@ -11,7 +11,7 @@ long_to_matrix(
   rnames,
   rorder = NULL,
   values_column,
-  rc = TRUE,
+  rc = FALSE,
   sort = FALSE
 )
 }
@@ -29,7 +29,7 @@ long_to_matrix(
 \item{values_column}{Character. Name of column containing distance/difference values. It should be from the nature of "distance" (e.g., antigenic distance or IC50), not "similarity" (e.g., HI Titer.)}
 
 \item{rc}{Logical. If TRUE, reference points are treated as a subset of challenge
-points. If FALSE, they are treated as distinct sets. Default is TRUE.}
+points. If FALSE, they are treated as distinct sets. Default is FALSE.}
 
 \item{sort}{Logical. Whether to sort rows/columns by chorder/rorder. Default FALSE.}
 }

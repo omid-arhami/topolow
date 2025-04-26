@@ -32,7 +32,7 @@
 #' @param rorder Character. Optional name of column for reference point ordering.
 #' @param values_column Character. Name of column containing distance/difference values. It should be from the nature of "distance" (e.g., antigenic distance or IC50), not "similarity" (e.g., HI Titer.)
 #' @param rc Logical. If TRUE, reference points are treated as a subset of challenge
-#'        points. If FALSE, they are treated as distinct sets. Default is TRUE.
+#'        points. If FALSE, they are treated as distinct sets. Default is FALSE.
 #' @param sort Logical. Whether to sort rows/columns by chorder/rorder. Default FALSE.
 #' 
 #' @details
@@ -76,7 +76,7 @@
 #' @export
 long_to_matrix <- function(data, chnames, chorder = NULL, 
                           rnames, rorder = NULL, values_column, 
-                          rc = TRUE, sort = FALSE) {
+                          rc = FALSE, sort = FALSE) {
   
   # Validate inputs 
   if (!is.data.frame(data)) {
@@ -122,8 +122,9 @@ long_to_matrix <- function(data, chnames, chorder = NULL,
   }
   
   # Get unique point names
-  all_points <- sort(unique(unlist(data[, .(get(chnames), get(rnames))])))
-  
+  #all_points <- sort(unique(unlist(data[, .(get(chnames), get(rnames))])))
+  all_points <- sort(unique(c(data[[chnames]], data[[rnames]])))
+
   # Create square matrix with NA values
   n <- length(all_points)
   distance_matrix <- matrix(NA, nrow = n, ncol = n)
