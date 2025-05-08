@@ -10,7 +10,8 @@ plot_temporal_mapping(
   dim_config = new_dim_reduction_config(),
   aesthetic_config = new_aesthetic_config(),
   layout_config = new_layout_config(),
-  output_dir = NULL
+  output_dir = NULL,
+  draw_arrows = FALSE
 )
 }
 \arguments{
@@ -30,12 +31,14 @@ plot_temporal_mapping(
 Use x_limits and y_limits in layout_config to set axis limits.}
 
 \item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+
+\item{draw_arrows}{logical; if TRUE, compute and draw antigenic drift vectors}
 }
 \value{
 ggplot object containing the temporal mapping visualization
 }
 \description{
-Creates a visualization of points colored by time (year) using dimension reduction.
+Creates a visualization of points colored by time (year) using dimension reduction, with optional drift arrows.
 Points are colored on a gradient scale based on their temporal values, with
 different shapes for antigens and antisera.
 }
