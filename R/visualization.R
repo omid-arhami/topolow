@@ -226,30 +226,36 @@ new_aesthetic_config <- function(
 #' @param reverse_y Numeric multiplier for y-axis direction (1 or -1)
 #' @param x_limits Numeric vector of length 2 specifying c(min, max) for x-axis. If NULL, limits are set automatically.
 #' @param y_limits Numeric vector of length 2 specifying c(min, max) for y-axis. If NULL, limits are set automatically.
+#' @param sigma_x Spatial bandwidth of the kernel function of velocity arrows in plot units
+#' @param sigma_t Temporal bandwidth of the kernel function of velocity arrows in years
+#' @param top_velocity_p Top percentile of velocity arrows to draw (between 0 and 1, default: 0.10)
 #' @return A layout_config object
 #' @export
 new_layout_config <- function(
-    width = 8,
-    height = 8,
-    dpi = 300,
-    aspect_ratio = 1,
-    show_grid = TRUE,
-    grid_type = "major",
-    grid_color = "grey80",
-    grid_linetype = "dashed",
-    show_axis = TRUE,
-    axis_lines = TRUE,
-    plot_margin = margin(1, 1, 1, 1, "cm"),
-    coord_type = "fixed",
-    background_color = "white",
-    panel_background_color = "white",
-    panel_border = TRUE,
-    panel_border_color = "black",
-    save_format = "png",
-    reverse_x = 1,
-    reverse_y = 1,
-    x_limits = NULL,
-    y_limits = NULL
+  width = 8,
+  height = 8,
+  dpi = 300,
+  aspect_ratio = 1,
+  show_grid = TRUE,
+  grid_type = "major",
+  grid_color = "grey80",
+  grid_linetype = "dashed",
+  show_axis = TRUE,
+  axis_lines = TRUE,
+  plot_margin = margin(1, 1, 1, 1, "cm"),
+  coord_type = "fixed",
+  background_color = "white",
+  panel_background_color = "white",
+  panel_border = TRUE,
+  panel_border_color = "black",
+  save_format = "png",
+  reverse_x = 1,
+  reverse_y = 1,
+  x_limits = NULL,
+  y_limits = NULL,
+  sigma_x = 1,    # spatial bandwidth (in plot units)
+  sigma_t = 1,    # temporal bandwidth (in years)
+  top_velocity_p   = 0.10  # top‐percentile of velocity arrows to draw
 ) {
   config <- list(
     width = width,
@@ -272,7 +278,10 @@ new_layout_config <- function(
     reverse_x = reverse_x,
     reverse_y = reverse_y,
     x_limits = x_limits,
-    y_limits = y_limits
+    y_limits = y_limits,
+    sigma_x = sigma_x,
+    sigma_t = sigma_t,
+    top_velocity_p   = top_velocity_p
   )
   
   # Validate inputs
@@ -295,7 +304,10 @@ new_layout_config <- function(
     is.character(panel_border_color),
     save_format %in% c("png", "pdf", "svg", "eps"),
     reverse_x %in% c(1, -1),
-    reverse_y %in% c(1, -1)
+    reverse_y %in% c(1, -1),
+    is.numeric(sigma_x), sigma_x > 0,
+    is.numeric(sigma_t), sigma_t > 0,
+    is.numeric(top_velocity_p),   top_velocity_p > 0, top_velocity_p < 1
   )
   
   # Validate axis limits if provided
@@ -608,7 +620,7 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #' Create Temporal Mapping Plot
 #'
 #' @description
-#' Creates a visualization of points colored by time (year) using dimension reduction.
+#' Creates a visualization of points colored by time (year) using dimension reduction, with optional drift arrows.
 #' Points are colored on a gradient scale based on their temporal values, with
 #' different shapes for antigens and antisera.
 #' @param df Data frame containing:
@@ -617,6 +629,7 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #'        - antiserum: Binary indicator for antiserum points
 #'        - year: Numeric year values for temporal coloring
 #' @param ndim Number of dimensions in input coordinates
+#' @param draw_arrows     logical; if TRUE, compute and draw antigenic drift vectors
 #' @param dim_config Dimension reduction configuration object specifying method and parameters
 #' @param aesthetic_config Aesthetic configuration object controlling plot appearance
 #' @param layout_config Layout configuration object controlling plot dimensions and style.
@@ -671,7 +684,8 @@ plot_temporal_mapping <- function(df, ndim,
                                   dim_config = new_dim_reduction_config(),
                                   aesthetic_config = new_aesthetic_config(),
                                   layout_config = new_layout_config(),
-                                  output_dir = NULL) {
+                                  output_dir = NULL,
+                                   draw_arrows = FALSE) {
   # Validate input data
   df <- validate_topolow_df(df, ndim, require_temporal = TRUE)
   
@@ -723,6 +737,54 @@ plot_temporal_mapping <- function(df, ndim,
   if(layout_config$coord_type == "fixed") {
     p <- p + coord_fixed(ratio = layout_config$aspect_ratio)
   }
+
+  if (draw_arrows) {
+    if (!"year" %in% names(reduced_df)) {
+      stop("`year` column is required when draw_arrows = TRUE")
+    }
+    # compute velocities in 2D
+    positions <- reduced_df
+    positions$V1 <- positions$plot_x
+    positions$V2 <- positions$plot_y
+
+    n   <- nrow(positions)
+    v1  <- numeric(n)
+    v2  <- numeric(n)
+    for (i in seq_len(n)) {
+      past_idx <- which(positions$year < positions$year[i])
+      if (length(past_idx) > 0) {
+        dt <- positions$year[past_idx] - positions$year[i]
+        dx <- positions$V1[past_idx] - positions$V1[i]
+        dy <- positions$V2[past_idx] - positions$V2[i]
+        w  <- exp(-(dx^2 + dy^2)/(2*layout_config$sigma_x^2)) *
+              exp(-(dt^2)         /(2*layout_config$sigma_t^2))
+        v1[i] <- sum(w * (dx / dt)) / sum(w)
+        v2[i] <- sum(w * (dy / dt)) / sum(w)
+      } else {
+        v1[i] <- NA; v2[i] <- NA
+      }
+    }
+    positions$v1  <- v1
+    positions$v2  <- v2
+    positions$mag <- sqrt(v1^2 + v2^2)
+    # select top-p speeds
+    threshold <- quantile(positions$mag,
+                          probs = 1 - layout_config$top_velocity_p,
+                          na.rm = TRUE)
+    top_vel <- positions[positions$mag >= threshold, ]
+
+    # add arrow layer
+    p <- p +
+      geom_segment(
+        data = top_vel,
+        aes(x    = V1 - v1,
+            y    = V2 - v2,
+            xend = V1,
+            yend = V2),
+        arrow = arrow(length = unit(0.15, "cm")),
+        alpha = aesthetic_config$arrow_alpha
+      )
+  }
   
   # Save plot if save format is specified
   if (!is.null(layout_config$save_format)) {
@@ -739,7 +801,7 @@ plot_temporal_mapping <- function(df, ndim,
 #'
 #' @description
 #' Creates a visualization of points colored by cluster assignment using dimension 
-#' reduction. Points are colored by cluster with different shapes for antigens and 
+#' reduction, with optional drift arrows. Points are colored by cluster with different shapes for antigens and 
 #' antisera.
 #'
 #' @param df_coords Data frame containing:
@@ -748,6 +810,7 @@ plot_temporal_mapping <- function(df, ndim,
 #'        - antiserum: Binary indicator for antiserum points
 #'        - cluster: Factor or integer cluster assignments
 #' @param ndim Number of dimensions in input coordinates
+#' @param draw_arrows     logical; if TRUE, compute and draw antigenic drift vectors
 #' @param dim_config Dimension reduction configuration object specifying method and parameters
 #' @param aesthetic_config Aesthetic configuration object controlling plot appearance
 #' @param layout_config Layout configuration object controlling plot dimensions and style.
@@ -824,7 +887,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
                                   annotation_config = new_annotation_config(),
                                   output_dir = NULL,
                                   show_shape_legend = TRUE,
-                                  cluster_legend_title = "Cluster") {
+                                  cluster_legend_title = "Cluster",
+                                  draw_arrows = FALSE) {
   
   # Ensure ggrepel is available
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
@@ -1010,6 +1074,55 @@ plot_cluster_mapping <- function(df_coords, ndim,
     p <- p + coord_fixed(ratio = layout_config$aspect_ratio)
   }
   
+  if (draw_arrows) {
+    if (!"year" %in% names(reduced_df)) {
+      stop("`year` column is required when draw_arrows = TRUE")
+    }
+    # compute velocities as above
+    positions <- reduced_df
+    positions$V1 <- positions$plot_x
+    positions$V2 <- positions$plot_y
+
+    n   <- nrow(positions)
+    v1  <- numeric(n)
+    v2  <- numeric(n)
+    for (i in seq_len(n)) {
+      past_idx <- which(positions$year < positions$year[i])
+      if (length(past_idx) > 0) {
+        dt <- positions$year[past_idx] - positions$year[i]
+        dx <- positions$V1[past_idx] - positions$V1[i]
+        dy <- positions$V2[past_idx] - positions$V2[i]
+        w  <- exp(-(dx^2 + dy^2)/(2*layout_config$sigma_x^2)) *
+              exp(-(dt^2)         /(2*layout_config$sigma_t^2))
+        v1[i] <- sum(w * (dx / dt)) / sum(w)
+        v2[i] <- sum(w * (dy / dt)) / sum(w)
+      } else {
+        v1[i] <- NA; v2[i] <- NA
+      }
+    }
+    positions$v1  <- v1
+    positions$v2  <- v2
+    positions$mag <- sqrt(v1^2 + v2^2)
+
+    # threshold
+    threshold <- quantile(positions$mag,
+                          probs = 1 - layout_config$top_velocity_p,
+                          na.rm = TRUE)
+    top_vel <- positions[positions$mag >= threshold, ]
+
+    # overlay arrows
+    p <- p +
+      geom_segment(
+        data = top_vel,
+        aes(x    = V1 - v1,
+            y    = V2 - v2,
+            xend = V1,
+            yend = V2),
+        arrow = arrow(length = unit(0.15, "cm")),
+        alpha = aesthetic_config$arrow_alpha
+      )
+  }
+
   # Save plot if save format is specified
   if (!is.null(layout_config$save_format)) {
     filename <- sprintf("%s_cluster_mapping_ndim_%d.%s", 

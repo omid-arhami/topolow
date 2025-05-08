@@ -13,7 +13,8 @@ plot_cluster_mapping(
   annotation_config = new_annotation_config(),
   output_dir = NULL,
   show_shape_legend = TRUE,
-  cluster_legend_title = "Cluster"
+  cluster_legend_title = "Cluster",
+  draw_arrows = FALSE
 )
 }
 \arguments{
@@ -39,13 +40,15 @@ Use x_limits and y_limits in layout_config to set axis limits.}
 \item{show_shape_legend}{Logical. Whether to show the shape legend (default: TRUE)}
 
 \item{cluster_legend_title}{Character. Custom title for the cluster legend (default: "Cluster")}
+
+\item{draw_arrows}{logical; if TRUE, compute and draw antigenic drift vectors}
 }
 \value{
 ggplot object containing the cluster mapping visualization
 }
 \description{
 Creates a visualization of points colored by cluster assignment using dimension
-reduction. Points are colored by cluster with different shapes for antigens and
+reduction, with optional drift arrows. Points are colored by cluster with different shapes for antigens and
 antisera.
 }
 \details{
