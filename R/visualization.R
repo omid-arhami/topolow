@@ -766,8 +766,8 @@ plot_temporal_mapping <- function(df, ndim,
       absent_tips  <- unique(all_tips[!present_mask])
 
       if (length(absent_tips) > 0) {
-        warning(
-          "No antigenic velocity was calculated for the following antigens\n",
+        cat(
+          "\nNo antigenic velocity was calculated for the following antigens\n",
           "because they are not in the provided phylo_tree\n  ",
           "Either supply a complete tree or call with phylo_tree = NULL.\n  ",
           paste(absent_tips, collapse = ", "), "\n"
@@ -1180,8 +1180,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
       absent_tips  <- unique(all_tips[!present_mask])
 
       if (length(absent_tips) > 0) {
-        warning(
-          "No antigenic velocity was calculated for the following antigens\n",
+        cat(
+          "\nNo antigenic velocity was calculated for the following antigens\n",
           "because they are not in the provided phylo_tree\n  ",
           "Either supply a complete tree or call with phylo_tree = NULL.\n  ",
           paste(absent_tips, collapse = ", "), "\n"
