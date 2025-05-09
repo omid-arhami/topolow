@@ -811,6 +811,50 @@ ggsave(file.path( "amino_acid_discrimination_power.pdf"),
 
 ```
 
+# Create a phylogenetic tree & save groupings:
+
+
+**This does:**
+
+1. imports `"matched_sequences_alignment.fasta"`.  
+2. calculates the pairwise distance matrix.  
+3. builds a neighbour‐joining tree from that matrix.  
+4. drops all branch lengths, because we only need groupings to use in calculating antigenic velocity. (i.e. save the nested Newick topology).  
+5. exports the grouping in standard Newick format.
+
+```{r phylo-groupings, echo=TRUE, message=FALSE, warning=FALSE}
+# install.packages("ape")
+#–– build grouping‐only phylogeny from amino‐acid alignment and root on oldest sample ––
+library(ape)
+library(phangorn)
+
+# read AA alignment
+alignment_aa <- read.phyDat("data_files/matched_sequences alignment.fasta",
+                           format = "fasta",
+                           type   = "AA")
+
+# compute pairwise Hamming distances
+dist_matrix <- dist.hamming(alignment_aa)
+
+# neighbor‐joining tree
+tree_nj <- NJ(dist_matrix)
+
+# identify oldest sample by extracting 4-digit year from sequence names
+seq_names   <- names(alignment_aa)
+years       <- as.integer(sub(".*(\\d{4}).*$", "\\1", seq_names))
+oldest_tip  <- seq_names[which.min(years)]
+
+# root the tree on that oldest tip
+tree_rooted <- root(tree_nj, outgroup = oldest_tip, resolve.root = TRUE)
+
+# strip out branch lengths → keep only grouping/topology
+tree_rooted$edge.length <- NULL
+
+# write topology‐only, rooted tree in Newick (no “:length” entries)
+write.tree(tree_rooted, file = "phylo_groupings_rooted.nwk")
+```
+
+
 
 ```{r session-info}
 # Print session information for reproducibility
