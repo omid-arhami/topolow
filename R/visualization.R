@@ -756,16 +756,34 @@ plot_temporal_mapping <- function(df, ndim,
     positions$V1 <- positions$plot_x
     positions$V2 <- positions$plot_y
 
-    # precompute clade tips if tree is provided
+    #— identify which tip names actually exist in the tree
     if (!is.null(phylo_tree)) {
       library(ape)
+      all_tips      <- positions$name
+      tree_tips_up  <- toupper(phylo_tree$tip.label)
+      # compare in uppercase for consistency
+      present_mask <- toupper(all_tips) %in% tree_tips_up
+      absent_tips  <- unique(all_tips[!present_mask])
+
+      if (length(absent_tips) > 0) {
+        warning(
+          "No antigenic velocity was calculated for the following antigens\n",
+          "because they are not in the provided phylo_tree\n  ",
+          "Either supply a complete tree or call with phylo_tree = NULL.",
+          paste(absent_tips, collapse = ", "), "\n"
+          
+        )
+
+      # only compute clades for tips that are present
       get_clade_node <- function(phy, tip_label, depth) {
-        tip_ix <- which(toupper(phy$tip.label) == toupper(tip_label))
-        if (length(tip_ix) != 1) {
-          stop("Tip '", tip_label, "' not found uniquely in phylo_tree.")
+        # exact match in uppercase
+        ix <- which(tree_tips_up == toupper(tip_label))
+        if (length(ix) != 1) {
+          # this should never happen now, since we filtered
+          stop("Internal error: tip '", tip_label, "' lookup failed")
         }
-        node <- tip_ix
-        for (k in seq_len(depth)) {
+        node <- ix
+        for (k in seq_len(clade_depth)) {
           parent <- phy$edge[phy$edge[,2] == node, 1]
           if (length(parent) != 1) break
           node <- parent
@@ -773,29 +791,41 @@ plot_temporal_mapping <- function(df, ndim,
         node
       }
 
-      unique_tips   <- unique(positions$name)
-      clade_nodes   <- setNames(
-        lapply(unique_tips, get_clade_node, phy = phylo_tree, depth = clade_depth),
-        unique_tips
+      present_tips <- unique(all_tips[present_mask])
+      clade_nodes  <- setNames(
+        lapply(present_tips, get_clade_node, phy = phylo_tree),
+        present_tips
       )
-      clade_members <- lapply(clade_nodes,
-                              function(nd) extract.clade(phylo_tree, nd)$tip.label)
+      clade_members <- lapply(
+        clade_nodes,
+        function(nd) extract.clade(phylo_tree, nd)$tip.label
+      )
     }
     
     n   <- nrow(positions)
     v1  <- numeric(n)
     v2  <- numeric(n)
+
     for (i in seq_len(n)) {
-      # pick past indices
+      this_tip <- positions$name[i]
+
       if (!is.null(phylo_tree)) {
-        members   <- clade_members[[ positions$name[i] ]]
-        past_idx  <- which(positions$year < positions$year[i] &
-                           positions$name %in% members)
+        # if the tip itself was absent, skip
+        if (!(this_tip %in% names(clade_members))) {
+          v1[i] <- NA
+          v2[i] <- NA
+          next
+        }
+        members  <- clade_members[[this_tip]]
+        past_idx <- which(
+          positions$year < positions$year[i] &
+          positions$name %in% members
+        )
       } else {
-        past_idx  <- which(positions$year < positions$year[i])
+        past_idx <- which(positions$year < positions$year[i])
       }
 
-      if (length(past_idx) > 0) {
+      if (length(past_idx)) {
         dt <- positions$year[past_idx] - positions$year[i]
         dx <- positions$V1[past_idx] - positions$V1[i]
         dy <- positions$V2[past_idx] - positions$V2[i]
@@ -804,13 +834,14 @@ plot_temporal_mapping <- function(df, ndim,
         v1[i] <- sum(w * (dx / dt)) / sum(w)
         v2[i] <- sum(w * (dy / dt)) / sum(w)
       } else {
-        v1[i] <- NA; v2[i] <- NA
+        v1[i] <- NA
+        v2[i] <- NA
       }
     }
     positions$v1  <- v1
     positions$v2  <- v2
     positions$mag <- sqrt(v1^2 + v2^2)
-    # select top-p speeds
+    # select top-p vectors
     threshold <- quantile(positions$mag,
                           probs = 1 - layout_config$top_velocity_p,
                           na.rm = TRUE)
@@ -1132,16 +1163,34 @@ plot_cluster_mapping <- function(df_coords, ndim,
     positions$V1 <- positions$plot_x
     positions$V2 <- positions$plot_y
 
-    # precompute clade tips if tree is provided
+    #— identify which tip names actually exist in the tree
     if (!is.null(phylo_tree)) {
       library(ape)
+      all_tips      <- positions$name
+      tree_tips_up  <- toupper(phylo_tree$tip.label)
+      # compare in uppercase for consistency
+      present_mask <- toupper(all_tips) %in% tree_tips_up
+      absent_tips  <- unique(all_tips[!present_mask])
+
+      if (length(absent_tips) > 0) {
+        warning(
+          "No antigenic velocity was calculated for the following antigens\n",
+          "because they are not in the provided phylo_tree\n  ",
+          "Either supply a complete tree or call with phylo_tree = NULL.",
+          paste(absent_tips, collapse = ", "), "\n"
+          
+        )
+
+      # only compute clades for tips that are present
       get_clade_node <- function(phy, tip_label, depth) {
-        tip_ix <- which(toupper(phy$tip.label) == toupper(tip_label))
-        if (length(tip_ix) != 1) {
-          stop("Tip '", tip_label, "' not found uniquely in phylo_tree.")
+        # exact match in uppercase
+        ix <- which(tree_tips_up == toupper(tip_label))
+        if (length(ix) != 1) {
+          # this should never happen now, since we filtered
+          stop("Internal error: tip '", tip_label, "' lookup failed")
         }
-        node <- tip_ix
-        for (k in seq_len(depth)) {
+        node <- ix
+        for (k in seq_len(clade_depth)) {
           parent <- phy$edge[phy$edge[,2] == node, 1]
           if (length(parent) != 1) break
           node <- parent
@@ -1149,29 +1198,41 @@ plot_cluster_mapping <- function(df_coords, ndim,
         node
       }
 
-      unique_tips   <- unique(positions$name)
-      clade_nodes   <- setNames(
-        lapply(unique_tips, get_clade_node, phy = phylo_tree, depth = clade_depth),
-        unique_tips
+      present_tips <- unique(all_tips[present_mask])
+      clade_nodes  <- setNames(
+        lapply(present_tips, get_clade_node, phy = phylo_tree),
+        present_tips
       )
-      clade_members <- lapply(clade_nodes,
-                              function(nd) extract.clade(phylo_tree, nd)$tip.label)
+      clade_members <- lapply(
+        clade_nodes,
+        function(nd) extract.clade(phylo_tree, nd)$tip.label
+      )
     }
     
     n   <- nrow(positions)
     v1  <- numeric(n)
     v2  <- numeric(n)
+    
     for (i in seq_len(n)) {
-      # pick past indices
+      this_tip <- positions$name[i]
+
       if (!is.null(phylo_tree)) {
-        members   <- clade_members[[ positions$name[i] ]]
-        past_idx  <- which(positions$year < positions$year[i] &
-                           positions$name %in% members)
+        # if the tip itself was absent, skip
+        if (!(this_tip %in% names(clade_members))) {
+          v1[i] <- NA
+          v2[i] <- NA
+          next
+        }
+        members  <- clade_members[[this_tip]]
+        past_idx <- which(
+          positions$year < positions$year[i] &
+          positions$name %in% members
+        )
       } else {
-        past_idx  <- which(positions$year < positions$year[i])
+        past_idx <- which(positions$year < positions$year[i])
       }
 
-      if (length(past_idx) > 0) {
+      if (length(past_idx)) {
         dt <- positions$year[past_idx] - positions$year[i]
         dx <- positions$V1[past_idx] - positions$V1[i]
         dy <- positions$V2[past_idx] - positions$V2[i]
@@ -1180,18 +1241,20 @@ plot_cluster_mapping <- function(df_coords, ndim,
         v1[i] <- sum(w * (dx / dt)) / sum(w)
         v2[i] <- sum(w * (dy / dt)) / sum(w)
       } else {
-        v1[i] <- NA; v2[i] <- NA
+        v1[i] <- NA
+        v2[i] <- NA
       }
     }
     positions$v1  <- v1
     positions$v2  <- v2
     positions$mag <- sqrt(v1^2 + v2^2)
-    # select top-p speeds
+    # select top-p vectors
     threshold <- quantile(positions$mag,
                           probs = 1 - layout_config$top_velocity_p,
                           na.rm = TRUE)
     # limit to top percentile, and to antigens only:
     top_vel <- positions[positions$mag >= threshold & positions$antigen, ]
+
 
     # add arrow layer
     p <- p +
