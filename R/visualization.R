@@ -773,6 +773,7 @@ plot_temporal_mapping <- function(df, ndim,
           paste(absent_tips, collapse = ", "), "\n"
           
         )
+      }
 
       # only compute clades for tips that are present
       get_clade_node <- function(phy, tip_label, depth) {
@@ -1178,8 +1179,9 @@ plot_cluster_mapping <- function(df_coords, ndim,
           "because they are not in the provided phylo_tree\n  ",
           "Either supply a complete tree or call with phylo_tree = NULL.",
           paste(absent_tips, collapse = ", "), "\n"
-          
+
         )
+      }
 
       # only compute clades for tips that are present
       get_clade_node <- function(phy, tip_label, depth) {
