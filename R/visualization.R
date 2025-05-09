@@ -1279,6 +1279,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
         aes(x   = V1, y   = V2),
         shape       = 21,   # same filled‐circle shape you used for notable antigens
         color       = "black",
+        size        = aesthetic_config$point_size * 1.2,
         stroke      = annotation_config$outline_size,
         alpha       = aesthetic_config$point_alpha
       )
@@ -1296,39 +1297,59 @@ plot_cluster_mapping <- function(df_coords, ndim,
         #alpha = aesthetic_config$arrow_alpha
       )
 
-    # Annotate top‐velocity points using annotation_config
+    # Annotate top‐velocity points exactly like notable‐point labels
     if (requireNamespace("ggrepel", quietly = TRUE)) {
-      p <- p +
-      ggrepel::geom_text_repel(
-        data        = top_vel,
-        inherit.aes = FALSE,
-        aes(x = V1, y = V2, label = name),
-        size              = annotation_config$size / ggplot2::.pt,
-        color             = annotation_config$color,
-        alpha             = annotation_config$alpha,
-        fontface          = annotation_config$fontface,
-        box.padding       = if (annotation_config$box) unit(0.25, "lines") else unit(0, "lines"),
-        point.padding     = unit(0.3, "lines"),
-        segment.size      = annotation_config$segment_size,
-        segment.alpha     = annotation_config$segment_alpha,
-        min.segment.length= annotation_config$min_segment_length,
-        max.overlaps      = annotation_config$max_overlaps,
-        force             = 1, #annotation_config$outline_size,
-        direction         = "both"
-      )     
+      if (annotation_config$box) {
+        p <- p +
+          ggrepel::geom_label_repel(
+            data        = top_vel,
+            inherit.aes = FALSE,
+            aes(x = V1, y = V2, label = name),
+            size              = annotation_config$size / ggplot2::.pt,
+            color             = annotation_config$color,
+            alpha             = annotation_config$alpha,
+            fontface          = annotation_config$fontface,
+            segment.size      = annotation_config$segment_size,
+            segment.alpha     = annotation_config$segment_alpha,
+            min.segment.length= annotation_config$min_segment_length,
+            max.overlaps      = annotation_config$max_overlaps,
+            box.padding       = unit(0.4, "lines"),
+            point.padding     = unit(0.3, "lines"),
+            force             = 1,
+            direction         = "both"
+          )
+      } else {
+        p <- p +
+          ggrepel::geom_text_repel(
+            data        = top_vel,
+            inherit.aes = FALSE,
+            aes(x = V1, y = V2, label = name),
+            size              = annotation_config$size / ggplot2::.pt,
+            color             = annotation_config$color,
+            alpha             = annotation_config$alpha,
+            fontface          = annotation_config$fontface,
+            segment.size      = annotation_config$segment_size,
+            segment.alpha     = annotation_config$segment_alpha,
+            min.segment.length= annotation_config$min_segment_length,
+            max.overlaps      = annotation_config$max_overlaps,
+            box.padding       = unit(0.4, "lines"),
+            point.padding     = unit(0.3, "lines"),
+            force             = 1,
+            direction         = "both"
+          )
+      }
     } else {
-      # Fallback if ggrepel is not available - basic text labels
       warning("ggrepel package not available - using basic text labels without repulsion")
       p <- p + geom_text(
         data = top_vel,
         aes(x = V1, y = V2, label = name),
-        size = annotation_config$size / ggplot2::.pt,
-        color = annotation_config$color,
-        alpha = annotation_config$alpha,
-        fontface = annotation_config$fontface,
-        nudge_x = 0.1,
-        nudge_y = 0.1,
-        check_overlap = TRUE
+        size           = annotation_config$size / ggplot2::.pt,
+        color          = annotation_config$color,
+        alpha          = annotation_config$alpha,
+        fontface       = annotation_config$fontface,
+        nudge_x        = - 0.15,
+        nudge_y        = - 0.15,
+        check_overlap  = TRUE
       )
     }
 
