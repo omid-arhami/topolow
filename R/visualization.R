@@ -636,6 +636,8 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #'        - year: Numeric year values for temporal coloring
 #' @param ndim Number of dimensions in input coordinates
 #' @param draw_arrows     logical; if TRUE, compute and draw antigenic drift vectors
+#' @param phylo_tree      phylo object; if provided, used to compute drift vectors
+#' @param clade_depth     integer; only takes 1, 2, 3. Number of levels of parent nodes to define clades to limit the calculation of drift vectors to
 #' @param dim_config Dimension reduction configuration object specifying method and parameters
 #' @param aesthetic_config Aesthetic configuration object controlling plot appearance
 #' @param layout_config Layout configuration object controlling plot dimensions and style.
@@ -691,7 +693,9 @@ plot_temporal_mapping <- function(df, ndim,
                                   aesthetic_config = new_aesthetic_config(),
                                   layout_config = new_layout_config(),
                                   output_dir = NULL,
-                                   draw_arrows = FALSE) {
+                                  draw_arrows = FALSE,
+                                  phylo_tree = NULL,
+                                  clade_depth = 2) {
   # Validate input data
   df <- validate_topolow_df(df, ndim, require_temporal = TRUE)
   
@@ -748,7 +752,33 @@ plot_temporal_mapping <- function(df, ndim,
     if (!"year" %in% names(reduced_df)) {
       stop("`year` column is required when draw_arrows = TRUE")
     }
-    # compute velocities in 2D
+
+    # precompute clade tips if tree is provided
+    if (!is.null(phylo_tree)) {
+      library(ape)
+      get_clade_node <- function(phy, tip_label, depth) {
+        tip_ix <- which(phy$tip.label == tip_label)
+        if (length(tip_ix) != 1) {
+          stop("Tip '", tip_label, "' not found uniquely in phylo_tree.")
+        }
+        node <- tip_ix
+        for (k in seq_len(depth)) {
+          parent <- phy$edge[phy$edge[,2] == node, 1]
+          if (length(parent) != 1) break
+          node <- parent
+        }
+        node
+      }
+
+      unique_tips   <- unique(reduced_df$name)
+      clade_nodes   <- setNames(
+        lapply(unique_tips, get_clade_node, phy = phylo_tree, depth = clade_depth),
+        unique_tips
+      )
+      clade_members <- lapply(clade_nodes,
+                              function(nd) extract.clade(phylo_tree, nd)$tip.label)
+    }
+    
     positions <- reduced_df
     positions$V1 <- positions$plot_x
     positions$V2 <- positions$plot_y
@@ -757,7 +787,15 @@ plot_temporal_mapping <- function(df, ndim,
     v1  <- numeric(n)
     v2  <- numeric(n)
     for (i in seq_len(n)) {
-      past_idx <- which(positions$year < positions$year[i])
+      # pick past indices
+      if (!is.null(phylo_tree)) {
+        members   <- clade_members[[ positions$name[i] ]]
+        past_idx  <- which(positions$year < positions$year[i] &
+                           positions$name %in% members)
+      } else {
+        past_idx  <- which(positions$year < positions$year[i])
+      }
+
       if (length(past_idx) > 0) {
         dt <- positions$year[past_idx] - positions$year[i]
         dx <- positions$V1[past_idx] - positions$V1[i]
@@ -820,6 +858,7 @@ plot_temporal_mapping <- function(df, ndim,
 #'        - cluster: Factor or integer cluster assignments
 #' @param ndim Number of dimensions in input coordinates
 #' @param draw_arrows     logical; if TRUE, compute and draw antigenic drift vectors
+#' @param phylo_tree Optional phylogenetic tree object for drawing arrows
 #' @param dim_config Dimension reduction configuration object specifying method and parameters
 #' @param aesthetic_config Aesthetic configuration object controlling plot appearance
 #' @param layout_config Layout configuration object controlling plot dimensions and style.
@@ -897,7 +936,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
                                   output_dir = NULL,
                                   show_shape_legend = TRUE,
                                   cluster_legend_title = "Cluster",
-                                  draw_arrows = FALSE) {
+                                  draw_arrows = FALSE,
+                                  phylo_tree = NULL) {
   
   # Ensure ggrepel is available
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
@@ -1087,7 +1127,33 @@ plot_cluster_mapping <- function(df_coords, ndim,
     if (!"year" %in% names(reduced_df)) {
       stop("`year` column is required when draw_arrows = TRUE")
     }
-    # compute velocities
+
+    # precompute clade tips if tree is provided
+    if (!is.null(phylo_tree)) {
+      library(ape)
+      get_clade_node <- function(phy, tip_label, depth) {
+        tip_ix <- which(phy$tip.label == tip_label)
+        if (length(tip_ix) != 1) {
+          stop("Tip '", tip_label, "' not found uniquely in phylo_tree.")
+        }
+        node <- tip_ix
+        for (k in seq_len(depth)) {
+          parent <- phy$edge[phy$edge[,2] == node, 1]
+          if (length(parent) != 1) break
+          node <- parent
+        }
+        node
+      }
+
+      unique_tips   <- unique(reduced_df$name)
+      clade_nodes   <- setNames(
+        lapply(unique_tips, get_clade_node, phy = phylo_tree, depth = clade_depth),
+        unique_tips
+      )
+      clade_members <- lapply(clade_nodes,
+                              function(nd) extract.clade(phylo_tree, nd)$tip.label)
+    }
+    
     positions <- reduced_df
     positions$V1 <- positions$plot_x
     positions$V2 <- positions$plot_y
@@ -1096,7 +1162,15 @@ plot_cluster_mapping <- function(df_coords, ndim,
     v1  <- numeric(n)
     v2  <- numeric(n)
     for (i in seq_len(n)) {
-      past_idx <- which(positions$year < positions$year[i])
+      # pick past indices
+      if (!is.null(phylo_tree)) {
+        members   <- clade_members[[ positions$name[i] ]]
+        past_idx  <- which(positions$year < positions$year[i] &
+                           positions$name %in% members)
+      } else {
+        past_idx  <- which(positions$year < positions$year[i])
+      }
+
       if (length(past_idx) > 0) {
         dt <- positions$year[past_idx] - positions$year[i]
         dx <- positions$V1[past_idx] - positions$V1[i]
@@ -1112,15 +1186,14 @@ plot_cluster_mapping <- function(df_coords, ndim,
     positions$v1  <- v1
     positions$v2  <- v2
     positions$mag <- sqrt(v1^2 + v2^2)
-
-    # threshold
+    # select top-p speeds
     threshold <- quantile(positions$mag,
                           probs = 1 - layout_config$top_velocity_p,
                           na.rm = TRUE)
     # limit to top percentile, and to antigens only:
     top_vel <- positions[positions$mag >= threshold & positions$antigen, ]
 
-    # overlay arrows
+    # add arrow layer
     p <- p +
       geom_segment(
         data      = top_vel,
