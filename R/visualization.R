@@ -637,7 +637,7 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #' @param ndim Number of dimensions in input coordinates
 #' @param draw_arrows     logical; if TRUE, compute and draw antigenic drift vectors
 #' @param phylo_tree      phylo object; if provided, used to compute drift vectors
-#' @param clade_depth     integer; only takes 1, 2, 3. Number of levels of parent nodes to define clades to limit the calculation of drift vectors to
+#' @param clade_depth     integer; number of levels of parent nodes to define clades to limit the calculation of drift vectors to
 #' @param dim_config Dimension reduction configuration object specifying method and parameters
 #' @param aesthetic_config Aesthetic configuration object controlling plot appearance
 #' @param layout_config Layout configuration object controlling plot dimensions and style.
@@ -753,6 +753,8 @@ plot_temporal_mapping <- function(df, ndim,
       stop("`year` column is required when draw_arrows = TRUE")
     }
 
+    positions <- positions[positions$antigen, ]
+
     # precompute clade tips if tree is provided
     if (!is.null(phylo_tree)) {
       library(ape)
@@ -858,6 +860,7 @@ plot_temporal_mapping <- function(df, ndim,
 #'        - cluster: Factor or integer cluster assignments
 #' @param ndim Number of dimensions in input coordinates
 #' @param draw_arrows     logical; if TRUE, compute and draw antigenic drift vectors
+#' @param clade_depth     integer; number of levels of parent nodes to define clades to limit the calculation of drift vectors to
 #' @param phylo_tree Optional phylogenetic tree object for drawing arrows
 #' @param dim_config Dimension reduction configuration object specifying method and parameters
 #' @param aesthetic_config Aesthetic configuration object controlling plot appearance
@@ -937,7 +940,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
                                   show_shape_legend = TRUE,
                                   cluster_legend_title = "Cluster",
                                   draw_arrows = FALSE,
-                                  phylo_tree = NULL) {
+                                  phylo_tree = NULL,
+                                  clade_depth = 2) {
   
   # Ensure ggrepel is available
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
@@ -1127,6 +1131,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
     if (!"year" %in% names(reduced_df)) {
       stop("`year` column is required when draw_arrows = TRUE")
     }
+
+    positions <- positions[positions$antigen, ]
 
     # precompute clade tips if tree is provided
     if (!is.null(phylo_tree)) {
