@@ -1276,10 +1276,9 @@ plot_cluster_mapping <- function(df_coords, ndim,
       geom_point(
         data        = top_vel,
         inherit.aes = FALSE,
-        aes(x   = V1, y   = V2, fill = cluster),
+        aes(x   = V1, y   = V2),
         shape       = 21,   # same filled‐circle shape you used for notable antigens
         color       = "black",
-        size        = aesthetic_config$point_size * 1.2,
         stroke      = annotation_config$outline_size,
         alpha       = aesthetic_config$point_alpha
       )
