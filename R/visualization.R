@@ -846,10 +846,10 @@ plot_temporal_mapping <- function(df, ndim,
     threshold <- quantile(positions$mag,
                           probs = 1 - layout_config$top_velocity_p,
                           na.rm = TRUE)
-    warning(
+    cat(
       paste0(
         "Antigenic velocity vectors larger than ", threshold,
-        "\nantigenic unit per unit of time are shown on the figure."
+        "\nantigenic unit per unit of time are shown on the figure.\n"
       )
     )
     # limit to top percentile, and to antigens only:
@@ -1261,15 +1261,28 @@ plot_cluster_mapping <- function(df_coords, ndim,
                           probs = 1 - layout_config$top_velocity_p,
                           na.rm = TRUE)
 
-    warning(
+    cat(
       paste0(
         "Antigenic velocity vectors larger than ", threshold,
-        "\nantigenic unit per unit of time are shown on the figure."
+        "\nantigenic unit per unit of time are shown on the figure.\n"
       )
     )
 
     # limit to top percentile, and to antigens only:
     top_vel <- positions[positions$mag >= threshold & positions$antigen, ]
+
+    # — overlay top-velocity points with filled shape + black outline —
+    p <- p +
+      geom_point(
+        data        = top_vel,
+        inherit.aes = FALSE,
+        aes(x   = V1, y   = V2, fill = cluster),
+        shape       = 21,   # same filled‐circle shape you used for notable antigens
+        color       = "black",
+        size        = aesthetic_config$point_size * 1.2,
+        stroke      = annotation_config$outline_size,
+        alpha       = aesthetic_config$point_alpha
+      )
 
     # add arrow layer
     p <- p +
