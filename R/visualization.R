@@ -752,14 +752,15 @@ plot_temporal_mapping <- function(df, ndim,
     if (!"year" %in% names(reduced_df)) {
       stop("`year` column is required when draw_arrows = TRUE")
     }
-
-    positions <- positions[positions$antigen, ]
+    positions <- reduced_df[reduced_df$antigen, ]
+    positions$V1 <- positions$plot_x
+    positions$V2 <- positions$plot_y
 
     # precompute clade tips if tree is provided
     if (!is.null(phylo_tree)) {
       library(ape)
       get_clade_node <- function(phy, tip_label, depth) {
-        tip_ix <- which(phy$tip.label == tip_label)
+        tip_ix <- which(toupper(phy$tip.label) == toupper(tip_label))
         if (length(tip_ix) != 1) {
           stop("Tip '", tip_label, "' not found uniquely in phylo_tree.")
         }
@@ -772,7 +773,7 @@ plot_temporal_mapping <- function(df, ndim,
         node
       }
 
-      unique_tips   <- unique(reduced_df$name)
+      unique_tips   <- unique(positions$name)
       clade_nodes   <- setNames(
         lapply(unique_tips, get_clade_node, phy = phylo_tree, depth = clade_depth),
         unique_tips
@@ -781,10 +782,6 @@ plot_temporal_mapping <- function(df, ndim,
                               function(nd) extract.clade(phylo_tree, nd)$tip.label)
     }
     
-    positions <- reduced_df
-    positions$V1 <- positions$plot_x
-    positions$V2 <- positions$plot_y
-
     n   <- nrow(positions)
     v1  <- numeric(n)
     v2  <- numeric(n)
@@ -1131,14 +1128,15 @@ plot_cluster_mapping <- function(df_coords, ndim,
     if (!"year" %in% names(reduced_df)) {
       stop("`year` column is required when draw_arrows = TRUE")
     }
-
-    positions <- positions[positions$antigen, ]
+    positions <- reduced_df[reduced_df$antigen, ]
+    positions$V1 <- positions$plot_x
+    positions$V2 <- positions$plot_y
 
     # precompute clade tips if tree is provided
     if (!is.null(phylo_tree)) {
       library(ape)
       get_clade_node <- function(phy, tip_label, depth) {
-        tip_ix <- which(phy$tip.label == tip_label)
+        tip_ix <- which(toupper(phy$tip.label) == toupper(tip_label))
         if (length(tip_ix) != 1) {
           stop("Tip '", tip_label, "' not found uniquely in phylo_tree.")
         }
@@ -1151,7 +1149,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
         node
       }
 
-      unique_tips   <- unique(reduced_df$name)
+      unique_tips   <- unique(positions$name)
       clade_nodes   <- setNames(
         lapply(unique_tips, get_clade_node, phy = phylo_tree, depth = clade_depth),
         unique_tips
@@ -1160,10 +1158,6 @@ plot_cluster_mapping <- function(df_coords, ndim,
                               function(nd) extract.clade(phylo_tree, nd)$tip.label)
     }
     
-    positions <- reduced_df
-    positions$V1 <- positions$plot_x
-    positions$V2 <- positions$plot_y
-
     n   <- nrow(positions)
     v1  <- numeric(n)
     v2  <- numeric(n)
