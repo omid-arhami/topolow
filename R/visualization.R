@@ -1282,22 +1282,43 @@ plot_cluster_mapping <- function(df_coords, ndim,
       )
 
     # Annotate top‐velocity points using annotation_config
-    p <- p +
+    if (requireNamespace("ggrepel", quietly = TRUE)) {
+      p <- p +
       ggrepel::geom_text_repel(
         data        = top_vel,
         inherit.aes = FALSE,
-        aes(x = plot_x, y = plot_y, label = name),
-        size              = annotation_config$size,
+        aes(x = V1, y = V2, label = name),
+        size              = annotation_config$size / ggplot2::.pt,
         color             = annotation_config$color,
         alpha             = annotation_config$alpha,
         fontface          = annotation_config$fontface,
         box.padding       = if (annotation_config$box) unit(0.25, "lines") else unit(0, "lines"),
+        point.padding = unit(0.3, "lines"),
         segment.size      = annotation_config$segment_size,
         segment.alpha     = annotation_config$segment_alpha,
         min.segment.length= annotation_config$min_segment_length,
         max.overlaps      = annotation_config$max_overlaps,
-        force             = annotation_config$outline_size
+        force             = 1, #annotation_config$outline_size,
+        direction = "both"
+      )     
+    } else {
+      # Fallback if ggrepel is not available - basic text labels
+      warning("ggrepel package not available - using basic text labels without repulsion")
+      p <- p + geom_text(
+        data = top_vel,
+        aes(x = V1, y = V2, label = name),
+        size = annotation_config$size / ggplot2::.pt,
+        color = annotation_config$color,
+        alpha = annotation_config$alpha,
+        fontface = annotation_config$fontface,
+        nudge_x = 0.1,
+        nudge_y = 0.1,
+        check_overlap = TRUE
       )
+    }
+
+
+    
   }
 
   # Save plot if save format is specified
