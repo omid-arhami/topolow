@@ -136,8 +136,8 @@ new_aesthetic_config <- function(
     legend_title_size = 12,
     show_legend = TRUE,
     legend_position = "right",
-    arrow_length=0.15,
-    arrow_alpha=0.7
+    arrow_head_size=0.2
+    #arrow_alpha=0.5
 ) {
   # Validate point_shapes
   if (!is.numeric(point_shapes) || !all(c("antigen", "antiserum") %in% names(point_shapes))) {
@@ -174,8 +174,8 @@ new_aesthetic_config <- function(
     legend_title_size = legend_title_size,
     show_legend = show_legend,
     legend_position = legend_position,
-    arrow_length= arrow_length,
-    arrow_alpha= arrow_length
+    arrow_head_size= arrow_head_size
+    #arrow_alpha= arrow_head_size
   )
   
   # Validate inputs
@@ -197,8 +197,8 @@ new_aesthetic_config <- function(
     is.numeric(legend_title_size), legend_title_size > 0,
     is.logical(show_legend),
     legend_position %in% c("none", "right", "left", "top", "bottom"),
-    is.numeric(arrow_length), arrow_length >= 0, arrow_length <= 1,
-    is.numeric(arrow_alpha), arrow_alpha >= 0, arrow_alpha <= 1
+    is.numeric(arrow_head_size), arrow_head_size >= 0, arrow_head_size <= 1
+    #is.numeric(arrow_alpha), arrow_alpha >= 0, arrow_alpha <= 1
   )
   
   structure(config, class = "aesthetic_config")
@@ -232,8 +232,8 @@ new_aesthetic_config <- function(
 #' @param reverse_y Numeric multiplier for y-axis direction (1 or -1)
 #' @param x_limits Numeric vector of length 2 specifying c(min, max) for x-axis. If NULL, limits are set automatically.
 #' @param y_limits Numeric vector of length 2 specifying c(min, max) for y-axis. If NULL, limits are set automatically.
-#' @param sigma_x Spatial bandwidth of the kernel function of velocity arrows in plot units
-#' @param sigma_t Temporal bandwidth of the kernel function of velocity arrows in years
+#' @param sigma_x Spatial bandwidth of the kernel function of velocity arrows in antigenic units
+#' @param sigma_t Temporal bandwidth of the kernel function of velocity arrows in years or taime unit of the data
 #' @param top_velocity_p Top percentile of velocity arrows to draw (between 0 and 1, default: 0.10)
 #' @return A layout_config object
 #' @export
@@ -259,8 +259,8 @@ new_layout_config <- function(
   reverse_y = 1,
   x_limits = NULL,
   y_limits = NULL,
-  sigma_x = 1,    # spatial bandwidth (in plot units)
-  sigma_t = 1,    # temporal bandwidth (in years)
+  sigma_x = 3,    # spatial bandwidth (in antigenic units)
+  sigma_t = 2,    # temporal bandwidth (in years)
   top_velocity_p   = 0.10  # top‐percentile of velocity arrows to draw
 ) {
   config <- list(
@@ -769,7 +769,7 @@ plot_temporal_mapping <- function(df, ndim,
         warning(
           "No antigenic velocity was calculated for the following antigens\n",
           "because they are not in the provided phylo_tree\n  ",
-          "Either supply a complete tree or call with phylo_tree = NULL.",
+          "Either supply a complete tree or call with phylo_tree = NULL.\n  ",
           paste(absent_tips, collapse = ", "), "\n"
           
         )
@@ -859,8 +859,8 @@ plot_temporal_mapping <- function(df, ndim,
             y    = V2 - v2,
             xend = V1,
             yend = V2),
-        arrow = arrow(length = unit(aesthetic_config$arrow_length, "cm")),
-        alpha = aesthetic_config$arrow_alpha
+        arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm"))
+        #alpha = aesthetic_config$arrow_alpha
       )
   }
   
@@ -1177,7 +1177,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
         warning(
           "No antigenic velocity was calculated for the following antigens\n",
           "because they are not in the provided phylo_tree\n  ",
-          "Either supply a complete tree or call with phylo_tree = NULL.",
+          "Either supply a complete tree or call with phylo_tree = NULL.\n  ",
           paste(absent_tips, collapse = ", "), "\n"
 
         )
@@ -1267,8 +1267,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
             y    = V2 - v2,
             xend = V1,
             yend = V2),
-        arrow = arrow(length = unit(aesthetic_config$arrow_length, "cm")),
-        alpha = aesthetic_config$arrow_alpha
+        arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm"))
+        #alpha = aesthetic_config$arrow_alpha
       )
   }
 
