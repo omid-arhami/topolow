@@ -846,15 +846,19 @@ plot_temporal_mapping <- function(df, ndim,
     threshold <- quantile(positions$mag,
                           probs = 1 - layout_config$top_velocity_p,
                           na.rm = TRUE)
+    warning(
+          "Antigenic velocity vectors larger than ", threshold, "\n",
+          "antigenic unit per unit of time are shown on the figure.\n",
+
+        )
     # limit to top percentile, and to antigens only:
     top_vel <- positions[positions$mag >= threshold & positions$antigen, ]
-
 
     # add arrow layer
     p <- p +
       geom_segment(
         data      = top_vel,
-        inherit.aes = FALSE,
+        inherit.aes = TRUE,
         aes(x    = V1 - v1,
             y    = V2 - v2,
             xend = V1,
@@ -1254,15 +1258,20 @@ plot_cluster_mapping <- function(df_coords, ndim,
     threshold <- quantile(positions$mag,
                           probs = 1 - layout_config$top_velocity_p,
                           na.rm = TRUE)
+
+    warning(
+          "Antigenic velocity vectors larger than ", threshold, "\n",
+          "antigenic unit per unit of time are shown on the figure.\n",
+
+        )
     # limit to top percentile, and to antigens only:
     top_vel <- positions[positions$mag >= threshold & positions$antigen, ]
-
 
     # add arrow layer
     p <- p +
       geom_segment(
         data      = top_vel,
-        inherit.aes = FALSE,
+        inherit.aes = TRUE,
         aes(x    = V1 - v1,
             y    = V2 - v2,
             xend = V1,
