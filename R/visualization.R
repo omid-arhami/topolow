@@ -777,7 +777,9 @@ plot_temporal_mapping <- function(df, ndim,
     threshold <- quantile(positions$mag,
                           probs = 1 - layout_config$top_velocity_p,
                           na.rm = TRUE)
-    top_vel <- positions[positions$mag >= threshold, ]
+    # limit to top percentile, and to antigens only:
+    top_vel <- positions[positions$mag >= threshold & positions$antigen, ]
+
 
     # add arrow layer
     p <- p +
@@ -1085,7 +1087,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
     if (!"year" %in% names(reduced_df)) {
       stop("`year` column is required when draw_arrows = TRUE")
     }
-    # compute velocities as above
+    # compute velocities
     positions <- reduced_df
     positions$V1 <- positions$plot_x
     positions$V2 <- positions$plot_y
@@ -1115,7 +1117,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
     threshold <- quantile(positions$mag,
                           probs = 1 - layout_config$top_velocity_p,
                           na.rm = TRUE)
-    top_vel <- positions[positions$mag >= threshold, ]
+    # limit to top percentile, and to antigens only:
+    top_vel <- positions[positions$mag >= threshold & positions$antigen, ]
 
     # overlay arrows
     p <- p +
