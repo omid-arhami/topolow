@@ -858,7 +858,7 @@ plot_temporal_mapping <- function(df, ndim,
     p <- p +
       geom_segment(
         data      = top_vel,
-        inherit.aes = TRUE,
+        inherit.aes = FALSE,
         aes(x    = V1 - v1,
             y    = V2 - v2,
             xend = V1,
@@ -877,6 +877,7 @@ plot_temporal_mapping <- function(df, ndim,
   
   return(p)
 }
+
 
 
 #' Create Clustered Mapping Plots
@@ -974,7 +975,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
                                   cluster_legend_title = "Cluster",
                                   draw_arrows = FALSE,
                                   phylo_tree = NULL,
-                                  clade_depth = 2) {
+                                  clade_depth = 4) {
   
   # Ensure ggrepel is available
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
@@ -1271,13 +1272,31 @@ plot_cluster_mapping <- function(df_coords, ndim,
     p <- p +
       geom_segment(
         data      = top_vel,
-        inherit.aes = TRUE,
+        inherit.aes = FALSE,
         aes(x    = V1 - v1,
             y    = V2 - v2,
             xend = V1,
             yend = V2),
         arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm"))
         #alpha = aesthetic_config$arrow_alpha
+      )
+
+    # Annotate top‐velocity points using annotation_config
+    p <- p +
+      ggrepel::geom_text_repel(
+        data        = top_vel,
+        inherit.aes = FALSE,
+        aes(x = plot_x, y = plot_y, label = name),
+        size              = annotation_config$size,
+        color             = annotation_config$color,
+        alpha             = annotation_config$alpha,
+        fontface          = annotation_config$fontface,
+        box.padding       = if (annotation_config$box) unit(0.25, "lines") else unit(0, "lines"),
+        segment.size      = annotation_config$segment_size,
+        segment.alpha     = annotation_config$segment_alpha,
+        min.segment.length= annotation_config$min_segment_length,
+        max.overlaps      = annotation_config$max_overlaps,
+        force             = annotation_config$outline_size
       )
   }
 
