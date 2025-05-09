@@ -847,10 +847,11 @@ plot_temporal_mapping <- function(df, ndim,
                           probs = 1 - layout_config$top_velocity_p,
                           na.rm = TRUE)
     warning(
-          "Antigenic velocity vectors larger than ", threshold, "\n",
-          "antigenic unit per unit of time are shown on the figure.\n",
-
-        )
+      paste0(
+        "Antigenic velocity vectors larger than ", threshold,
+        "\nantigenic unit per unit of time are shown on the figure."
+      )
+    )
     # limit to top percentile, and to antigens only:
     top_vel <- positions[positions$mag >= threshold & positions$antigen, ]
 
@@ -1261,10 +1262,12 @@ plot_cluster_mapping <- function(df_coords, ndim,
                           na.rm = TRUE)
 
     warning(
-          "Antigenic velocity vectors larger than ", threshold, "\n",
-          "antigenic unit per unit of time are shown on the figure.\n",
+      paste0(
+        "Antigenic velocity vectors larger than ", threshold,
+        "\nantigenic unit per unit of time are shown on the figure."
+      )
+    )
 
-        )
     # limit to top percentile, and to antigens only:
     top_vel <- positions[positions$mag >= threshold & positions$antigen, ]
 
