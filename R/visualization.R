@@ -1293,13 +1293,13 @@ plot_cluster_mapping <- function(df_coords, ndim,
         alpha             = annotation_config$alpha,
         fontface          = annotation_config$fontface,
         box.padding       = if (annotation_config$box) unit(0.25, "lines") else unit(0, "lines"),
-        point.padding = unit(0.3, "lines"),
+        point.padding     = unit(0.3, "lines"),
         segment.size      = annotation_config$segment_size,
         segment.alpha     = annotation_config$segment_alpha,
         min.segment.length= annotation_config$min_segment_length,
         max.overlaps      = annotation_config$max_overlaps,
         force             = 1, #annotation_config$outline_size,
-        direction = "both"
+        direction         = "both"
       )     
     } else {
       # Fallback if ggrepel is not available - basic text labels
