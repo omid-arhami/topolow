@@ -235,7 +235,7 @@ new_aesthetic_config <- function(
 #' @param y_limits Numeric vector of length 2 specifying c(min, max) for y-axis. If NULL, limits are set automatically.
 #' @param sigma_x Spatial bandwidth of the kernel function of velocity arrows in antigenic units
 #' @param sigma_t Temporal bandwidth of the kernel function of velocity arrows in years or taime unit of the data
-#' @param top_velocity_p Top percentile of velocity arrows to draw (between 0 and 1, default: 0.10)
+#' @param arrow_plot_threshold Threshold for velocity arrows to be drawn in the same antigenic distance unit (default: 0.10)
 #' @return A layout_config object
 #' @export
 new_layout_config <- function(
@@ -262,7 +262,7 @@ new_layout_config <- function(
   y_limits = NULL,
   sigma_x = 3,    # spatial bandwidth (in antigenic units)
   sigma_t = 2,    # temporal bandwidth (in years)
-  top_velocity_p   = 0.10  # top‐percentile of velocity arrows to draw
+  arrow_plot_threshold   = 0.10  # top‐percentile of velocity arrows to draw
 ) {
   config <- list(
     width = width,
@@ -288,7 +288,7 @@ new_layout_config <- function(
     y_limits = y_limits,
     sigma_x = sigma_x,
     sigma_t = sigma_t,
-    top_velocity_p   = top_velocity_p
+    arrow_plot_threshold   = arrow_plot_threshold
   )
   
   # Validate inputs
@@ -314,7 +314,7 @@ new_layout_config <- function(
     reverse_y %in% c(1, -1),
     is.numeric(sigma_x), sigma_x > 0,
     is.numeric(sigma_t), sigma_t > 0,
-    is.numeric(top_velocity_p),   top_velocity_p > 0, top_velocity_p < 1
+    is.numeric(arrow_plot_threshold),   arrow_plot_threshold >= 0
   )
   
   # Validate axis limits if provided
@@ -1243,17 +1243,11 @@ plot_cluster_mapping <- function(df_coords, ndim,
     positions$v1  <- v1
     positions$v2  <- v2
     positions$mag <- sqrt(v1^2 + v2^2)
-    # select top-p vectors
-    threshold <- quantile(positions$mag,
-                          probs = 1 - layout_config$top_velocity_p,
-                          na.rm = TRUE)
-
+    # select vectors above the threshold
     cat(sprintf(
-        "Showing only arrows with magnitude ≥ %.3f\n", threshold
+        "Showing only arrows with magnitude ≥ %.3f\n", layout_config$arrow_plot_threshold
       ))
-
-    # limit to top percentile, and to antigens only:
-    top_vel <- subset(positions, mag >= threshold)
+    top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
 
     # — overlay top-velocity points with filled shape + black outline —
     p <- p +
@@ -1355,8 +1349,15 @@ plot_cluster_mapping <- function(df_coords, ndim,
   
   # Save plot if save format is specified
   if (!is.null(layout_config$save_format)) {
-    filename <- sprintf("%s_cluster_mapping_ndim_%d.%s", 
-                        dim_config$method, ndim, layout_config$save_format)
+    filename <- sprintf(
+      "%s_cluster_mapping_ndim_%d_sigma_t_%g_sigma_x_%g_arrowthresh_%g.%s",
+      dim_config$method,
+      ndim,
+      layout_config$sigma_t,
+      layout_config$sigma_x,
+      layout_config$arrow_plot_threshold,
+      layout_config$save_format
+    )
     save_plot(p, filename, layout_config, output_dir)
   }
   
