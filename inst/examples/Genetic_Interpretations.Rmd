@@ -32,6 +32,7 @@ This script demonstrates how to:
 6. Compare antigenic and genetic distances from different methods
 7. Find cluster transition patterns
 
+
 ## Setup and Loading Required Packages
 
 ```{r load-packages}
@@ -812,6 +813,172 @@ ggsave(file.path( "amino_acid_discrimination_power.pdf"),
 ```
 
 # Create a phylogenetic tree & save groupings:
+
+
+---
+
+**Rationale and key points:**  
+1. **`cleaner_sequences()`** ensures that header parsing, name standardization, and year extraction remain identical between amino-acid and nucleotide workflows.
+
+2. **`readDNAStringSet()`** reads nucleotide data, but downstream processing is unchanged.  
+
+3. For phylogeny:  
+   - **`read.dna(..., format="fasta")`** gives a `DNAbin` object suitable for nucleotide distances.  
+   - **`dist.dna(..., model="raw")`** computes raw (Hamming) p-distances among DNA sequences.  
+   - **Neighbor-Joining** recovers a topology driven purely by these distances.  
+   - **Rooting** on the oldest tip approximates a temporal calibration in absence of explicit branch-length inference.  
+   - **Removing edge lengths** leaves only the grouping structure.
+
+```{r}
+#’ Clean, filter, and deduplicate HA‐DNA sequences in “HA_DNA_68_03.fa”
+#’
+#’ @param dna_set A DNAStringSet as returned by readDNAStringSet()
+#’ @return A data.frame with columns:
+#’   FASTA_Name, Accession, name, year, sequence
+#’   (only one row per strain: the longest)
+#’ @importFrom stringr str_extract
+#’ @export
+cleaner_sequences_DNA <- function(dna_set) {
+  # 1. Helper to compute ungapped length
+  calc_length <- function(seq) {
+    nchar(gsub("[- ]", "", seq))
+  }
+  
+  # 2. Pull out raw headers & sequences
+  raw_headers <- names(dna_set)
+  seq_vec     <- as.character(dna_set)
+  
+  # 3. Extract only the “A/location/isolate/YYYY” part (or NA)
+  pattern  <- "A/[^ ]+?/[^ ]+?/\\d{4}"
+  strain   <- stringr::str_extract(raw_headers, pattern)
+  
+  # 4. Filter to those with a valid strain identifier
+  keep     <- which(!is.na(strain))
+  if (length(keep) == 0) {
+    stop("No A/.../.../YYYY headers found.")
+  }
+  raw_headers <- raw_headers[keep]
+  seq_vec     <- seq_vec[keep]
+  strain      <- strain[keep]
+  
+  # 5. Parse accession = first whitespace‐delimited token after ‘>’
+  accession <- sub("^>([^ ]+).*", "\\1", raw_headers)
+  
+  # 6. Normalize strain name (upper‐case, remove stray underscores)
+  name <- toupper(gsub("[-_\\\\]+", "", strain))
+  
+  # 7. Extract 4‐digit year
+  year <- as.integer(sub(".*/(\\d{4})$", "\\1", strain))
+  
+  # 8. Compute sequence lengths
+  seq_length <- vapply(seq_vec, calc_length, integer(1))
+  
+  # 9. Assemble preliminary data.frame
+  df <- data.frame(
+    FASTA_Name = raw_headers,
+    Accession  = accession,
+    name       = name,
+    year       = year,
+    sequence   = seq_vec,
+    seq_length = seq_length,
+    stringsAsFactors = FALSE
+  )
+  
+  # 10. For each strain, keep _only_ the longest sequence
+  grouped <- split(df, df$name)
+  deduped <- do.call(rbind, lapply(grouped, function(subdf) {
+    idx_max <- which.max(subdf$seq_length)
+    subdf[idx_max[1], ]  # pick the first if ties
+  }))
+  
+  # 11. Drop the seq_length column and return
+  deduped$seq_length <- NULL
+  rownames(deduped)   <- NULL
+  return(deduped)
+}
+
+```
+
+```{r dna-sequence-processing, echo=TRUE, message=FALSE, warning=FALSE}
+# ── 1. Load and Clean Raw DNA Sequences ──────────────────────────────────────
+library(Biostrings)
+
+# Read raw HA nucleotide sequences
+dna_set <- readDNAStringSet("data_files/HA_DNA_68_03.fa")
+
+# Reuse your cleaner_sequences() to parse headers, standardize names, extract year, etc.
+dna_df <- cleaner_sequences_DNA(dna_set)
+dna_df$name <- toupper(dna_df$name)
+# ── 2. Match to Your Antigen Strains ────────────────────────────────────────
+# Extract strain names from positions where antigen == TRUE
+positions <- read.csv("data_files/H3N2_Positions.csv")
+antigens     <- positions[positions$antigen, ]
+strain_names <- toupper(gsub("^(V/|S/)", "", antigens$name))
+
+# Clean the strain names exactly as in cleaner_sequences()
+clean_strains <- gsub("[-_\\\\]+", "", strain_names)
+
+# Subset dna_df to only those strains you have in positions
+matched_df <- dna_df[dna_df$name %in% clean_strains, ]
+
+# ── 3. Write Out Matched DNA FASTA for Alignment ───────────────────────────
+matched_dna_set <- DNAStringSet(matched_df$sequence)
+names(matched_dna_set) <- matched_df$name
+
+writeXStringSet(
+  matched_dna_set,
+  "data_files/HA_DNA_matched.fasta",
+  format = "fasta"
+)
+
+# At this point, perform a multiple‐sequence alignment externally
+# (e.g. MAFFT or MUSCLE), writing to
+# "data_files/HA_DNA_matched_aligned.fasta"
+```
+
+
+```{r dna-phylogeny, echo=TRUE, message=FALSE, warning=FALSE}
+# ── 4. Build a Topology-Only Phylogeny from the DNA Alignment ──────────────
+library(ape)
+
+# Read the post-alignment FASTA as a DNAbin object
+alignment_dna <- read.dna(
+  file   = "data_files/HA_DNA_matched_aligned.fasta",
+  format = "fasta"
+)
+
+# Compute raw p-distance (proportion of nucleotide differences)
+dist_matrix <- dist.dna(
+  alignment_dna,
+  model             = "raw",
+  pairwise.deletion = TRUE
+)
+
+# Construct a Neighbor-Joining tree
+tree_nj <- NJ(dist_matrix)
+
+# Identify the oldest tip by extracting the 4-digit year from tip labels
+tip_labels <- rownames(alignment_dna)
+years      <- as.integer(sub(".*(\\d{4}).*$", "\\1", tip_labels))
+oldest_tip <- tip_labels[which.min(years)]
+
+# Root the NJ tree on the oldest sample
+tree_rooted <- root(
+  tree_nj,
+  outgroup     = oldest_tip,
+  resolve.root = TRUE
+)
+
+# Strip branch lengths to retain only grouping topology
+tree_rooted$edge.length <- NULL
+
+# Write topology-only, rooted Newick file
+write.tree(
+  tree_rooted,
+  file = "phylo_groupings_DNA_rooted.nwk"
+)
+```
+
 
 
 **This does:**
