@@ -138,7 +138,7 @@ new_aesthetic_config <- function(
     legend_title_size = 12,
     show_legend = TRUE,
     legend_position = "right",
-    arrow_head_size=0.2
+    arrow_head_size=0.2,
     arrow_alpha=0.6
 ) {
   # Validate point_shapes
@@ -199,7 +199,7 @@ new_aesthetic_config <- function(
     legend_title_size = legend_title_size,
     show_legend = show_legend,
     legend_position = legend_position,
-    arrow_head_size= arrow_head_size
+    arrow_head_size= arrow_head_size,
     arrow_alpha= arrow_alpha
   )
   structure(config, class = "aesthetic_config")
