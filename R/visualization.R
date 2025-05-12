@@ -178,7 +178,7 @@ new_aesthetic_config <- function(
     is.numeric(legend_title_size), legend_title_size > 0,
     is.logical(show_legend),
     legend_position %in% c("none", "right", "left", "top", "bottom"),
-    is.numeric(arrow_head_size), arrow_head_size >= 0, arrow_head_size <= 1
+    is.numeric(arrow_head_size), arrow_head_size >= 0, arrow_head_size <= 1,
     is.numeric(arrow_alpha), arrow_alpha >= 0, arrow_alpha <= 1
   )
     
