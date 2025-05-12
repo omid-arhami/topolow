@@ -637,7 +637,7 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #' @param ndim Number of dimensions in input coordinates
 #' @param draw_arrows     logical; if TRUE, compute and draw antigenic drift vectors
 #' @param phylo_tree      phylo object; if provided, used to compute drift vectors
-#' @param clade_depth     integer; number of levels of parent nodes to define clades to limit the calculation of drift vectors to
+#' @param clade_node_depth     integer; number of levels of parent nodes to define clades to limit the calculation of drift vectors to
 #' @param dim_config Dimension reduction configuration object specifying method and parameters
 #' @param aesthetic_config Aesthetic configuration object controlling plot appearance
 #' @param layout_config Layout configuration object controlling plot dimensions and style.
@@ -695,7 +695,7 @@ plot_temporal_mapping <- function(df, ndim,
                                   output_dir = NULL,
                                   draw_arrows = FALSE,
                                   phylo_tree = NULL,
-                                  clade_depth = 2) {
+                                  clade_node_depth = 2) {
   # Validate input data
   df <- validate_topolow_df(df, ndim, require_temporal = TRUE)
   
@@ -752,6 +752,7 @@ plot_temporal_mapping <- function(df, ndim,
     if (!"year" %in% names(reduced_df)) {
       stop("`year` column is required when draw_arrows = TRUE")
     }
+    # only antigens get arrows
     positions <- reduced_df[reduced_df$antigen, ]
     positions$V1 <- positions$plot_x
     positions$V2 <- positions$plot_y
@@ -759,17 +760,17 @@ plot_temporal_mapping <- function(df, ndim,
     #— identify which tip names actually exist in the tree
     if (!is.null(phylo_tree)) {
       library(ape)
-      all_tips      <- positions$name
+      all_points      <- positions$name
       tree_tips_up  <- toupper(phylo_tree$tip.label)
       # compare in uppercase for consistency
-      present_mask <- toupper(all_tips) %in% tree_tips_up
-      absent_tips  <- unique(all_tips[!present_mask])
+      present_mask <- toupper(all_points) %in% tree_tips_up
+      tree_present_points <- unique(all_points[present_mask])
+      absent_tips <- setdiff(all_points, tree_present_points)
 
       if (length(absent_tips) > 0) {
         cat(
-          "\nNo antigenic velocity was calculated for the following antigens\n",
-          "because they are not in the provided phylo_tree\n  ",
-          "Either supply a complete tree or call with phylo_tree = NULL.\n  ",
+          "\nThe following antigens are not in the provided phylo_tree\n ",
+          "Thus, they did not contribute to the kernel weight calculation.\n",
           paste(absent_tips, collapse = ", "), "\n"
           
         )
@@ -778,13 +779,12 @@ plot_temporal_mapping <- function(df, ndim,
       # only compute clades for tips that are present
       get_clade_node <- function(phy, tip_label, depth) {
         # exact match in uppercase
-        ix <- which(tree_tips_up == toupper(tip_label))
-        if (length(ix) != 1) {
-          # this should never happen now, since we filtered
+        ix <- match(toupper(tip_label), tree_tips_up)
+        if (is.na(ix)) {
           stop("Internal error: tip '", tip_label, "' lookup failed")
         }
         node <- ix
-        for (k in seq_len(clade_depth)) {
+        for (k in seq_len(depth)) {
           parent <- phy$edge[phy$edge[,2] == node, 1]
           if (length(parent) != 1) break
           node <- parent
@@ -792,10 +792,9 @@ plot_temporal_mapping <- function(df, ndim,
         node
       }
 
-      present_tips <- unique(all_tips[present_mask])
       clade_nodes  <- setNames(
-        lapply(present_tips, get_clade_node, phy = phylo_tree),
-        present_tips
+        lapply(tree_present_points, get_clade_node, phy = phylo_tree, depth = clade_node_depth),
+        tree_present_points
       )
       clade_members <- lapply(
         clade_nodes,
@@ -808,16 +807,16 @@ plot_temporal_mapping <- function(df, ndim,
     v2  <- numeric(n)
 
     for (i in seq_len(n)) {
-      this_tip <- positions$name[i]
+      this_point <- positions$name[i]
 
       if (!is.null(phylo_tree)) {
         # if the tip itself was absent, skip
-        if (!(this_tip %in% names(clade_members))) {
+        if (!(this_point %in% names(clade_members))) {
           v1[i] <- NA
           v2[i] <- NA
           next
         }
-        members  <- clade_members[[this_tip]]
+        members  <- clade_members[[this_point]]
         past_idx <- which(
           positions$year < positions$year[i] &
           positions$name %in% members
@@ -895,7 +894,8 @@ plot_temporal_mapping <- function(df, ndim,
 #'        - cluster: Factor or integer cluster assignments
 #' @param ndim Number of dimensions in input coordinates
 #' @param draw_arrows     logical; if TRUE, compute and draw antigenic drift vectors
-#' @param clade_depth     integer; number of levels of parent nodes to define clades to limit the calculation of drift vectors to
+#' @param annotate_arrows logical; if TRUE, show names of the points having arrows
+#' @param clade_node_depth     integer; number of levels of parent nodes to define clades to limit the calculation of drift vectors to
 #' @param phylo_tree Optional phylogenetic tree object for drawing arrows
 #' @param dim_config Dimension reduction configuration object specifying method and parameters
 #' @param aesthetic_config Aesthetic configuration object controlling plot appearance
@@ -975,8 +975,9 @@ plot_cluster_mapping <- function(df_coords, ndim,
                                   show_shape_legend = TRUE,
                                   cluster_legend_title = "Cluster",
                                   draw_arrows = FALSE,
+                                  annotate_arrows = TRUE,
                                   phylo_tree = NULL,
-                                  clade_depth = 4) {
+                                  clade_node_depth = 4) {
   
   # Ensure ggrepel is available
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
@@ -993,6 +994,9 @@ plot_cluster_mapping <- function(df_coords, ndim,
   reduced_df$plot_x <- reduced_df$dim2 * layout_config$reverse_x
   reduced_df$plot_y <- reduced_df$dim1 * layout_config$reverse_y
   
+  # Process row names to get strain names
+  reduced_df$clean_name <- sub("^(V/|S/)", "", reduced_df$name)
+
   # Create base theme
   base_theme <- create_base_theme(aesthetic_config, layout_config)
   
@@ -1020,8 +1024,6 @@ plot_cluster_mapping <- function(df_coords, ndim,
   
   # Flag notable points
   if (!is.null(annotation_config$notable_points) && length(annotation_config$notable_points) > 0) {
-    # Process row names to get strain names
-    reduced_df$clean_name <- sub("^(V/|S/)", "", reduced_df$name)
     reduced_df$is_notable <- reduced_df$clean_name %in% annotation_config$notable_points
     annotation_df <- reduced_df[reduced_df$is_notable, ]
     
@@ -1149,23 +1151,11 @@ plot_cluster_mapping <- function(df_coords, ndim,
     }
   }
   
-  # Add axis limits if specified in layout_config
-  if (!is.null(layout_config$x_limits)) {
-    p <- p + scale_x_continuous(limits = layout_config$x_limits)
-  }
-  if (!is.null(layout_config$y_limits)) {
-    p <- p + scale_y_continuous(limits = layout_config$y_limits)
-  }
-  
-  # Add fixed coordinates if specified
-  if(layout_config$coord_type == "fixed") {
-    p <- p + coord_fixed(ratio = layout_config$aspect_ratio)
-  }
-  
   if (draw_arrows) {
     if (!"year" %in% names(reduced_df)) {
       stop("`year` column is required when draw_arrows = TRUE")
     }
+    # limit to antigens only:
     positions <- reduced_df[reduced_df$antigen, ]
     positions$V1 <- positions$plot_x
     positions$V2 <- positions$plot_y
@@ -1173,32 +1163,31 @@ plot_cluster_mapping <- function(df_coords, ndim,
     #— identify which tip names actually exist in the tree
     if (!is.null(phylo_tree)) {
       library(ape)
-      all_tips      <- positions$name
+      all_points      <- positions$name
       tree_tips_up  <- toupper(phylo_tree$tip.label)
       # compare in uppercase for consistency
-      present_mask <- toupper(all_tips) %in% tree_tips_up
-      absent_tips  <- unique(all_tips[!present_mask])
+      present_mask <- toupper(all_points) %in% tree_tips_up
+      tree_present_points <- unique(all_points[present_mask])
+      absent_tips <- setdiff(all_points, tree_present_points)
 
       if (length(absent_tips) > 0) {
         cat(
-          "\nNo antigenic velocity was calculated for the following antigens\n",
-          "because they are not in the provided phylo_tree\n  ",
-          "Either supply a complete tree or call with phylo_tree = NULL.\n  ",
+          "\nThe following antigens are not in the provided phylo_tree\n ",
+          "Thus, they did not contribute to the kernel weight calculation.\n",
           paste(absent_tips, collapse = ", "), "\n"
-
+          
         )
       }
 
       # only compute clades for tips that are present
       get_clade_node <- function(phy, tip_label, depth) {
         # exact match in uppercase
-        ix <- which(tree_tips_up == toupper(tip_label))
-        if (length(ix) != 1) {
-          # this should never happen now, since we filtered
+        ix <- match(toupper(tip_label), tree_tips_up)
+        if (is.na(ix)) {
           stop("Internal error: tip '", tip_label, "' lookup failed")
         }
         node <- ix
-        for (k in seq_len(clade_depth)) {
+        for (k in seq_len(depth)) {
           parent <- phy$edge[phy$edge[,2] == node, 1]
           if (length(parent) != 1) break
           node <- parent
@@ -1206,10 +1195,10 @@ plot_cluster_mapping <- function(df_coords, ndim,
         node
       }
 
-      present_tips <- unique(all_tips[present_mask])
+      # only compute clades for points that are present in the tree
       clade_nodes  <- setNames(
-        lapply(present_tips, get_clade_node, phy = phylo_tree),
-        present_tips
+        lapply(tree_present_points, get_clade_node, phy = phylo_tree, depth = clade_node_depth),
+        tree_present_points
       )
       clade_members <- lapply(
         clade_nodes,
@@ -1222,30 +1211,27 @@ plot_cluster_mapping <- function(df_coords, ndim,
     v2  <- numeric(n)
     
     for (i in seq_len(n)) {
-      this_tip <- positions$name[i]
-
-      if (!is.null(phylo_tree)) {
-        # if the tip itself was absent, skip
-        if (!(this_tip %in% names(clade_members))) {
-          v1[i] <- NA
-          v2[i] <- NA
-          next
-        }
-        members  <- clade_members[[this_tip]]
+      this_pt <- positions$name[i]
+      # determine past indices, excluding only known “non‐clade” tips
+      if (!is.null(phylo_tree) && this_pt %in% names(clade_members)) {
+        # those present but *not* in the same clade
+        bad <- setdiff(tree_present_points, clade_members[[this_pt]])
         past_idx <- which(
           positions$year < positions$year[i] &
-          positions$name %in% members
+          !(positions$name %in% bad)
         )
       } else {
+        # either no tree or tip absent from tree → include *all* past points
         past_idx <- which(positions$year < positions$year[i])
       }
 
       if (length(past_idx)) {
-        dt <- positions$year[past_idx] - positions$year[i]
-        dx <- positions$V1[past_idx] - positions$V1[i]
-        dy <- positions$V2[past_idx] - positions$V2[i]
+        #  positive dt = current − past
+        dt <- positions$year[i] - positions$year[past_idx]
+        dx <- positions$V1[i] - positions$V1[past_idx]
+        dy <- positions$V2[i] - positions$V2[past_idx]
         w  <- exp(-(dx^2 + dy^2)/(2*layout_config$sigma_x^2)) *
-              exp(-(dt^2)         /(2*layout_config$sigma_t^2))
+            exp(- (dt^2)        /(2*layout_config$sigma_t^2))
         v1[i] <- sum(w * (dx / dt)) / sum(w)
         v2[i] <- sum(w * (dy / dt)) / sum(w)
       } else {
@@ -1261,15 +1247,12 @@ plot_cluster_mapping <- function(df_coords, ndim,
                           probs = 1 - layout_config$top_velocity_p,
                           na.rm = TRUE)
 
-    cat(
-      paste0(
-        "Antigenic velocity vectors larger than ", threshold,
-        "\nantigenic unit per unit of time are shown on the figure.\n"
-      )
-    )
+    cat(sprintf(
+        "Showing only arrows with magnitude ≥ %.3f\n", threshold
+      ))
 
     # limit to top percentile, and to antigens only:
-    top_vel <- positions[positions$mag >= threshold & positions$antigen, ]
+    top_vel <- subset(positions, mag >= threshold)
 
     # — overlay top-velocity points with filled shape + black outline —
     p <- p +
@@ -1298,65 +1281,77 @@ plot_cluster_mapping <- function(df_coords, ndim,
       )
 
     # Annotate top‐velocity points exactly like notable‐point labels
-    if (requireNamespace("ggrepel", quietly = TRUE)) {
-      if (annotation_config$box) {
-        p <- p +
-          ggrepel::geom_label_repel(
-            data        = top_vel,
-            inherit.aes = FALSE,
-            aes(x = V1, y = V2, label = name),
-            size              = annotation_config$size / ggplot2::.pt,
-            color             = annotation_config$color,
-            alpha             = annotation_config$alpha,
-            fontface          = annotation_config$fontface,
-            segment.size      = annotation_config$segment_size,
-            segment.alpha     = annotation_config$segment_alpha,
-            min.segment.length= annotation_config$min_segment_length,
-            max.overlaps      = annotation_config$max_overlaps,
-            box.padding       = unit(0.4, "lines"),
-            point.padding     = unit(0.3, "lines"),
-            force             = 1,
-            direction         = "both"
-          )
+    if (annotate_arrows) {
+      if (requireNamespace("ggrepel", quietly = TRUE)) {
+        if (annotation_config$box) {
+          p <- p +
+            ggrepel::geom_label_repel(
+              data        = top_vel,
+              inherit.aes = FALSE,
+              aes(x = V1, y = V2, label = name),
+              size              = annotation_config$size / ggplot2::.pt,
+              color             = annotation_config$color,
+              alpha             = annotation_config$alpha,
+              fontface          = annotation_config$fontface,
+              segment.size      = annotation_config$segment_size,
+              segment.alpha     = annotation_config$segment_alpha,
+              min.segment.length= annotation_config$min_segment_length,
+              max.overlaps      = annotation_config$max_overlaps,
+              box.padding       = unit(0.4, "lines"),
+              point.padding     = unit(0.3, "lines"),
+              force             = 1,
+              direction         = "both"
+            )
+        } else {
+          p <- p +
+            ggrepel::geom_text_repel(
+              data        = top_vel,
+              inherit.aes = FALSE,
+              aes(x = V1, y = V2, label = name),
+              size              = annotation_config$size / ggplot2::.pt,
+              color             = annotation_config$color,
+              alpha             = annotation_config$alpha,
+              fontface          = annotation_config$fontface,
+              segment.size      = annotation_config$segment_size,
+              segment.alpha     = annotation_config$segment_alpha,
+              min.segment.length= annotation_config$min_segment_length,
+              max.overlaps      = annotation_config$max_overlaps,
+              box.padding       = unit(0.4, "lines"),
+              point.padding     = unit(0.3, "lines"),
+              force             = 1,
+              direction         = "both"
+            )
+        }
       } else {
-        p <- p +
-          ggrepel::geom_text_repel(
-            data        = top_vel,
-            inherit.aes = FALSE,
-            aes(x = V1, y = V2, label = name),
-            size              = annotation_config$size / ggplot2::.pt,
-            color             = annotation_config$color,
-            alpha             = annotation_config$alpha,
-            fontface          = annotation_config$fontface,
-            segment.size      = annotation_config$segment_size,
-            segment.alpha     = annotation_config$segment_alpha,
-            min.segment.length= annotation_config$min_segment_length,
-            max.overlaps      = annotation_config$max_overlaps,
-            box.padding       = unit(0.4, "lines"),
-            point.padding     = unit(0.3, "lines"),
-            force             = 1,
-            direction         = "both"
-          )
+        warning("ggrepel package not available - using basic text labels without repulsion")
+        p <- p + geom_text(
+          data = top_vel,
+          aes(x = V1, y = V2, label = name),
+          size           = annotation_config$size / ggplot2::.pt,
+          color          = annotation_config$color,
+          alpha          = annotation_config$alpha,
+          fontface       = annotation_config$fontface,
+          nudge_x        = - 0.15,
+          nudge_y        = - 0.15,
+          check_overlap  = TRUE
+        )
       }
-    } else {
-      warning("ggrepel package not available - using basic text labels without repulsion")
-      p <- p + geom_text(
-        data = top_vel,
-        aes(x = V1, y = V2, label = name),
-        size           = annotation_config$size / ggplot2::.pt,
-        color          = annotation_config$color,
-        alpha          = annotation_config$alpha,
-        fontface       = annotation_config$fontface,
-        nudge_x        = - 0.15,
-        nudge_y        = - 0.15,
-        check_overlap  = TRUE
-      )
     }
-
-
-    
   }
 
+  # Add axis limits if specified in layout_config
+  if (!is.null(layout_config$x_limits)) {
+    p <- p + scale_x_continuous(limits = layout_config$x_limits)
+  }
+  if (!is.null(layout_config$y_limits)) {
+    p <- p + scale_y_continuous(limits = layout_config$y_limits)
+  }
+  
+  # Add fixed coordinates if specified
+  if(layout_config$coord_type == "fixed") {
+    p <- p + coord_fixed(ratio = layout_config$aspect_ratio)
+  }
+  
   # Save plot if save format is specified
   if (!is.null(layout_config$save_format)) {
     filename <- sprintf("%s_cluster_mapping_ndim_%d.%s", 
