@@ -1277,7 +1277,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
             y    = V2 - v2,
             xend = V1,
             yend = V2),
-        arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm"))
+        arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm")),
         alpha = aesthetic_config$arrow_alpha
       )
 
