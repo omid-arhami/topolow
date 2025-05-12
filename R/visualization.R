@@ -117,6 +117,8 @@ new_annotation_config <- function(
 #' @param legend_title_size Legend title text size
 #' @param show_legend Whether to show the legend
 #' @param legend_position Legend position ("none", "right", "left", "top", "bottom")
+#' @param arrow_head_size Size of the arrow head for velocity arrows (in cm)
+#' @param arrow_alpha Transparency of arrows (0 = invisible, 1 = fully opaque)
 #' @return An aesthetic_config object
 #' @export
 new_aesthetic_config <- function(
@@ -137,7 +139,7 @@ new_aesthetic_config <- function(
     show_legend = TRUE,
     legend_position = "right",
     arrow_head_size=0.2
-    #arrow_alpha=0.5
+    arrow_alpha=0.6
 ) {
   # Validate point_shapes
   if (!is.numeric(point_shapes) || !all(c("antigen", "antiserum") %in% names(point_shapes))) {
@@ -156,27 +158,6 @@ new_aesthetic_config <- function(
   if (!is.vector(color_palette)) {
     stop("color_palette must be a vector of colors or a valid palette name")
   }
-  
-  config <- list(
-    point_size = point_size,
-    point_alpha = point_alpha,
-    point_shapes = point_shapes,
-    color_palette = color_palette,
-    gradient_colors = gradient_colors,
-    show_labels = show_labels,
-    show_title = show_title,
-    label_size = label_size,
-    title_size = title_size,
-    subtitle_size = subtitle_size,
-    axis_title_size = axis_title_size,
-    axis_text_size = axis_text_size,
-    legend_text_size = legend_text_size,
-    legend_title_size = legend_title_size,
-    show_legend = show_legend,
-    legend_position = legend_position,
-    arrow_head_size= arrow_head_size
-    #arrow_alpha= arrow_head_size
-  )
   
   # Validate inputs
   stopifnot(
@@ -198,9 +179,29 @@ new_aesthetic_config <- function(
     is.logical(show_legend),
     legend_position %in% c("none", "right", "left", "top", "bottom"),
     is.numeric(arrow_head_size), arrow_head_size >= 0, arrow_head_size <= 1
-    #is.numeric(arrow_alpha), arrow_alpha >= 0, arrow_alpha <= 1
+    is.numeric(arrow_alpha), arrow_alpha >= 0, arrow_alpha <= 1
   )
-  
+    
+  config <- list(
+    point_size = point_size,
+    point_alpha = point_alpha,
+    point_shapes = point_shapes,
+    color_palette = color_palette,
+    gradient_colors = gradient_colors,
+    show_labels = show_labels,
+    show_title = show_title,
+    label_size = label_size,
+    title_size = title_size,
+    subtitle_size = subtitle_size,
+    axis_title_size = axis_title_size,
+    axis_text_size = axis_text_size,
+    legend_text_size = legend_text_size,
+    legend_title_size = legend_title_size,
+    show_legend = show_legend,
+    legend_position = legend_position,
+    arrow_head_size= arrow_head_size
+    arrow_alpha= arrow_alpha
+  )
   structure(config, class = "aesthetic_config")
 }
 
@@ -1173,7 +1174,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
       if (length(absent_tips) > 0) {
         cat(
           "\nThe following antigens are not in the provided phylo_tree\n ",
-          "Thus, they did not contribute to the kernel weight calculation.\n",
+          "Thus, they did not contribute to limiting antigenic velo.\n",
           paste(absent_tips, collapse = ", "), "\n"
           
         )
@@ -1277,7 +1278,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
             xend = V1,
             yend = V2),
         arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm"))
-        #alpha = aesthetic_config$arrow_alpha
+        alpha = aesthetic_config$arrow_alpha
       )
 
     # Annotate top‐velocity points exactly like notable‐point labels
