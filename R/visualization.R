@@ -1084,7 +1084,6 @@ plot_temporal_mapping <- function(df_coords, ndim,
 #' @param ndim Number of dimensions in input coordinates
 #' @param draw_arrows     logical; if TRUE, compute and draw antigenic drift vectors
 #' @param annotate_arrows logical; if TRUE, show names of the points having arrows
-#' @param clade_node_depth     integer; number of levels of parent nodes to define clades to limit the calculation of drift vectors to
 #' @param phylo_tree Optional phylogenetic tree object for drawing arrows
 #' @param dim_config Dimension reduction configuration object specifying method and parameters
 #' @param aesthetic_config Aesthetic configuration object controlling plot appearance
@@ -1165,8 +1164,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
                                   cluster_legend_title = "Cluster",
                                   draw_arrows = FALSE,
                                   annotate_arrows = TRUE,
-                                  phylo_tree = NULL,
-                                  clade_node_depth = 4) {
+                                  phylo_tree = NULL) {
   
   # Ensure ggrepel is available
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
@@ -1393,7 +1391,18 @@ plot_cluster_mapping <- function(df_coords, ndim,
       sigma_phy <- ifelse(is.null(layout_config$sigma_phy),
                         bw.nrd0(distmat_phy),
                         layout_config$sigma_phy)
+      cat(sprintf(
+        "Kernel bandwidth for phylogenetic distance = %.3f\n", sigma_phy
+      ))
     }
+    
+    cat(sprintf(
+      "Kernel bandwidth for time = %.3f\n", sigma_t
+    ))
+    cat(sprintf(
+      "Kernel bandwidth for antigenic distance = %.3f\n", sigma_x
+    ))
+    
     
     n   <- nrow(positions)
     v1  <- numeric(n)
@@ -1532,14 +1541,23 @@ plot_cluster_mapping <- function(df_coords, ndim,
   
   # Save plot if save format is specified
   if (!is.null(layout_config$save_format)) {
-    filename <- sprintf(
-      "clustered_map_ndim_%d_sigma_t_%g_sigma_x_%g_arrowthresh_%g.%s",
-      ndim,
-      layout_config$sigma_t,
-      layout_config$sigma_x,
-      layout_config$arrow_plot_threshold,
-      layout_config$save_format
-    )
+    if (draw_arrows){
+      filename <- sprintf(
+        "clustered_map_ndim_%d_s_t_%g_s_x_%g_s_phy_%g_arrowthresh_%g.%s",
+        ndim,
+        sigma_t,
+        sigma_x,
+        sigma_phy,
+        layout_config$arrow_plot_threshold,
+        layout_config$save_format
+      )
+    } else {
+      filename <- sprintf(
+        "clustered_map_ndim_%d.%s",
+        ndim,
+        layout_config$save_format
+      )
+    }
     save_plot(p, filename, layout_config, output_dir)
   }
   
