@@ -1406,7 +1406,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
     if (!is.null(phylo_tree)) {
       distmat_phy <- D_edge[upper.tri(D_edge, diag = FALSE)]
       sigma_phy <- ifelse(is.null(layout_config$sigma_phy),
-                        bw.nrd0(distmat_phy),
+                        2* bw.nrd0(distmat_phy),
                         layout_config$sigma_phy)
       cat(sprintf(
         "Kernel bandwidth for phylogenetic distance = %.3f\n", sigma_phy
