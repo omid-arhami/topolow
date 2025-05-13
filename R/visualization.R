@@ -1364,6 +1364,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
     if (!is.null(phylo_tree)) {
       library(ape)
       #— identify which tip names actually exist in the tree
+      positions$name <- toupper(positions$name)
       all_points      <- positions$name
       tree_tips_up  <- toupper(phylo_tree$tip.label)
       # compare in uppercase for consistency
@@ -1435,7 +1436,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
         w  <- exp(-(dx^2 + dy^2)/(2*sigma_x^2)) *
               exp(- (dt^2)/(2*sigma_t^2))
               
-        if (!is.null(phylo_tree)) {
+        if (!is.null(phylo_tree) && this_pt %in% tree_tips_up) {
           w <- w * exp(- (D_edge[i, past_idx]^2)/(2*sigma_phy^2)) 
         }
         
