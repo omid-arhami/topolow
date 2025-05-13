@@ -260,9 +260,10 @@ new_layout_config <- function(
   reverse_y = 1,
   x_limits = NULL,
   y_limits = NULL,
-  sigma_x = 3,    # spatial bandwidth (in antigenic units)
-  sigma_t = 2,    # temporal bandwidth (in years)
-  arrow_plot_threshold   = 0.10  # top‐percentile of velocity arrows to draw
+  sigma_x = NULL,    # spatial bandwidth (in antigenic units)
+  sigma_t = NULL,    # temporal bandwidth (in years)
+  sigma_phy = NULL, # bandwidth of phylogenetic distance
+  arrow_plot_threshold   = 1  # velocity arrows larger than this are shown
 ) {
   config <- list(
     width = width,
@@ -1053,8 +1054,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
   # Save plot if save format is specified
   if (!is.null(layout_config$save_format)) {
     filename <- sprintf(
-      "%s_cluster_mapping_ndim_%d_sigma_t_%g_sigma_x_%g_arrowthresh_%g.%s",
-      dim_config$method,
+      "temporal_map_ndim_%d_sigma_t_%g_sigma_x_%g_arrowthresh_%g.%s",
       ndim,
       layout_config$sigma_t,
       layout_config$sigma_x,
@@ -1349,9 +1349,9 @@ plot_cluster_mapping <- function(df_coords, ndim,
     positions$V1 <- positions$plot_x
     positions$V2 <- positions$plot_y
 
-    #— identify which tip names actually exist in the tree
     if (!is.null(phylo_tree)) {
       library(ape)
+      #— identify which tip names actually exist in the tree
       all_points      <- positions$name
       tree_tips_up  <- toupper(phylo_tree$tip.label)
       # compare in uppercase for consistency
@@ -1367,32 +1367,32 @@ plot_cluster_mapping <- function(df_coords, ndim,
           
         )
       }
-
-      # only compute clades for tips that are present
-      get_clade_node <- function(phy, tip_label, depth) {
-        # exact match in uppercase
-        ix <- match(toupper(tip_label), tree_tips_up)
-        if (is.na(ix)) {
-          stop("Internal error: tip '", tip_label, "' lookup failed")
-        }
-        node <- ix
-        for (k in seq_len(depth)) {
-          parent <- phy$edge[phy$edge[,2] == node, 1]
-          if (length(parent) != 1) break
-          node <- parent
-        }
-        node
-      }
-
-      # only compute clades for points that are present in the tree
-      clade_nodes  <- setNames(
-        lapply(tree_present_points, get_clade_node, phy = phylo_tree, depth = clade_node_depth),
-        tree_present_points
-      )
-      clade_members <- lapply(
-        clade_nodes,
-        function(nd) extract.clade(phylo_tree, nd)$tip.label
-      )
+      
+      # Calculate edge-distances
+      # Force every edge to length 1
+      tree_unit        <- phylo_tree
+      tree_unit$edge.length <- rep(1, nrow(tree_unit$edge))
+      # Compute the node/edge distance matrix
+      D_edge <- cophenetic.phylo(tree_unit)
+    }
+    
+    # Estimate kernel bandwidths based on Silverman's rule (bw.nrd0)
+    # Use 'dists' is of class "dist" and length n*(n-1)/2
+    distmat_t <- dist(positions$year)
+    sigma_t <- ifelse(is.null(layout_config$sigma_t),
+                      bw.nrd0(distmat_t),
+                      layout_config$sigma_t)
+    
+    distmat_x <- dist(positions[, c("V1", "V2")], method = "euclidean")
+    sigma_x <- ifelse(is.null(layout_config$sigma_x),
+                      bw.nrd0(distmat_x),
+                      layout_config$sigma_x)
+    
+    if (!is.null(phylo_tree)) {
+      distmat_phy <- D_edge[upper.tri(D_edge, diag = FALSE)]
+      sigma_phy <- ifelse(is.null(layout_config$sigma_phy),
+                        bw.nrd0(distmat_phy),
+                        layout_config$sigma_phy)
     }
     
     n   <- nrow(positions)
@@ -1401,26 +1401,21 @@ plot_cluster_mapping <- function(df_coords, ndim,
     
     for (i in seq_len(n)) {
       this_pt <- positions$name[i]
-      # determine past indices, excluding only known “non‐clade” tips
-      if (!is.null(phylo_tree) && this_pt %in% names(clade_members)) {
-        # those present but *not* in the same clade
-        bad <- setdiff(tree_present_points, clade_members[[this_pt]])
-        past_idx <- which(
-          positions$year < positions$year[i] &
-          !(positions$name %in% bad)
-        )
-      } else {
-        # either no tree or tip absent from tree → include *all* past points
-        past_idx <- which(positions$year < positions$year[i])
-      }
-
+      # determine past indices
+      past_idx <- which(positions$year < positions$year[i])
+      
       if (length(past_idx)) {
         #  positive dt = current − past
         dt <- positions$year[i] - positions$year[past_idx]
         dx <- positions$V1[i] - positions$V1[past_idx]
         dy <- positions$V2[i] - positions$V2[past_idx]
-        w  <- exp(-(dx^2 + dy^2)/(2*layout_config$sigma_x^2)) *
-            exp(- (dt^2)        /(2*layout_config$sigma_t^2))
+        w  <- exp(-(dx^2 + dy^2)/(2*sigma_x^2)) *
+              exp(- (dt^2)/(2*sigma_t^2))
+              
+        if (!is.null(phylo_tree)) {
+          w <- w * exp(- (D_edge[i, past_idx]^2)/(2*sigma_phy^2)) 
+        }
+        
         v1[i] <- sum(w * (dx / dt)) / sum(w)
         v2[i] <- sum(w * (dy / dt)) / sum(w)
       } else {
@@ -1538,8 +1533,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
   # Save plot if save format is specified
   if (!is.null(layout_config$save_format)) {
     filename <- sprintf(
-      "%s_cluster_mapping_ndim_%d_sigma_t_%g_sigma_x_%g_arrowthresh_%g.%s",
-      dim_config$method,
+      "clustered_map_ndim_%d_sigma_t_%g_sigma_x_%g_arrowthresh_%g.%s",
       ndim,
       layout_config$sigma_t,
       layout_config$sigma_x,
