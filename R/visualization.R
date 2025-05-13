@@ -630,7 +630,7 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #' Creates a visualization of points colored by time (year) using dimension reduction, with optional drift arrows.
 #' Points are colored on a gradient scale based on their temporal values, with
 #' different shapes for antigens and antisera.
-#' @param df Data frame containing:
+#' @param df_coords Data frame containing:
 #'        - V1, V2, ... Vn: Coordinate columns
 #'        - antigen: Binary indicator for antigen points 
 #'        - antiserum: Binary indicator for antiserum points
@@ -689,52 +689,173 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #' \code{\link{new_layout_config}} for layout options
 #'
 #' @export
-plot_temporal_mapping <- function(df, ndim, 
+plot_temporal_mapping <- function(df_coords, ndim, 
                                   dim_config = new_dim_reduction_config(),
                                   aesthetic_config = new_aesthetic_config(),
                                   layout_config = new_layout_config(),
+                                  annotation_config = new_annotation_config(),
                                   output_dir = NULL,
+                                  show_shape_legend = TRUE,
+                                  cluster_legend_title = "Cluster",
                                   draw_arrows = FALSE,
+                                  annotate_arrows = TRUE,
                                   phylo_tree = NULL,
-                                  clade_node_depth = 2) {
+                                  clade_node_depth = 4) {
+  
+  # Ensure ggrepel is available
+  if (!requireNamespace("ggrepel", quietly = TRUE)) {
+    warning("The ggrepel package is required for optimal label placement. Install with: install.packages('ggrepel')")
+  }
+  
   # Validate input data
-  df <- validate_topolow_df(df, ndim, require_temporal = TRUE)
+  df_coords <- validate_topolow_df(df_coords, ndim, require_temporal = TRUE)
   
   # Perform dimension reduction
-  reduced_df <- reduce_dimensions(df, dim_config)
+  reduced_df <- reduce_dimensions(df_coords, dim_config)
   
   # Apply axis reversals
   reduced_df$plot_x <- reduced_df$dim2 * layout_config$reverse_x
   reduced_df$plot_y <- reduced_df$dim1 * layout_config$reverse_y
   
+  # Process row names to get strain names
+  reduced_df$clean_name <- sub("^(V/|S/)", "", reduced_df$name)
+  
   # Create base theme
   base_theme <- create_base_theme(aesthetic_config, layout_config)
   
   # Create point type with explicit factor levels
+  
+  # Calculate optimal number of legend columns if legend is shown
+  legend_theme <- if(aesthetic_config$show_legend) {
+    n_legend_cols <- min(max(1, ceiling(n_clusters / 15)), 3)
+    theme(
+      legend.box = "vertical",
+      legend.margin = margin(l = 5, r = 5),
+      legend.spacing.y = unit(0.1, "cm"),
+      legend.key.size = unit(0.8, "lines")
+    )
+  } else {
+    theme()  # Empty theme if no legend
+  }
+  
+  # Flag notable points
+  if (!is.null(annotation_config$notable_points) && length(annotation_config$notable_points) > 0) {
+    reduced_df$is_notable <- reduced_df$clean_name %in% annotation_config$notable_points
+    annotation_df <- reduced_df[reduced_df$is_notable, ]
+    
+    if (nrow(annotation_df) == 0) {
+      warning("None of the specified notable points found in the data")
+    }
+  } else {
+    reduced_df$is_notable <- FALSE
+    annotation_df <- reduced_df[0, ]  # Empty dataframe
+  }
+  # Create point type with explicit factor levels - this is just for regular points
   reduced_df$point_type <- NA_character_  # Initialize
-  reduced_df$point_type[reduced_df$antigen] <- "antigen"    # Use lowercase to match names
-  reduced_df$point_type[reduced_df$antiserum] <- "antiserum"
+  reduced_df$point_type[reduced_df$antigen & !reduced_df$is_notable] <- "antigen"
+  reduced_df$point_type[reduced_df$antiserum & !reduced_df$is_notable] <- "antiserum"
   reduced_df$point_type <- factor(reduced_df$point_type, 
                                   levels = names(aesthetic_config$point_shapes))
   
   # Create plot
-  p <- ggplot(reduced_df, aes(x = plot_x, y = plot_y, 
-                              colour = year,
-                              shape = point_type)) +
+  p <- ggplot(
+    data = reduced_df[!reduced_df$is_notable, ],
+    aes(x = plot_x, y = plot_y, 
+        colour = year,
+        shape = point_type)) +
     geom_point(size = aesthetic_config$point_size,
                alpha = aesthetic_config$point_alpha) +
+    # Plot notable points with filled shapes and outlines
+    geom_point(
+      data = reduced_df[reduced_df$is_notable & reduced_df$antigen, ],
+      aes(x = plot_x, y = plot_y, 
+          fill = year),
+      shape = 21,  # Filled circle with outline
+      color = "black",  # Outline color
+      size = aesthetic_config$point_size * 1.2,
+      stroke = annotation_config$outline_size,
+      alpha = aesthetic_config$point_alpha
+    ) +
+    # Notable antisera with different filled shape
+    geom_point(
+      data = reduced_df[reduced_df$is_notable & reduced_df$antiserum, ],
+      aes(x = plot_x, y = plot_y, 
+          fill = year),
+      shape = 22,  # Filled square with outline
+      color = "black",  # Outline color
+      size = aesthetic_config$point_size * 1.2,
+      stroke = annotation_config$outline_size,
+      alpha = aesthetic_config$point_alpha
+    ) +
     scale_colour_gradient(low = aesthetic_config$gradient_colors$low,
                           high = aesthetic_config$gradient_colors$high,
                           na.value = "gray50") +
-    scale_shape_manual(name = "Type",
-                       values = aesthetic_config$point_shapes,
-                       labels = c(antigen = "Antigen", 
-                                  antiserum = "Antiserum")) +
+    scale_shape_manual(
+      name = "Type",
+      values = aesthetic_config$point_shapes,
+      labels = c(antigen = "Antigen", antiserum = "Antiserum")) +
     base_theme +
     labs(title = if(aesthetic_config$show_title) "Temporal Mapping" else "",
          x = "Dimension 1",
          y = "Dimension 2",
          colour = "Year")
+  
+  # Add labels to notable points if any exist
+  if (nrow(annotation_df) > 0) {
+    if (requireNamespace("ggrepel", quietly = TRUE)) {
+      if (annotation_config$box) {
+        # Use label boxes with background
+        p <- p + ggrepel::geom_label_repel(
+          data = annotation_df,
+          aes(x = plot_x, y = plot_y, label = clean_name),
+          size = annotation_config$size / ggplot2::.pt,
+          color = annotation_config$color,
+          alpha = annotation_config$alpha,
+          fontface = annotation_config$fontface,
+          segment.size = annotation_config$segment_size,
+          segment.alpha = annotation_config$segment_alpha,
+          min.segment.length = annotation_config$min_segment_length,
+          max.overlaps = annotation_config$max_overlaps,
+          box.padding = unit(0.4, "lines"),
+          point.padding = unit(0.3, "lines"),
+          force = 1,
+          direction = "both"
+        )
+      } else {
+        # Use simple text without background
+        p <- p + ggrepel::geom_text_repel(
+          data = annotation_df,
+          aes(x = plot_x, y = plot_y, label = clean_name),
+          size = annotation_config$size / ggplot2::.pt,
+          color = annotation_config$color,
+          alpha = annotation_config$alpha,
+          fontface = annotation_config$fontface,
+          segment.size = annotation_config$segment_size,
+          segment.alpha = annotation_config$segment_alpha,
+          min.segment.length = annotation_config$min_segment_length,
+          max.overlaps = annotation_config$max_overlaps,
+          box.padding = unit(0.4, "lines"),
+          point.padding = unit(0.3, "lines"),
+          force = 1,
+          direction = "both"
+        )
+      }
+    } else {
+      # Fallback if ggrepel is not available - basic text labels
+      warning("ggrepel package not available - using basic text labels without repulsion")
+      p <- p + geom_text(
+        data = annotation_df,
+        aes(x = plot_x, y = plot_y, label = clean_name),
+        size = annotation_config$size / ggplot2::.pt,
+        color = annotation_config$color,
+        alpha = annotation_config$alpha,
+        fontface = annotation_config$fontface,
+        nudge_x = 0.1,
+        nudge_y = 0.1,
+        check_overlap = TRUE
+      )
+    }
+  }
   
   # Add axis limits if specified in layout_config
   if (!is.null(layout_config$x_limits)) {
@@ -748,16 +869,16 @@ plot_temporal_mapping <- function(df, ndim,
   if(layout_config$coord_type == "fixed") {
     p <- p + coord_fixed(ratio = layout_config$aspect_ratio)
   }
-
+  
   if (draw_arrows) {
     if (!"year" %in% names(reduced_df)) {
       stop("`year` column is required when draw_arrows = TRUE")
     }
-    # only antigens get arrows
+    # limit to antigens only:
     positions <- reduced_df[reduced_df$antigen, ]
     positions$V1 <- positions$plot_x
     positions$V2 <- positions$plot_y
-
+    
     #— identify which tip names actually exist in the tree
     if (!is.null(phylo_tree)) {
       library(ape)
@@ -767,16 +888,16 @@ plot_temporal_mapping <- function(df, ndim,
       present_mask <- toupper(all_points) %in% tree_tips_up
       tree_present_points <- unique(all_points[present_mask])
       absent_tips <- setdiff(all_points, tree_present_points)
-
+      
       if (length(absent_tips) > 0) {
         cat(
           "\nThe following antigens are not in the provided phylo_tree\n ",
-          "Thus, they did not contribute to the kernel weight calculation.\n",
+          "Thus, they did not contribute to limiting antigenic velo.\n",
           paste(absent_tips, collapse = ", "), "\n"
           
         )
       }
-
+      
       # only compute clades for tips that are present
       get_clade_node <- function(phy, tip_label, depth) {
         # exact match in uppercase
@@ -792,7 +913,8 @@ plot_temporal_mapping <- function(df, ndim,
         }
         node
       }
-
+      
+      # only compute clades for points that are present in the tree
       clade_nodes  <- setNames(
         lapply(tree_present_points, get_clade_node, phy = phylo_tree, depth = clade_node_depth),
         tree_present_points
@@ -806,32 +928,29 @@ plot_temporal_mapping <- function(df, ndim,
     n   <- nrow(positions)
     v1  <- numeric(n)
     v2  <- numeric(n)
-
+    
     for (i in seq_len(n)) {
-      this_point <- positions$name[i]
-
-      if (!is.null(phylo_tree)) {
-        # if the tip itself was absent, skip
-        if (!(this_point %in% names(clade_members))) {
-          v1[i] <- NA
-          v2[i] <- NA
-          next
-        }
-        members  <- clade_members[[this_point]]
+      this_pt <- positions$name[i]
+      # determine past indices, excluding only known “non‐clade” tips
+      if (!is.null(phylo_tree) && this_pt %in% names(clade_members)) {
+        # those present but *not* in the same clade
+        bad <- setdiff(tree_present_points, clade_members[[this_pt]])
         past_idx <- which(
           positions$year < positions$year[i] &
-          positions$name %in% members
+            !(positions$name %in% bad)
         )
       } else {
+        # either no tree or tip absent from tree → include *all* past points
         past_idx <- which(positions$year < positions$year[i])
       }
-
+      
       if (length(past_idx)) {
-        dt <- positions$year[past_idx] - positions$year[i]
-        dx <- positions$V1[past_idx] - positions$V1[i]
-        dy <- positions$V2[past_idx] - positions$V2[i]
+        #  positive dt = current − past
+        dt <- positions$year[i] - positions$year[past_idx]
+        dx <- positions$V1[i] - positions$V1[past_idx]
+        dy <- positions$V2[i] - positions$V2[past_idx]
         w  <- exp(-(dx^2 + dy^2)/(2*layout_config$sigma_x^2)) *
-              exp(-(dt^2)         /(2*layout_config$sigma_t^2))
+          exp(- (dt^2)        /(2*layout_config$sigma_t^2))
         v1[i] <- sum(w * (dx / dt)) / sum(w)
         v2[i] <- sum(w * (dy / dt)) / sum(w)
       } else {
@@ -842,19 +961,25 @@ plot_temporal_mapping <- function(df, ndim,
     positions$v1  <- v1
     positions$v2  <- v2
     positions$mag <- sqrt(v1^2 + v2^2)
-    # select top-p vectors
-    threshold <- quantile(positions$mag,
-                          probs = 1 - layout_config$top_velocity_p,
-                          na.rm = TRUE)
-    cat(
-      paste0(
-        "Antigenic velocity vectors larger than ", threshold,
-        "\nantigenic unit per unit of time are shown on the figure.\n"
+    # select vectors above the threshold
+    cat(sprintf(
+      "Showing only arrows with magnitude ≥ %.3f\n", layout_config$arrow_plot_threshold
+    ))
+    top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
+    
+    # — overlay top-velocity points with filled shape + black outline —
+    p <- p +
+      geom_point(
+        data        = top_vel,
+        inherit.aes = FALSE,
+        aes(x   = V1, y   = V2),
+        shape       = 21,   # same filled‐circle shape you used for notable antigens
+        color       = "black",
+        size        = aesthetic_config$point_size * 1.2,
+        stroke      = annotation_config$outline_size,
+        alpha       = aesthetic_config$point_alpha
       )
-    )
-    # limit to top percentile, and to antigens only:
-    top_vel <- positions[positions$mag >= threshold & positions$antigen, ]
-
+    
     # add arrow layer
     p <- p +
       geom_segment(
@@ -864,15 +989,93 @@ plot_temporal_mapping <- function(df, ndim,
             y    = V2 - v2,
             xend = V1,
             yend = V2),
-        arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm"))
-        #alpha = aesthetic_config$arrow_alpha
+        arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm")),
+        alpha = aesthetic_config$arrow_alpha
       )
+    
+    # Annotate top‐velocity points exactly like notable‐point labels
+    if (annotate_arrows) {
+      if (requireNamespace("ggrepel", quietly = TRUE)) {
+        if (annotation_config$box) {
+          p <- p +
+            ggrepel::geom_label_repel(
+              data        = top_vel,
+              inherit.aes = FALSE,
+              aes(x = V1, y = V2, label = name),
+              size              = annotation_config$size / ggplot2::.pt,
+              color             = annotation_config$color,
+              alpha             = annotation_config$alpha,
+              fontface          = annotation_config$fontface,
+              segment.size      = annotation_config$segment_size,
+              segment.alpha     = annotation_config$segment_alpha,
+              min.segment.length= annotation_config$min_segment_length,
+              max.overlaps      = annotation_config$max_overlaps,
+              box.padding       = unit(0.4, "lines"),
+              point.padding     = unit(0.3, "lines"),
+              force             = 1,
+              direction         = "both"
+            )
+        } else {
+          p <- p +
+            ggrepel::geom_text_repel(
+              data        = top_vel,
+              inherit.aes = FALSE,
+              aes(x = V1, y = V2, label = name),
+              size              = annotation_config$size / ggplot2::.pt,
+              color             = annotation_config$color,
+              alpha             = annotation_config$alpha,
+              fontface          = annotation_config$fontface,
+              segment.size      = annotation_config$segment_size,
+              segment.alpha     = annotation_config$segment_alpha,
+              min.segment.length= annotation_config$min_segment_length,
+              max.overlaps      = annotation_config$max_overlaps,
+              box.padding       = unit(0.4, "lines"),
+              point.padding     = unit(0.3, "lines"),
+              force             = 1,
+              direction         = "both"
+            )
+        }
+      } else {
+        warning("ggrepel package not available - using basic text labels without repulsion")
+        p <- p + geom_text(
+          data = top_vel,
+          aes(x = V1, y = V2, label = name),
+          size           = annotation_config$size / ggplot2::.pt,
+          color          = annotation_config$color,
+          alpha          = annotation_config$alpha,
+          fontface       = annotation_config$fontface,
+          nudge_x        = - 0.15,
+          nudge_y        = - 0.15,
+          check_overlap  = TRUE
+        )
+      }
+    }
+  }
+  
+  # Add axis limits if specified in layout_config
+  if (!is.null(layout_config$x_limits)) {
+    p <- p + scale_x_continuous(limits = layout_config$x_limits)
+  }
+  if (!is.null(layout_config$y_limits)) {
+    p <- p + scale_y_continuous(limits = layout_config$y_limits)
+  }
+  
+  # Add fixed coordinates if specified
+  if(layout_config$coord_type == "fixed") {
+    p <- p + coord_fixed(ratio = layout_config$aspect_ratio)
   }
   
   # Save plot if save format is specified
   if (!is.null(layout_config$save_format)) {
-    filename <- sprintf("%s_temporal_mapping_ndim_%d.%s", 
-                        dim_config$method, ndim, layout_config$save_format)
+    filename <- sprintf(
+      "%s_cluster_mapping_ndim_%d_sigma_t_%g_sigma_x_%g_arrowthresh_%g.%s",
+      dim_config$method,
+      ndim,
+      layout_config$sigma_t,
+      layout_config$sigma_x,
+      layout_config$arrow_plot_threshold,
+      layout_config$save_format
+    )
     save_plot(p, filename, layout_config, output_dir)
   }
   

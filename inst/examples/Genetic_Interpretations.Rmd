@@ -814,6 +814,7 @@ ggsave(file.path( "amino_acid_discrimination_power.pdf"),
 
 # Create a phylogenetic tree & save groupings:
 
+## H3N2
 
 ---
 
@@ -992,33 +993,133 @@ write.tree(
 ```{r phylo-groupings, echo=TRUE, message=FALSE, warning=FALSE}
 # install.packages("ape")
 #–– build grouping‐only phylogeny from amino‐acid alignment and root on oldest sample ––
+# library(ape)
+# library(phangorn)
+# 
+# # read AA alignment
+# alignment_aa <- read.phyDat("data_files/matched_sequences alignment.fasta",
+#                            format = "fasta",
+#                            type   = "AA")
+# 
+# # compute pairwise Hamming distances
+# dist_matrix <- dist.hamming(alignment_aa)
+# 
+# # neighbor‐joining tree
+# tree_nj <- NJ(dist_matrix)
+# 
+# # identify oldest sample by extracting 4-digit year from sequence names
+# seq_names   <- names(alignment_aa)
+# years       <- as.integer(sub(".*(\\d{4}).*$", "\\1", seq_names))
+# oldest_tip  <- seq_names[which.min(years)]
+# 
+# # root the tree on that oldest tip
+# tree_rooted <- root(tree_nj, outgroup = oldest_tip, resolve.root = TRUE)
+# 
+# # strip out branch lengths → keep only grouping/topology
+# tree_rooted$edge.length <- NULL
+# 
+# # write topology‐only, rooted tree in Newick (no “:length” entries)
+# write.tree(tree_rooted, file = "phylo_groupings_rooted.nwk")
+```
+
+
+
+## HIV1
+
+```{r}
+# 1. Read in the data
+hiv_positions <- read_csv("hiv_positions.csv",
+                          stringsAsFactors = FALSE,
+                          header           = TRUE,
+                          check.names      = FALSE)
+HIV_viruses <- read.csv("HIV_viruses.csv",
+                     stringsAsFactors = FALSE,
+                     header           = TRUE,
+                     check.names      = FALSE)
+
+# We select only the two relevant columns from metadata 
+merged_baseR <- merge(
+  x     = hiv_positions,
+  y     = HIV_viruses[, c("Virus name", "Accession")],
+  by.x  = "name",          # key in hiv_positions
+  by.y  = "Virus name",    # key in metadata
+  all.x = TRUE             # preserve all rows in hiv_positions
+)
+
+head(merged_baseR)
+
+hiv_positions <- merged_baseR
+
+# 1. Subset to non-NA accessions
+valid_accessions <- merged_baseR$Accession[!is.na(merged_baseR$Accession)]
+
+# 2. Write each accession on its own line
+writeLines(valid_accessions, con = "data_files/HIV1BC_accessions.txt")
+
+```
+
+
+```{r dna-phylogeny, echo=TRUE, message=FALSE, warning=FALSE}
+# ── 4. Build a Topology-Only Phylogeny from the DNA Alignment ──────────────
 library(ape)
-library(phangorn)
 
-# read AA alignment
-alignment_aa <- read.phyDat("data_files/matched_sequences alignment.fasta",
-                           format = "fasta",
-                           type   = "AA")
+# Read the post-alignment FASTA as a DNAbin object
+alignment_dna <- read.dna(
+  file   = "data_files/HIV1BC_sequence_aligned.fasta",
+  format = "fasta"
+)
 
-# compute pairwise Hamming distances
-dist_matrix <- dist.hamming(alignment_aa)
+# Use positions with Accession column
 
-# neighbor‐joining tree
+# edit alignment_dna to replace accessions with names.
+# Extract accession numbers from the full FASTA names
+accessions <- sub("^([A-Z0-9]+)\\..*", "\\1", rownames(alignment_dna))
+
+# Match these accessions to hiv_positions$Accession
+matched_idx <- match(accessions, hiv_positions$Accession)
+
+# Initialize new sequence names
+new_names <- character(length(accessions))
+
+# For matched accessions, use the corresponding hiv_positions$name
+new_names[!is.na(matched_idx)] <- hiv_positions$name[matched_idx[!is.na(matched_idx)]]
+
+# For unmatched accessions, use the accession number only
+new_names[is.na(matched_idx)] <- accessions[is.na(matched_idx)]
+
+# Replace row names of alignment_dna
+rownames(alignment_dna) <- new_names
+
+
+# Compute raw p-distance (proportion of nucleotide differences)
+dist_matrix <- dist.dna(
+  alignment_dna,
+  model             = "raw",
+  pairwise.deletion = TRUE
+)
+
+# Construct a Neighbor-Joining tree
 tree_nj <- NJ(dist_matrix)
 
-# identify oldest sample by extracting 4-digit year from sequence names
-seq_names   <- names(alignment_aa)
-years       <- as.integer(sub(".*(\\d{4}).*$", "\\1", seq_names))
-oldest_tip  <- seq_names[which.min(years)]
+# Identify the oldest tip by extracting the 4-digit year from tip labels
+tip_labels <- rownames(alignment_dna)
+oldest_tip <- "ADA"
 
-# root the tree on that oldest tip
-tree_rooted <- root(tree_nj, outgroup = oldest_tip, resolve.root = TRUE)
+# Root the NJ tree on the oldest sample
+tree_rooted <- root(
+  tree_nj,
+  outgroup     = oldest_tip,
+  resolve.root = TRUE
+)
 
-# strip out branch lengths → keep only grouping/topology
+# Strip branch lengths to retain only grouping topology
 tree_rooted$edge.length <- NULL
 
-# write topology‐only, rooted tree in Newick (no “:length” entries)
-write.tree(tree_rooted, file = "phylo_groupings_rooted.nwk")
+# Write topology-only, rooted Newick file
+write.tree(
+  tree_rooted,
+  file = "data_files/HIV1BC_phylo_groupings_rooted.nwk"
+)
 ```
 
 
