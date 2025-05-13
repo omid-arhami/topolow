@@ -289,6 +289,7 @@ new_layout_config <- function(
     y_limits = y_limits,
     sigma_x = sigma_x,
     sigma_t = sigma_t,
+    sigma_phy = sigma_phy,
     arrow_plot_threshold   = arrow_plot_threshold
   )
   
@@ -313,9 +314,7 @@ new_layout_config <- function(
     save_format %in% c("png", "pdf", "svg", "eps"),
     reverse_x %in% c(1, -1),
     reverse_y %in% c(1, -1),
-    is.numeric(sigma_x), sigma_x > 0,
-    is.numeric(sigma_t), sigma_t > 0,
-    is.numeric(arrow_plot_threshold),   arrow_plot_threshold >= 0
+    is.numeric(arrow_plot_threshold), arrow_plot_threshold >= 0
   )
   
   # Validate axis limits if provided
@@ -329,7 +328,22 @@ new_layout_config <- function(
       stop("y_limits must be a numeric vector of length 2 with min < max")
     }
   }
-  
+  # Validate sigmas if provided
+  if (!is.null(sigma_x)) {
+    if (!is.numeric(sigma_x) || sigma_x <= 0) {
+      stop("sigma_x must be a numeric positive value")
+    }
+  }
+  if (!is.null(sigma_t)) {
+    if (!is.numeric(sigma_t) || sigma_t <= 0) {
+      stop("sigma_x must be a numeric positive value")
+    }
+  }
+  if (!is.null(sigma_phy)) {
+    if (!is.numeric(sigma_phy) || sigma_phy <= 0) {
+      stop("sigma_x must be a numeric positive value")
+    }
+  }
   structure(config, class = "layout_config")
 }
 
