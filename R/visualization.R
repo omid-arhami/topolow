@@ -723,21 +723,6 @@ plot_temporal_mapping <- function(df_coords, ndim,
   # Create base theme
   base_theme <- create_base_theme(aesthetic_config, layout_config)
   
-  # Create point type with explicit factor levels
-  
-  # Calculate optimal number of legend columns if legend is shown
-  legend_theme <- if(aesthetic_config$show_legend) {
-    n_legend_cols <- min(max(1, ceiling(n_clusters / 15)), 3)
-    theme(
-      legend.box = "vertical",
-      legend.margin = margin(l = 5, r = 5),
-      legend.spacing.y = unit(0.1, "cm"),
-      legend.key.size = unit(0.8, "lines")
-    )
-  } else {
-    theme()  # Empty theme if no legend
-  }
-  
   # Flag notable points
   if (!is.null(annotation_config$notable_points) && length(annotation_config$notable_points) > 0) {
     reduced_df$is_notable <- reduced_df$clean_name %in% annotation_config$notable_points
