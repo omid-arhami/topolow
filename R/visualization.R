@@ -1217,6 +1217,11 @@ plot_cluster_mapping <- function(df_coords, ndim,
   # Validate input data
   df_coords <- validate_topolow_df(df_coords, ndim, require_clusters = TRUE)
   
+  # if no output_dir given, default to current working directory
+  if (is.null(output_dir) || length(output_dir) == 0) {
+    output_dir <- getwd()
+  }
+  
   # Perform dimension reduction
   reduced_df <- reduce_dimensions(df_coords, dim_config)
   
@@ -1526,26 +1531,21 @@ plot_cluster_mapping <- function(df_coords, ndim,
     top_vel$end_x <- top_vel$V1 - u_x * point_radius
     top_vel$end_y <- top_vel$V2 - u_y * point_radius
     
-    
-    # — Save unrooted tree with tip distances from spline path —
-    unrooted <- if (is.rooted(phylo_tree)) unroot(phylo_tree) else phylo_tree
-    # `leaf_distances` was computed above as distances to the spline path
+    # — Save unrooted tree with tip distances (only if phylo_tree) —
+    if (!is.null(phylo_tree)) {
+      unrooted <- if (is.rooted(phylo_tree)) unroot(phylo_tree) else phylo_tree
       tip_labels <- paste0(unrooted$tip.label, " (", round(leaf_distances, 2), ")")
-    unrooted$tip.label <- tip_labels
-    # write the tree
-    write.tree(unrooted, file = file.path(output_dir, "unrooted_tree.tre"))
-    pdf(file.path(output_dir, "unrooted_tree.pdf"))
-    plot(unrooted, type = "unrooted", no.margin = TRUE)
-    dev.off()
+      unrooted$tip.label <- tip_labels
+      write.tree(unrooted, file = file.path(output_dir, "unrooted_tree.tre"))
+      pdf(file.path(output_dir, "unrooted_tree.pdf")); plot(unrooted, type="unrooted", no.margin=TRUE); dev.off()
+  
+      # — Save rooted tree highlighting arrowed tips —
+      rooted <- root(phylo_tree, resolve.root=TRUE)
+      tip_col <- ifelse(rooted$tip.label %in% top_vel$name, "red", "black")
+      write.tree(rooted, file = file.path(output_dir, "rooted_tree.tre"))
+      pdf(file.path(output_dir, "rooted_tree.pdf")); plot(rooted, tip.color=tip_col, no.margin=TRUE); dev.off()
+    }
     
-    # — Save rooted tree highlighting leaves with arrows —
-    rooted <- root(phylo_tree, outgroup = NULL, resolve.root = TRUE)
-    arrow_tips <- top_vel$name
-    tip_col <- ifelse(rooted$tip.label %in% arrow_tips, "red", "black")
-    write.tree(rooted, file = file.path(output_dir, "rooted_tree.tre"))
-    pdf(file.path(output_dir, "rooted_tree.pdf"))
-    plot(rooted, tip.color = tip_col, no.margin = TRUE)
-    dev.off()
     
     # — overlay top-velocity points with filled shape + black outline —
     p <- p +
