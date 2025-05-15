@@ -1398,6 +1398,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
     if (!is.null(phylo_tree)) {
       library(ape)
       if (is.rooted(phylo_tree)) {
+        rooted_tree <- phylo_tree
         phylo_tree <- unroot(phylo_tree)
       }
       #— identify which tip names actually exist in the tree
@@ -1540,10 +1541,9 @@ plot_cluster_mapping <- function(df_coords, ndim,
       pdf(file.path(output_dir, "unrooted_tree.pdf")); plot(unrooted, type="unrooted", no.margin=TRUE); dev.off()
   
       # — Save rooted tree highlighting arrowed tips —
-      rooted <- root(phylo_tree, resolve.root=TRUE)
-      tip_col <- ifelse(rooted$tip.label %in% top_vel$name, "red", "black")
-      write.tree(rooted, file = file.path(output_dir, "rooted_tree.tre"))
-      pdf(file.path(output_dir, "rooted_tree.pdf")); plot(rooted, tip.color=tip_col, no.margin=TRUE); dev.off()
+      tip_col <- ifelse(rooted_tree$tip.label %in% top_vel$name, "red", "black")
+      write.tree(rooted_tree, file = file.path(output_dir, "rooted_tree.tre"))
+      pdf(file.path(output_dir, "rooted_tree.pdf")); plot(rooted_tree, tip.color=tip_col, no.margin=TRUE); dev.off()
     }
     
     
