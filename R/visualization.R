@@ -1514,7 +1514,39 @@ plot_cluster_mapping <- function(df_coords, ndim,
         "Showing only arrows with magnitude ≥ %.3f (figure unit)\n", layout_config$arrow_plot_threshold
       ))
     top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
-
+    
+    # compute a radius (in data units) — you may need to tweak the factor
+    point_radius <- aesthetic_config$point_size * 0.5
+    
+    # unit‐vector of the arrow
+    u_x <- top_vel$v1 / top_vel$mag
+    u_y <- top_vel$v2 / top_vel$mag
+    
+    # new end points, pulled back by the radius
+    top_vel$end_x <- top_vel$V1 - u_x * point_radius
+    top_vel$end_y <- top_vel$V2 - u_y * point_radius
+    
+    
+    # — Save unrooted tree with tip distances from spline path —
+    unrooted <- if (is.rooted(phylo_tree)) unroot(phylo_tree) else phylo_tree
+    # `leaf_distances` was computed above as distances to the spline path
+      tip_labels <- paste0(unrooted$tip.label, " (", round(leaf_distances, 2), ")")
+    unrooted$tip.label <- tip_labels
+    # write the tree
+    write.tree(unrooted, file = file.path(output_dir, "unrooted_tree.tre"))
+    pdf(file.path(output_dir, "unrooted_tree.pdf"))
+    plot(unrooted, type = "unrooted", no.margin = TRUE)
+    dev.off()
+    
+    # — Save rooted tree highlighting leaves with arrows —
+    rooted <- root(phylo_tree, outgroup = NULL, resolve.root = TRUE)
+    arrow_tips <- top_vel$name
+    tip_col <- ifelse(rooted$tip.label %in% arrow_tips, "red", "black")
+    write.tree(rooted, file = file.path(output_dir, "rooted_tree.tre"))
+    pdf(file.path(output_dir, "rooted_tree.pdf"))
+    plot(rooted, tip.color = tip_col, no.margin = TRUE)
+    dev.off()
+    
     # — overlay top-velocity points with filled shape + black outline —
     p <- p +
       geom_point(
@@ -1535,8 +1567,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
         inherit.aes = FALSE,
         aes(x    = V1 - v1,
             y    = V2 - v2,
-            xend = V1,
-            yend = V2),
+            xend = end_x,
+            yend = end_y),
         arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm")),
         alpha = aesthetic_config$arrow_alpha
       )
