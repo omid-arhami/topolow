@@ -1400,7 +1400,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
       all_points      <- positions$name
       tree_tips_up  <- toupper(phylo_tree$tip.label)
       tip_idx <- match(toupper(positions$name), tree_tips_up)
-      # tip_idx[i] is the row in D_edge for positions$name[i], or NA if absent
+      # tip_idx[i] is the row in D_edge (DN) for positions$name[i], or NA if absent
+      
       # compare in uppercase for consistency
       present_mask <- toupper(all_points) %in% tree_tips_up
       tree_present_points <- unique(all_points[present_mask])
@@ -1435,7 +1436,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
       tree_unit$edge.length <- rep(1, nrow(tree_unit$edge))
       
       # 2) compute node‐to‐node distances
-      DN <- dist.nodes(tree_unit)
+      DN <- cophenetic.phylo(tree_unit)
+      #DN <- dist.nodes(tree_unit)
       
       # 3) find the two tips with maximum separation
       n_tip <- length(tree_unit$tip.label)
@@ -1491,7 +1493,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
           if (length(valid_past)) {
             phy_i   <- tip_idx[i]
             phy_p   <- tip_idx[valid_past]
-            d_phy   <- D_edge[phy_i, phy_p]
+            d_phy   <- DN[phy_i, phy_p]
             w[valid_past] <- w[valid_past] * exp(- (d_phy^2)/(2*sigma_phy^2))
           }
         }
