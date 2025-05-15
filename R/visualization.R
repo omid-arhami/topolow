@@ -1436,8 +1436,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
       tree_unit$edge.length <- rep(1, nrow(tree_unit$edge))
       
       # 2) compute node‐to‐node distances
-      DN <- cophenetic.phylo(tree_unit)
-      #DN <- dist.nodes(tree_unit)
+      #DN <- cophenetic.phylo(tree_unit)
+      DN <- dist.nodes(tree_unit)
       
       # 3) find the two tips with maximum separation
       n_tip <- length(tree_unit$tip.label)
