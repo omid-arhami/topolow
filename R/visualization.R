@@ -985,7 +985,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
     positions$mag <- sqrt(v1^2 + v2^2)
     # select vectors above the threshold
     cat(sprintf(
-      "Showing only arrows with magnitude ≥ %.3f\n", layout_config$arrow_plot_threshold
+      "Showing only arrows with magnitude ≥ %.3f (figure unit)\n", layout_config$arrow_plot_threshold
     ))
     top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
     
@@ -1459,7 +1459,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
         layout_config$sigma_phy
       )
       
-      cat(sprintf("Phylogenetic‐bandwidth = %.3f\n", sigma_phy))
+      cat(sprintf("Kernel bandwidth for Phylogenetic edge distance = %.3f\n", sigma_phy))
     }
     
     cat(sprintf(
@@ -1476,8 +1476,9 @@ plot_cluster_mapping <- function(df_coords, ndim,
     
     for (i in seq_len(n)) {
       this_pt <- positions$name[i]
-      # determine past indices
+      # determine past indices (include same-year but drop self)
       past_idx <- which(positions$year <= positions$year[i])
+      past_idx <- past_idx[past_idx != i]
       
       if (length(past_idx)) {
         #  positive dt = current − past
@@ -1510,7 +1511,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
     positions$mag <- sqrt(v1^2 + v2^2)
     # select vectors above the threshold
     cat(sprintf(
-        "Showing only arrows with magnitude ≥ %.3f\n", layout_config$arrow_plot_threshold
+        "Showing only arrows with magnitude ≥ %.3f (figure unit)\n", layout_config$arrow_plot_threshold
       ))
     top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
 
