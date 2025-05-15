@@ -825,10 +825,6 @@ ggsave(file.path( "amino_acid_discrimination_power.pdf"),
 
 3. For phylogeny:  
    - **`read.dna(..., format="fasta")`** gives a `DNAbin` object suitable for nucleotide distances.  
-   - **`dist.dna(..., model="raw")`** computes raw (Hamming) p-distances among DNA sequences.  
-   - **Neighbor-Joining** recovers a topology driven purely by these distances.  
-   - **Rooting** on the oldest tip approximates a temporal calibration in absence of explicit branch-length inference.  
-   - **Removing edge lengths** leaves only the grouping structure.
 
 ```{r}
 #’ Clean, filter, and deduplicate HA‐DNA sequences in “HA_DNA_68_03.fa”
@@ -931,11 +927,22 @@ writeXStringSet(
   "data_files/HA_DNA_matched.fasta",
   format = "fasta"
 )
-
-# At this point, perform a multiple‐sequence alignment externally
-# (e.g. MAFFT or MUSCLE), writing to
-# "data_files/HA_DNA_matched_aligned.fasta"
 ```
+
+At this point, perform a multiple‐sequence alignment externally (e.g. MAFFT or MUSCLE), writing to
+"data_files/HA_DNA_68_03_aligned.fasta"
+
+We used MAFFT/7.520-GCC-12.3.0-with-extensions.
+mafft --thread 8 --auto --anysymbol $INPUT_FILE > $OUTPUT_DIR/${base_name}_aligned.fasta
+
+To create the tree with node supports we use IQ-TREE/2.2.2.6-gompi-2022a. For influenza A/H3N2, GTR+F+I+R4 model has been used in the literature, also found by model finder feature of iqtree2 in our test.
+
+iqtree2 -s INPUT -m GTR+F+I+R4 -nt AUTO -bb 1000 -pre "H3N2-68-03"
+
+To run:
+sbatch iqtree-h3n2.sh "/home/oa36725/scripts/Model1/phylogeny/alignments/nuc/HA/HA_DNA_68_03_aligned.fasta"
+
+Or simpler:
 
 
 ```{r dna-phylogeny, echo=TRUE, message=FALSE, warning=FALSE}
@@ -975,11 +982,14 @@ tree_rooted$edge.length <- NULL
 
 # Write topology-only, rooted Newick file
 write.tree(
+  tree_nj,
+  file = "phylo_groupings_DNA.nwk"
+)
+write.tree(
   tree_rooted,
   file = "phylo_groupings_DNA_rooted.nwk"
 )
 ```
-
 
 
 **This does:**
@@ -1026,6 +1036,7 @@ write.tree(
 
 ## HIV1
 
+Find accessions:
 ```{r}
 # 1. Read in the data
 hiv_positions <- read_csv("hiv_positions.csv",
@@ -1059,37 +1070,60 @@ writeLines(valid_accessions, con = "data_files/HIV1BC_accessions.txt")
 ```
 
 
+At this point, perform a multiple‐sequence alignment externally (e.g. MAFFT or MUSCLE), writing to
+"data_files/HIV1BC_sequence_aligned_named.fasta"
+
+We used MAFFT/7.520-GCC-12.3.0-with-extensions.
+mafft --thread 8 --auto --anysymbol $INPUT_FILE > $OUTPUT_DIR/${base_name}_aligned.fasta
+
+To create the tree with node supports we use IQ-TREE/2.2.2.6-gompi-2022a with its model finder plus feature.
+
+iqtree2 -s $INPUT_FILE -m MFP -bb 1000 -alrt 1000 -nt AUTO -pre $OUTPUT_PREFIX
+
+To run:
+sbatch iqtree-hiv.sh "/home/oa36725/scripts/Model1/phylogeny/alignments/nuc/HIVEnv/HIV1BC_sequence_aligned_named.fasta"
+
+Or simpler
+
+
 ```{r dna-phylogeny, echo=TRUE, message=FALSE, warning=FALSE}
 # ── 4. Build a Topology-Only Phylogeny from the DNA Alignment ──────────────
 library(ape)
 
+# # Read the post-alignment FASTA as a DNAbin object
+# alignment_dna <- read.dna(
+#   file   = "data_files/HIV1BC_sequence_aligned.fasta",
+#   format = "fasta"
+# )
+# # Use positions with Accession column
+# # edit alignment_dna to replace accessions with names.
+# # Extract accession numbers from the full FASTA names
+# accessions <- sub("^([A-Z0-9]+)\\..*", "\\1", rownames(alignment_dna))
+# # Match these accessions to hiv_positions$Accession
+# matched_idx <- match(accessions, hiv_positions$Accession)
+# # Initialize new sequence names
+# new_names <- character(length(accessions))
+# # For matched accessions, use the corresponding hiv_positions$name
+# new_names[!is.na(matched_idx)] <- hiv_positions$name[matched_idx[!is.na(matched_idx)]]
+# # For unmatched accessions, use the accession number only
+# new_names[is.na(matched_idx)] <- accessions[is.na(matched_idx)]
+# # Replace row names of alignment_dna
+# rownames(alignment_dna) <- new_names
+# # Write the modified alignment to a FASTA file
+# write.dna(
+#   x       = alignment_dna,        # Your DNA alignment object
+#   file    = "data_files/HIV1BC_sequence_aligned_named.fasta",  # Output filename
+#   format  = "fasta",              # Specify FASTA format
+#   nbcol   = -1,                   # Write each sequence on a single line (-1)
+#   colsep  = "",                   # No separator between blocks
+#   indent  = 0                     # No indentation
+# )
+
 # Read the post-alignment FASTA as a DNAbin object
 alignment_dna <- read.dna(
-  file   = "data_files/HIV1BC_sequence_aligned.fasta",
+  file   = "data_files/HIV1BC_sequence_aligned_named.fasta",
   format = "fasta"
 )
-
-# Use positions with Accession column
-
-# edit alignment_dna to replace accessions with names.
-# Extract accession numbers from the full FASTA names
-accessions <- sub("^([A-Z0-9]+)\\..*", "\\1", rownames(alignment_dna))
-
-# Match these accessions to hiv_positions$Accession
-matched_idx <- match(accessions, hiv_positions$Accession)
-
-# Initialize new sequence names
-new_names <- character(length(accessions))
-
-# For matched accessions, use the corresponding hiv_positions$name
-new_names[!is.na(matched_idx)] <- hiv_positions$name[matched_idx[!is.na(matched_idx)]]
-
-# For unmatched accessions, use the accession number only
-new_names[is.na(matched_idx)] <- accessions[is.na(matched_idx)]
-
-# Replace row names of alignment_dna
-rownames(alignment_dna) <- new_names
-
 
 # Compute raw p-distance (proportion of nucleotide differences)
 dist_matrix <- dist.dna(
@@ -1117,11 +1151,23 @@ tree_rooted$edge.length <- NULL
 
 # Write topology-only, rooted Newick file
 write.tree(
+  tree_nj,
+  file = "data_files/HIV1BC_phylo_groupings.nwk"
+)
+write.tree(
   tree_rooted,
   file = "data_files/HIV1BC_phylo_groupings_rooted.nwk"
 )
 ```
 
+
+To get the clades:
+TreeCluster.py \
+  -i '/Users/omidarhami/Library/CloudStorage/OneDrive-UniversityofGeorgia/code/R package/topolow1/inst/examples/data_files/tree_output_HIV1BC_sequence_aligned_named.treefile' \
+  -t 0.045 \
+  -s 70 \
+  -m max_clade \
+  -o '/Users/omidarhami/Library/CloudStorage/OneDrive-UniversityofGeorgia/code/R package/topolow1/inst/examples/data_files/clusters.tsv'
 
 
 ```{r session-info}
