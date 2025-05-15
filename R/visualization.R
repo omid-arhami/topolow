@@ -750,6 +750,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
     reduced_df$is_notable <- FALSE
     annotation_df <- reduced_df[0, ]  # Empty dataframe
   }
+  
   # Create point type with explicit factor levels - this is just for regular points
   reduced_df$point_type <- NA_character_  # Initialize
   reduced_df$point_type[reduced_df$antigen & !reduced_df$is_notable] <- "antigen"
@@ -879,9 +880,10 @@ plot_temporal_mapping <- function(df_coords, ndim,
     positions$V1 <- positions$plot_x
     positions$V2 <- positions$plot_y
     
-    #— identify which tip names actually exist in the tree
     if (!is.null(phylo_tree)) {
       library(ape)
+      #— identify which tip names actually exist in the tree
+      positions$name <- toupper(positions$name)
       all_points      <- positions$name
       tree_tips_up  <- toupper(phylo_tree$tip.label)
       # compare in uppercase for consistency
@@ -923,7 +925,27 @@ plot_temporal_mapping <- function(df_coords, ndim,
         clade_nodes,
         function(nd) extract.clade(phylo_tree, nd)$tip.label
       )
+      
+      # Estimate kernel bandwidths based on Silverman's rule (bw.nrd0)
+      # Use 'dists' is of class "dist" and length n*(n-1)/2
+      distmat_t <- dist(positions$year)
+      sigma_t <- ifelse(is.null(layout_config$sigma_t),
+                        bw.nrd0(distmat_t),
+                        layout_config$sigma_t)
+      
+      distmat_x <- dist(positions[, c("V1", "V2")], method = "euclidean")
+      sigma_x <- ifelse(is.null(layout_config$sigma_x),
+                        bw.nrd0(distmat_x),
+                        layout_config$sigma_x)
     }
+    
+    cat(sprintf(
+      "Kernel bandwidth for time = %.3f\n", sigma_t
+    ))
+    cat(sprintf(
+      "Kernel bandwidth for antigenic distance = %.3f\n", sigma_x
+    ))
+    
     
     n   <- nrow(positions)
     v1  <- numeric(n)
@@ -949,8 +971,8 @@ plot_temporal_mapping <- function(df_coords, ndim,
         dt <- positions$year[i] - positions$year[past_idx]
         dx <- positions$V1[i] - positions$V1[past_idx]
         dy <- positions$V2[i] - positions$V2[past_idx]
-        w  <- exp(-(dx^2 + dy^2)/(2*layout_config$sigma_x^2)) *
-          exp(- (dt^2)        /(2*layout_config$sigma_t^2))
+        w  <- exp(-(dx^2 + dy^2)/(2*sigma_x^2)) *
+          exp(- (dt^2)/(2*sigma_t^2))
         v1[i] <- sum(w * (dx / dt)) / sum(w)
         v2[i] <- sum(w * (dy / dt)) / sum(w)
       } else {
@@ -1067,20 +1089,27 @@ plot_temporal_mapping <- function(df_coords, ndim,
   
   # Save plot if save format is specified
   if (!is.null(layout_config$save_format)) {
-    filename <- sprintf(
-      "temporal_map_ndim_%d_sigma_t_%g_sigma_x_%g_arrowthresh_%g.%s",
-      ndim,
-      layout_config$sigma_t,
-      layout_config$sigma_x,
-      layout_config$arrow_plot_threshold,
-      layout_config$save_format
-    )
+    if (draw_arrows){
+      filename <- sprintf(
+        "temporal_map_ndim_%d_s_t_%g_s_x_%g_arrowthresh_%g.%s",
+        ndim,
+        sigma_t,
+        sigma_x,
+        layout_config$arrow_plot_threshold,
+        layout_config$save_format
+      )
+    } else {
+      filename <- sprintf(
+        "temporal_map_ndim_%d.%s",
+        ndim,
+        layout_config$save_format
+      )
+    }
     save_plot(p, filename, layout_config, output_dir)
   }
   
   return(p)
 }
-
 
 
 #' Create Clustered Mapping Plots
@@ -1363,6 +1392,9 @@ plot_cluster_mapping <- function(df_coords, ndim,
 
     if (!is.null(phylo_tree)) {
       library(ape)
+      if (is.rooted(phylo_tree)) {
+        phylo_tree <- unroot(phylo_tree)
+      }
       #— identify which tip names actually exist in the tree
       positions$name <- toupper(positions$name)
       all_points      <- positions$name
@@ -1382,13 +1414,6 @@ plot_cluster_mapping <- function(df_coords, ndim,
           
         )
       }
-      
-      # Calculate edge-distances
-      # Force every edge to length 1
-      tree_unit        <- phylo_tree
-      tree_unit$edge.length <- rep(1, nrow(tree_unit$edge))
-      # Compute the node/edge distance matrix
-      D_edge <- cophenetic.phylo(tree_unit)
     }
     
     # Estimate kernel bandwidths based on Silverman's rule (bw.nrd0)
@@ -1403,14 +1428,36 @@ plot_cluster_mapping <- function(df_coords, ndim,
                       bw.nrd0(distmat_x),
                       layout_config$sigma_x)
     
+    # --- phylogenetic bandwidth via longest‐path distance to tree spine ---
     if (!is.null(phylo_tree)) {
-      distmat_phy <- D_edge[upper.tri(D_edge, diag = FALSE)]
-      sigma_phy <- ifelse(is.null(layout_config$sigma_phy),
-                        2* bw.nrd0(distmat_phy),
-                        layout_config$sigma_phy)
-      cat(sprintf(
-        "Kernel bandwidth for phylogenetic distance = %.3f\n", sigma_phy
-      ))
+      # 1) force every edge to length 1
+      tree_unit <- phylo_tree
+      tree_unit$edge.length <- rep(1, nrow(tree_unit$edge))
+      
+      # 2) compute node‐to‐node distances
+      DN <- dist.nodes(tree_unit)
+      
+      # 3) find the two tips with maximum separation
+      n_tip <- length(tree_unit$tip.label)
+      tip_idx <- seq_len(n_tip)
+      tip_dist_mat <- DN[tip_idx, tip_idx, drop = FALSE]
+      # pick the first pair achieving the max
+      max_pair <- which(tip_dist_mat == max(tip_dist_mat), arr.ind = TRUE)[1, ]
+      
+      # 4) get the (internal + tip) nodes along that path
+      path_nodes <- nodepath(tree_unit, max_pair[1], max_pair[2])
+      
+      # 5) for each tip, its distance to the nearest node on that path
+      leaf_distances <- apply(DN[tip_idx, path_nodes, drop = FALSE], 1, min)
+      
+      # 6) sigma_phy = median distance (unless overridden)
+      sigma_phy <- ifelse(
+        is.null(layout_config$sigma_phy),
+        median(leaf_distances),
+        layout_config$sigma_phy
+      )
+      
+      cat(sprintf("Phylogenetic‐bandwidth = %.3f\n", sigma_phy))
     }
     
     cat(sprintf(
