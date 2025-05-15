@@ -1476,9 +1476,9 @@ plot_cluster_mapping <- function(df_coords, ndim,
     
     for (i in seq_len(n)) {
       this_pt <- positions$name[i]
-      # determine past indices (include same-year but drop self)
-      past_idx <- which(positions$year <= positions$year[i])
-      past_idx <- past_idx[past_idx != i]
+      # determine past indices (exclude same-year)
+      past_idx <- which(positions$year < positions$year[i])
+      #past_idx <- past_idx[past_idx != i]
       
       if (length(past_idx)) {
         #  positive dt = current − past
