@@ -1632,15 +1632,26 @@ plot_cluster_mapping <- function(df_coords, ndim,
   # Save plot if save format is specified
   if (!is.null(layout_config$save_format)) {
     if (draw_arrows){
-      filename <- sprintf(
-        "clustered_map_ndim_%d_s_t_%g_s_x_%g_s_phy_%g_arrowthresh_%g.%s",
-        ndim,
-        sigma_t,
-        sigma_x,
-        sigma_phy,
-        layout_config$arrow_plot_threshold,
-        layout_config$save_format
-      )
+      if (!is.null(phylo_tree)) {
+        filename <- sprintf(
+          "clustered_map_ndim_%d_s_t_%g_s_x_%g_s_phy_%g_arrowthresh_%g.%s",
+          ndim,
+          sigma_t,
+          sigma_x,
+          sigma_phy,
+          layout_config$arrow_plot_threshold,
+          layout_config$save_format
+        )
+      } else {
+        filename <- sprintf(
+          "clustered_map_ndim_%d_s_t_%g_s_x_%g_arrowthresh_%g.%s",
+          ndim,
+          sigma_t,
+          sigma_x,
+          layout_config$arrow_plot_threshold,
+          layout_config$save_format
+        )
+      }
     } else {
       filename <- sprintf(
         "clustered_map_ndim_%d.%s",
