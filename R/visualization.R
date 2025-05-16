@@ -1441,7 +1441,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
     
     distmat_x <- dist(positions[, c("V1", "V2")], method = "euclidean")
     sigma_x <- ifelse(is.null(layout_config$sigma_x),
-                      bw.nrd(distmat_x),
+                      sqrt( (bw.nrd(positions$V1))^2 + (bw.nrd(positions$V2))^2 )
                       layout_config$sigma_x)
     
     # --- phylogenetic bandwidth via longest‐path distance to tree spine ---
