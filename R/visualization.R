@@ -1207,7 +1207,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
                                   cluster_legend_title = "Cluster",
                                   draw_arrows = FALSE,
                                   annotate_arrows = TRUE,
-                                  phylo_tree = NULL) {
+                                  phylo_tree = NULL,
+                                 show_one_arrow_per_cluster = FALSE) {
   
   # Ensure ggrepel is available
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
@@ -1509,11 +1510,17 @@ plot_cluster_mapping <- function(df_coords, ndim,
     positions$v1  <- v1
     positions$v2  <- v2
     positions$mag <- sqrt(v1^2 + v2^2)
-    # select vectors above the threshold
-    cat(sprintf(
-        "Showing only arrows with magnitude ≥ %.3f (figure unit)\n", layout_config$arrow_plot_threshold
-      ))
-    top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
+    
+    if (show_one_arrow_per_cluster) {
+      top_vel <- positions %>%
+        dplyr::group_by(cluster) %>%
+        dplyr::filter(mag == max(mag, na.rm = TRUE)) %>%
+        dplyr::ungroup()
+      cat("Showing one longest arrow per cluster\n")
+    } else {
+      top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
+      cat(sprintf("Showing only arrows with magnitude ≥ %.3f (figure unit)\n", layout_config$arrow_plot_threshold))
+    }
 
     # Calculate the unit vectors for direction
     top_vel$v1_unit <- top_vel$v1 / top_vel$mag
@@ -1521,7 +1528,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
     
     # Calculate point radius in data units (approximation)
     # Convert point size to data units
-    point_radius <- aesthetic_config$point_size * 1.2 / 72 * 2.54  # assuming point size is in points, convert to cm
+    point_radius <- aesthetic_config$point_size * 1.5 / 72 * 2.54  # assuming point size is in points, convert to cm
     
     # — overlay top-velocity points with filled shape + black outline —
     p <- p +
