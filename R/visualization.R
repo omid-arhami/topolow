@@ -642,23 +642,28 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #' Create Temporal Mapping Plot
 #'
 #' @description
-#' Creates a visualization of points colored by time (year) using dimension reduction, with optional drift arrows.
+#' Creates a visualization of points colored by time (year) using dimension reduction, with optional antigenic velocity arrows.
 #' Points are colored on a gradient scale based on their temporal values, with
 #' different shapes for antigens and antisera.
-#' @param df_coords Data frame containing:
+#'
+#' #' @param df_coords Data frame containing:
 #'        - V1, V2, ... Vn: Coordinate columns
 #'        - antigen: Binary indicator for antigen points 
 #'        - antiserum: Binary indicator for antiserum points
 #'        - year: Numeric year values for temporal coloring
 #' @param ndim Number of dimensions in input coordinates
-#' @param draw_arrows     logical; if TRUE, compute and draw antigenic drift vectors
-#' @param phylo_tree      phylo object; if provided, used to compute drift vectors
-#' @param clade_node_depth     integer; number of levels of parent nodes to define clades to limit the calculation of drift vectors to
+#' @param draw_arrows logical; if TRUE, compute and draw antigenic drift vectors
+#' @param annotate_arrows logical; if TRUE, show names of the points having arrows
+#' @param phylo_tree Optional; phylo object in Newick format. Does not need to be rooted. If provided, used to compute antigenic velocity arrows.
+#' @param clade_node_depth Optional; integer; number of levels of parent nodes to define clades. Antigens from different clades will be excluded from the calculation antigenic velocity arrows. (Default: Automatically calculated mode of leaf-to-backbone distance of the tree)
 #' @param dim_config Dimension reduction configuration object specifying method and parameters
 #' @param aesthetic_config Aesthetic configuration object controlling plot appearance
 #' @param layout_config Layout configuration object controlling plot dimensions and style.
 #'        Use x_limits and y_limits in layout_config to set axis limits.
 #' @param output_dir Character. Directory for output files. If NULL, uses current directory
+#' @param annotation_config Annotation configuration object for labeling notable points
+#' @param sigma_t Optional; numeric; bandwidth for the Gaussian kernel didcounting on time. If NULL, uses Silverman's rule of thumb.
+#' @param sigma_x Optional; numeric; bandwidth for the Gaussian kernel didcounting on antigenic distance. If NULL, uses Silverman's rule of thumb.
 #' 
 #' @details
 #' The function performs these steps:
@@ -699,9 +704,11 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #' @seealso 
 #' \code{\link{plot_cluster_mapping}} for cluster-based visualization
 #' \code{\link{plot_3d_mapping}} for 3D visualization
+#' \code{\link{plot_combined}} for creating multiple visualizations
 #' \code{\link{new_dim_reduction_config}} for dimension reduction options
 #' \code{\link{new_aesthetic_config}} for aesthetic options
 #' \code{\link{new_layout_config}} for layout options
+#' \code{\link{new_annotation_config}} for annotation options
 #'
 #' @export
 plot_temporal_mapping <- function(df_coords, ndim, 
@@ -715,7 +722,9 @@ plot_temporal_mapping <- function(df_coords, ndim,
                                   draw_arrows = FALSE,
                                   annotate_arrows = TRUE,
                                   phylo_tree = NULL,
-                                  clade_node_depth = 4) {
+                                  sigma_t = NULL,
+                                  sigma_x = NULL,
+                                  clade_node_depth = NULL) {
   
   # Ensure ggrepel is available
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
@@ -858,19 +867,6 @@ plot_temporal_mapping <- function(df_coords, ndim,
     }
   }
   
-  # Add axis limits if specified in layout_config
-  if (!is.null(layout_config$x_limits)) {
-    p <- p + scale_x_continuous(limits = layout_config$x_limits)
-  }
-  if (!is.null(layout_config$y_limits)) {
-    p <- p + scale_y_continuous(limits = layout_config$y_limits)
-  }
-  
-  # Add fixed coordinates if specified
-  if(layout_config$coord_type == "fixed") {
-    p <- p + coord_fixed(ratio = layout_config$aspect_ratio)
-  }
-  
   if (draw_arrows) {
     if (!"year" %in% names(reduced_df)) {
       stop("`year` column is required when draw_arrows = TRUE")
@@ -882,10 +878,16 @@ plot_temporal_mapping <- function(df_coords, ndim,
     
     if (!is.null(phylo_tree)) {
       library(ape)
+      if (is.rooted(phylo_tree)) {
+        phylo_tree <- unroot(phylo_tree)
+      }
       #— identify which tip names actually exist in the tree
       positions$name <- toupper(positions$name)
       all_points      <- positions$name
       tree_tips_up  <- toupper(phylo_tree$tip.label)
+      tip_idx <- match(toupper(positions$name), tree_tips_up)
+      # tip_idx[i] is the row in D_edge (DN) for positions$name[i], or NA if absent
+      
       # compare in uppercase for consistency
       present_mask <- toupper(all_points) %in% tree_tips_up
       tree_present_points <- unique(all_points[present_mask])
@@ -900,7 +902,37 @@ plot_temporal_mapping <- function(df_coords, ndim,
         )
       }
       
-      # only compute clades for tips that are present
+      # phylogenetic clade depth cutoff via leaf-to-backbone (longest‐path in terms of nodes, aka tree spine)
+      # 1) force every edge to length 1
+      tree_unit <- phylo_tree
+      tree_unit$edge.length <- rep(1, nrow(tree_unit$edge))
+      
+      # 2) compute node‐to‐node distances
+      DN <- dist.nodes(tree_unit)
+      
+      # 3) find the two tips with maximum separation
+      n_tip <- length(tree_unit$tip.label)
+      tip_idx <- seq_len(n_tip)
+      tip_dist_mat <- DN[tip_idx, tip_idx, drop = FALSE]
+      # pick the first pair achieving the max
+      max_pair <- which(tip_dist_mat == max(tip_dist_mat), arr.ind = TRUE)[1, ]
+      
+      # 4) get the (internal + tip) nodes along that path
+      path_nodes <- nodepath(tree_unit, max_pair[1], max_pair[2])
+      
+      # 5) for each tip, its distance to the nearest node on that path
+      leaf_distances <- apply(DN[tip_idx, path_nodes, drop = FALSE], 1, min)
+      
+      # 6) clade_node_depth = median distance (unless overridden)
+      clade_node_depth <- ifelse(
+        is.null(clade_node_depth),
+        ceiling(median(leaf_distances)),
+        clade_node_depth
+      )
+      
+      cat(sprintf("Average leaf-to-backbone distance of the tree (%.3f) was used as clades' depth cutoff.\n", clade_node_depth))
+      
+      # 7) get the clade nodes for each tip            
       get_clade_node <- function(phy, tip_label, depth) {
         # exact match in uppercase
         ix <- match(toupper(tip_label), tree_tips_up)
@@ -925,19 +957,17 @@ plot_temporal_mapping <- function(df_coords, ndim,
         clade_nodes,
         function(nd) extract.clade(phylo_tree, nd)$tip.label
       )
-      
-      # Estimate kernel bandwidths based on Silverman's rule (bw.nrd0)
-      # Use 'dists' is of class "dist" and length n*(n-1)/2
-      distmat_t <- dist(positions$year)
-      sigma_t <- ifelse(is.null(layout_config$sigma_t),
-                        bw.nrd0(distmat_t),
-                        layout_config$sigma_t)
-      
-      distmat_x <- dist(positions[, c("V1", "V2")], method = "euclidean")
-      sigma_x <- ifelse(is.null(layout_config$sigma_x),
-                        bw.nrd0(distmat_x),
-                        layout_config$sigma_x)
     }
+    
+    # Estimate kernel bandwidths based on Silverman's rule (bw.nrd)
+    # Use 'dists' is of class "dist" and length n*(n-1)/2
+    distmat_t <- dist(positions$year)
+    sigma_t <- ifelse(is.null(sigma_t), bw.nrd(distmat_t), sigma_t)
+    
+    distmat_x <- dist(positions[, c("V1", "V2")], method = "euclidean")
+    sigma_x <- ifelse(is.null(sigma_x),
+                      sqrt(0.5*( (bw.nrd(positions$V1))^2 + (bw.nrd(positions$V2))^2 )),
+                      sigma_x)
     
     cat(sprintf(
       "Kernel bandwidth for time = %.3f\n", sigma_t
@@ -945,6 +975,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
     cat(sprintf(
       "Kernel bandwidth for antigenic distance = %.3f\n", sigma_x
     ))
+    
     
     
     n   <- nrow(positions)
@@ -983,11 +1014,25 @@ plot_temporal_mapping <- function(df_coords, ndim,
     positions$v1  <- v1
     positions$v2  <- v2
     positions$mag <- sqrt(v1^2 + v2^2)
-    # select vectors above the threshold
-    cat(sprintf(
-      "Showing only arrows with magnitude ≥ %.3f (figure unit)\n", layout_config$arrow_plot_threshold
-    ))
-    top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
+    
+    if (show_one_arrow_per_cluster) {
+      top_vel <- positions %>%
+        dplyr::group_by(cluster) %>%
+        dplyr::filter(mag == max(mag, na.rm = TRUE)) %>%
+        dplyr::ungroup()
+      cat("Showing one longest arrow per cluster\n")
+    } else {
+      top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
+      cat(sprintf("Showing only arrows with magnitude ≥ %.3f (figure unit)\n", layout_config$arrow_plot_threshold))
+    }
+    
+    # Calculate the unit vectors for direction
+    top_vel$v1_unit <- top_vel$v1 / top_vel$mag
+    top_vel$v2_unit <- top_vel$v2 / top_vel$mag
+    
+    # Calculate point radius in data units (approximation)
+    # Convert point size to data units
+    point_radius <- aesthetic_config$point_size * 1.7 / 72 * 2.54  # assuming point size is in points, convert to cm
     
     # — overlay top-velocity points with filled shape + black outline —
     p <- p +
@@ -1002,18 +1047,35 @@ plot_temporal_mapping <- function(df_coords, ndim,
         alpha       = aesthetic_config$point_alpha
       )
     
-    # add arrow layer
+    # add arrow layer with adjusted endpoints
     p <- p +
       geom_segment(
         data      = top_vel,
         inherit.aes = FALSE,
         aes(x    = V1 - v1,
             y    = V2 - v2,
-            xend = V1,
-            yend = V2),
+            # Adjust endpoints to stop at point border
+            xend = V1 - v1_unit * point_radius,
+            yend = V2 - v2_unit * point_radius),
         arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm")),
         alpha = aesthetic_config$arrow_alpha
       )
+    
+    # Add arrow labels (length in parentheses) at midpoint
+    p <- p + 
+      geom_text(
+        data = top_vel,
+        aes(
+          x = V1 - v1 / 2,
+          y = V2 - v2 / 2,
+          label = sprintf("(%.2f)", mag)
+        ),
+        size = 0.8*(annotation_config$size / ggplot2::.pt),  # Small font size
+        hjust = 0.5,
+        vjust = 0.5,
+        alpha = 0.6
+      )
+    
     
     # Annotate top‐velocity points exactly like notable‐point labels
     if (annotate_arrows) {
@@ -1090,14 +1152,26 @@ plot_temporal_mapping <- function(df_coords, ndim,
   # Save plot if save format is specified
   if (!is.null(layout_config$save_format)) {
     if (draw_arrows){
-      filename <- sprintf(
-        "temporal_map_ndim_%d_s_t_%g_s_x_%g_arrowthresh_%g.%s",
-        ndim,
-        sigma_t,
-        sigma_x,
-        layout_config$arrow_plot_threshold,
-        layout_config$save_format
-      )
+      if (!is.null(phylo_tree)) {
+        filename <- sprintf(
+          "temporal_map_ndim_%d_s_t_%g_s_x_%g_s_phy_%g_arrowthresh_%g.%s",
+          ndim,
+          sigma_t,
+          sigma_x,
+          sigma_phy,
+          layout_config$arrow_plot_threshold,
+          layout_config$save_format
+        )
+      } else {
+        filename <- sprintf(
+          "temporal_map_ndim_%d_s_t_%g_s_x_%g_arrowthresh_%g.%s",
+          ndim,
+          sigma_t,
+          sigma_x,
+          layout_config$arrow_plot_threshold,
+          layout_config$save_format
+        )
+      }
     } else {
       filename <- sprintf(
         "temporal_map_ndim_%d.%s",
@@ -1116,7 +1190,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
 #'
 #' @description
 #' Creates a visualization of points colored by cluster assignment using dimension 
-#' reduction, with optional drift arrows. Points are colored by cluster with different shapes for antigens and 
+#' reduction, with optional antigenic velocity arrows. Points are colored by cluster with different shapes for antigens and 
 #' antisera.
 #'
 #' @param df_coords Data frame containing:
@@ -1125,9 +1199,10 @@ plot_temporal_mapping <- function(df_coords, ndim,
 #'        - antiserum: Binary indicator for antiserum points
 #'        - cluster: Factor or integer cluster assignments
 #' @param ndim Number of dimensions in input coordinates
-#' @param draw_arrows     logical; if TRUE, compute and draw antigenic drift vectors
+#' @param draw_arrows logical; if TRUE, compute and draw antigenic drift vectors
 #' @param annotate_arrows logical; if TRUE, show names of the points having arrows
-#' @param phylo_tree Optional phylogenetic tree object for drawing arrows
+#' @param phylo_tree Optional; phylo object in Newick format. Does not need to be rooted. If provided, used to compute antigenic velocity arrows.
+#' @param clade_node_depth Optional; integer; number of levels of parent nodes to define clades. Antigens from different clades will be excluded from the calculation antigenic velocity arrows. (Default: Automatically calculated mode of leaf-to-backbone distance of the tree)
 #' @param dim_config Dimension reduction configuration object specifying method and parameters
 #' @param aesthetic_config Aesthetic configuration object controlling plot appearance
 #' @param layout_config Layout configuration object controlling plot dimensions and style.
@@ -1136,6 +1211,8 @@ plot_temporal_mapping <- function(df_coords, ndim,
 #' @param show_shape_legend Logical. Whether to show the shape legend (default: TRUE)
 #' @param cluster_legend_title Character. Custom title for the cluster legend (default: "Cluster")
 #' @param annotation_config Annotation configuration object for labeling notable points
+#' @param sigma_t Optional; numeric; bandwidth for the Gaussian kernel didcounting on time. If NULL, uses Silverman's rule of thumb.
+#' @param sigma_x Optional; numeric; bandwidth for the Gaussian kernel didcounting on antigenic distance. If NULL, uses Silverman's rule of thumb.
 #' @param show_one_arrow_per_cluster Shows only the largest antigenic velocity arrow in each cluster
 #' @param cluster_legend_order in case you prefer a certain order for clusters in the legend, 
 #'        provide a list with that order here; e.g., c("cluster 2", "cluster 1")
@@ -1198,19 +1275,26 @@ plot_temporal_mapping <- function(df_coords, ndim,
 #' \code{\link{plot_temporal_mapping}} for temporal visualization
 #' \code{\link{plot_3d_mapping}} for 3D visualization
 #' \code{\link{plot_combined}} for creating multiple visualizations
+#' \code{\link{new_dim_reduction_config}} for dimension reduction options
+#' \code{\link{new_aesthetic_config}} for aesthetic options
+#' \code{\link{new_layout_config}} for layout options
+#' \code{\link{new_annotation_config}} for annotation options
 #'
 #' @export
 plot_cluster_mapping <- function(df_coords, ndim,
-                                  dim_config = new_dim_reduction_config(),
-                                  aesthetic_config = new_aesthetic_config(),
-                                  layout_config = new_layout_config(),
-                                  annotation_config = new_annotation_config(),
-                                  output_dir = NULL,
-                                  show_shape_legend = TRUE,
-                                  cluster_legend_title = "Cluster",
-                                  draw_arrows = FALSE,
-                                  annotate_arrows = TRUE,
-                                  phylo_tree = NULL,
+                                 dim_config = new_dim_reduction_config(),
+                                 aesthetic_config = new_aesthetic_config(),
+                                 layout_config = new_layout_config(),
+                                 annotation_config = new_annotation_config(),
+                                 output_dir = NULL,
+                                 show_shape_legend = TRUE,
+                                 cluster_legend_title = "Cluster",
+                                 draw_arrows = FALSE,
+                                 annotate_arrows = TRUE,
+                                 phylo_tree = NULL,
+                                 sigma_t = NULL,
+                                 sigma_x = NULL,
+                                 clade_node_depth = NULL,
                                  show_one_arrow_per_cluster = FALSE,
                                  cluster_legend_order = NULL) {
   
@@ -1239,7 +1323,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
   if (!is.null(cluster_legend_order)) {
     reduced_df$cluster <- factor(reduced_df$cluster, levels = cluster_legend_order)
   }
-
+  
   if (!is.null(cluster_legend_order)) {
     cluster_levels <- cluster_legend_order
   } else {
@@ -1288,7 +1372,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
   reduced_df$point_type[reduced_df$antigen & !reduced_df$is_notable] <- "antigen"
   reduced_df$point_type[reduced_df$antiserum & !reduced_df$is_notable] <- "antiserum"
   reduced_df$point_type <- factor(reduced_df$point_type, 
-                                levels = names(aesthetic_config$point_shapes))
+                                  levels = names(aesthetic_config$point_shapes))
   
   # Create plot
   p <- ggplot() +
@@ -1407,7 +1491,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
     positions <- reduced_df[reduced_df$antigen, ]
     positions$V1 <- positions$plot_x
     positions$V2 <- positions$plot_y
-
+    
     if (!is.null(phylo_tree)) {
       library(ape)
       if (is.rooted(phylo_tree)) {
@@ -1424,7 +1508,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
       present_mask <- toupper(all_points) %in% tree_tips_up
       tree_present_points <- unique(all_points[present_mask])
       absent_tips <- setdiff(all_points, tree_present_points)
-
+      
       if (length(absent_tips) > 0) {
         cat(
           "\nThe following antigens are not in the provided phylo_tree\n ",
@@ -1433,28 +1517,13 @@ plot_cluster_mapping <- function(df_coords, ndim,
           
         )
       }
-    }
-    
-    # Estimate kernel bandwidths based on Silverman's rule (bw.nrd)
-    # Use 'dists' is of class "dist" and length n*(n-1)/2
-    distmat_t <- dist(positions$year)
-    sigma_t <- ifelse(is.null(layout_config$sigma_t),
-                      bw.nrd(distmat_t),
-                      layout_config$sigma_t)
-    
-    distmat_x <- dist(positions[, c("V1", "V2")], method = "euclidean")
-    sigma_x <- ifelse(is.null(layout_config$sigma_x),
-                      sqrt(0.5*( (bw.nrd(positions$V1))^2 + (bw.nrd(positions$V2))^2 )),
-                      layout_config$sigma_x)
-    
-    # --- phylogenetic bandwidth via longest‐path distance to tree spine ---
-    if (!is.null(phylo_tree)) {
+      
+      # phylogenetic clade depth cutoff via leaf-to-backbone (longest‐path in terms of nodes, aka tree spine)
       # 1) force every edge to length 1
       tree_unit <- phylo_tree
       tree_unit$edge.length <- rep(1, nrow(tree_unit$edge))
       
       # 2) compute node‐to‐node distances
-      #DN <- cophenetic.phylo(tree_unit)
       DN <- dist.nodes(tree_unit)
       
       # 3) find the two tips with maximum separation
@@ -1470,15 +1539,51 @@ plot_cluster_mapping <- function(df_coords, ndim,
       # 5) for each tip, its distance to the nearest node on that path
       leaf_distances <- apply(DN[tip_idx, path_nodes, drop = FALSE], 1, min)
       
-      # 6) sigma_phy = median distance (unless overridden)
-      sigma_phy <- ifelse(
-        is.null(layout_config$sigma_phy),
-        median(leaf_distances),
-        layout_config$sigma_phy
+      # 6) clade_node_depth = median distance (unless overridden)
+      clade_node_depth <- ifelse(
+        is.null(clade_node_depth),
+        ceiling(median(leaf_distances)),
+        clade_node_depth
       )
       
-      cat(sprintf("Kernel bandwidth for Phylogenetic edge distance = %.3f\n", sigma_phy))
+      cat(sprintf("Average leaf-to-backbone distance of the tree (%.3f) was used as clades' depth cutoff.\n", clade_node_depth))
+      
+      # 7) get the clade nodes for each tip      
+      get_clade_node <- function(phy, tip_label, depth) {
+        # exact match in uppercase
+        ix <- match(toupper(tip_label), tree_tips_up)
+        if (is.na(ix)) {
+          stop("Internal error: tip '", tip_label, "' lookup failed")
+        }
+        node <- ix
+        for (k in seq_len(depth)) {
+          parent <- phy$edge[phy$edge[,2] == node, 1]
+          if (length(parent) != 1) break
+          node <- parent
+        }
+        node
+      }
+      
+      # only compute clades for points that are present in the tree
+      clade_nodes  <- setNames(
+        lapply(tree_present_points, get_clade_node, phy = phylo_tree, depth = clade_node_depth),
+        tree_present_points
+      )
+      clade_members <- lapply(
+        clade_nodes,
+        function(nd) extract.clade(phylo_tree, nd)$tip.label
+      )
     }
+    
+    # Estimate kernel bandwidths based on Silverman's rule (bw.nrd)
+    # Use 'dists' is of class "dist" and length n*(n-1)/2
+    distmat_t <- dist(positions$year)
+    sigma_t <- ifelse(is.null(sigma_t), bw.nrd(distmat_t), sigma_t)
+    
+    distmat_x <- dist(positions[, c("V1", "V2")], method = "euclidean")
+    sigma_x <- ifelse(is.null(sigma_x),
+                      sqrt(0.5*( (bw.nrd(positions$V1))^2 + (bw.nrd(positions$V2))^2 )),
+                      sigma_x)
     
     cat(sprintf(
       "Kernel bandwidth for time = %.3f\n", sigma_t
@@ -1488,15 +1593,25 @@ plot_cluster_mapping <- function(df_coords, ndim,
     ))
     
     
+    
     n   <- nrow(positions)
     v1  <- numeric(n)
     v2  <- numeric(n)
     
     for (i in seq_len(n)) {
       this_pt <- positions$name[i]
-      # determine past indices (exclude same-year)
-      past_idx <- which(positions$year < positions$year[i])
-      #past_idx <- past_idx[past_idx != i]
+      # determine past indices, excluding only known “non‐clade” tips
+      if (!is.null(phylo_tree) && this_pt %in% names(clade_members)) {
+        # those present but *not* in the same clade
+        bad <- setdiff(tree_present_points, clade_members[[this_pt]])
+        past_idx <- which(
+          positions$year < positions$year[i] &
+            !(positions$name %in% bad)
+        )
+      } else {
+        # either no tree or tip absent from tree → include *all* past points
+        past_idx <- which(positions$year < positions$year[i])
+      }
       
       if (length(past_idx)) {
         #  positive dt = current − past
@@ -1504,19 +1619,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
         dx <- positions$V1[i] - positions$V1[past_idx]
         dy <- positions$V2[i] - positions$V2[past_idx]
         w  <- exp(-(dx^2 + dy^2)/(2*sigma_x^2)) *
-              exp(- (dt^2)/(2*sigma_t^2))
-              
-        if (!is.null(phylo_tree) && !is.na(tip_idx[i])) {
-          # find which of the past points are also in the tree
-          valid_past <- past_idx[!is.na(tip_idx[past_idx])]
-          if (length(valid_past)) {
-            phy_i   <- tip_idx[i]
-            phy_p   <- tip_idx[valid_past]
-            d_phy   <- DN[phy_i, phy_p]
-            w[valid_past] <- w[valid_past] * exp(- (d_phy^2)/(2*sigma_phy^2))
-          }
-        }
-        
+          exp(- (dt^2)/(2*sigma_t^2)) 
         v1[i] <- sum(w * (dx / dt)) / sum(w)
         v2[i] <- sum(w * (dy / dt)) / sum(w)
       } else {
@@ -1538,7 +1641,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
       top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
       cat(sprintf("Showing only arrows with magnitude ≥ %.3f (figure unit)\n", layout_config$arrow_plot_threshold))
     }
-
+    
     # Calculate the unit vectors for direction
     top_vel$v1_unit <- top_vel$v1 / top_vel$mag
     top_vel$v2_unit <- top_vel$v2 / top_vel$mag
@@ -1559,7 +1662,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
         stroke      = annotation_config$outline_size,
         alpha       = aesthetic_config$point_alpha
       )
-
+    
     # add arrow layer with adjusted endpoints
     p <- p +
       geom_segment(
@@ -1572,7 +1675,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
             yend = V2 - v2_unit * point_radius),
         arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm")),
         alpha = aesthetic_config$arrow_alpha
-    )
+      )
     
     # Add arrow labels (length in parentheses) at midpoint
     p <- p + 
@@ -1589,7 +1692,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
         alpha = 0.6
       )
     
-
+    
     # Annotate top‐velocity points exactly like notable‐point labels
     if (annotate_arrows) {
       if (requireNamespace("ggrepel", quietly = TRUE)) {
@@ -1648,7 +1751,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
       }
     }
   }
-
+  
   # Add axis limits if specified in layout_config
   if (!is.null(layout_config$x_limits)) {
     p <- p + scale_x_continuous(limits = layout_config$x_limits)
