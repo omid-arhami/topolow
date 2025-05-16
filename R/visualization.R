@@ -1514,18 +1514,14 @@ plot_cluster_mapping <- function(df_coords, ndim,
         "Showing only arrows with magnitude ≥ %.3f (figure unit)\n", layout_config$arrow_plot_threshold
       ))
     top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
+
+    # Calculate the unit vectors for direction
+    top_vel$v1_unit <- top_vel$v1 / top_vel$mag
+    top_vel$v2_unit <- top_vel$v2 / top_vel$mag
     
-    ## Calculate arrows start and ends
-    top_vel$start_x <- top_vel$V1 - top_vel$v1
-    top_vel$start_y <- top_vel$V2 - top_vel$v2
-    # compute a radius (in data units) — you may need to tweak the factor
-    point_radius <- aesthetic_config$point_size * 0.5
-    # unit‐vector of the arrow
-    top_vel$u_x <- top_vel$v1 / top_vel$mag
-    top_vel$u_y <- top_vel$v2 / top_vel$mag
-    # new end points, pulled back by the radius
-    top_vel$end_x <- top_vel$V1 - top_vel$u_x * point_radius
-    top_vel$end_y <- top_vel$V2 - top_vel$u_y * point_radius
+    # Calculate point radius in data units (approximation)
+    # Convert point size to data units
+    point_radius <- aesthetic_config$point_size * 1.2 / 72 * 2.54  # assuming point size is in points, convert to cm
     
     # — overlay top-velocity points with filled shape + black outline —
     p <- p +
@@ -1540,18 +1536,19 @@ plot_cluster_mapping <- function(df_coords, ndim,
         alpha       = aesthetic_config$point_alpha
       )
 
-    # add arrow layer
+    # add arrow layer with adjusted endpoints
     p <- p +
       geom_segment(
         data      = top_vel,
         inherit.aes = FALSE,
-        aes(x    = start_x,
-            y    = start_y,
-            xend = end_x,
-            yend = end_y),
+        aes(x    = V1 - v1,
+            y    = V2 - v2,
+            # Adjust endpoints to stop at point border
+            xend = V1 - v1_unit * point_radius,
+            yend = V2 - v2_unit * point_radius),
         arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm")),
         alpha = aesthetic_config$arrow_alpha
-      )
+    )
 
     # Annotate top‐velocity points exactly like notable‐point labels
     if (annotate_arrows) {
