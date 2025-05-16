@@ -1136,6 +1136,9 @@ plot_temporal_mapping <- function(df_coords, ndim,
 #' @param show_shape_legend Logical. Whether to show the shape legend (default: TRUE)
 #' @param cluster_legend_title Character. Custom title for the cluster legend (default: "Cluster")
 #' @param annotation_config Annotation configuration object for labeling notable points
+#' @param show_one_arrow_per_cluster Shows only the largest antigenic velocity arrow in each cluster
+#' @param cluster_legend_order in case you prefer a certain order for clusters in the legend, 
+#'        provide a list with that order here; e.g., c("cluster 2", "cluster 1")
 #' 
 #' @details
 #' The function performs these steps:
@@ -1441,7 +1444,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
     
     distmat_x <- dist(positions[, c("V1", "V2")], method = "euclidean")
     sigma_x <- ifelse(is.null(layout_config$sigma_x),
-                      sqrt( (bw.nrd(positions$V1))^2 + (bw.nrd(positions$V2))^2 )
+                      sqrt( (bw.nrd(positions$V1))^2 + (bw.nrd(positions$V2))^2 ),
                       layout_config$sigma_x)
     
     # --- phylogenetic bandwidth via longest‐path distance to tree spine ---
