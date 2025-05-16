@@ -991,16 +991,8 @@ plot_temporal_mapping <- function(df_coords, ndim,
     positions$v2  <- v2
     positions$mag <- sqrt(v1^2 + v2^2)
     
-    if (show_one_arrow_per_cluster) {
-      top_vel <- positions %>%
-        dplyr::group_by(cluster) %>%
-        dplyr::filter(mag == max(mag, na.rm = TRUE)) %>%
-        dplyr::ungroup()
-      cat("Showing one longest arrow per cluster\n")
-    } else {
-      top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
-      cat(sprintf("Showing only arrows with magnitude ≥ %.3f (figure unit)\n", layout_config$arrow_plot_threshold))
-    }
+    top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
+    cat(sprintf("Showing only arrows with magnitude ≥ %.3f (figure unit)\n", layout_config$arrow_plot_threshold))
     
     # Calculate the unit vectors for direction
     top_vel$v1_unit <- top_vel$v1 / top_vel$mag
@@ -1037,24 +1029,23 @@ plot_temporal_mapping <- function(df_coords, ndim,
         alpha = aesthetic_config$arrow_alpha
       )
     
-    # Add arrow labels (length in parentheses) at midpoint
-    p <- p + 
-      geom_text(
-        data = top_vel,
-        aes(
-          x = V1 - v1 / 2,
-          y = V2 - v2 / 2,
-          label = sprintf("(%.2f)", mag)
-        ),
-        size = 0.8*(annotation_config$size / ggplot2::.pt),  # Small font size
-        hjust = 0.5,
-        vjust = 0.5,
-        alpha = 0.6
-      )
     
-    
-    # Annotate top‐velocity points exactly like notable‐point labels
     if (annotate_arrows) {
+      # Add arrow labels (length in parentheses) at midpoint
+      p <- p + 
+        geom_text(
+          data = top_vel,
+          aes(
+            x = V1 - v1 / 2,
+            y = V2 - v2 / 2,
+            label = sprintf("(%.2f)", mag)
+          ),
+          size = 0.8*(annotation_config$size / ggplot2::.pt),  # Small font size
+          hjust = 0.5,
+          vjust = 0.5,
+          alpha = 0.8*annotation_config$alpha
+        )
+      # Annotate top‐velocity points exactly like notable‐point labels
       if (requireNamespace("ggrepel", quietly = TRUE)) {
         if (annotation_config$box) {
           p <- p +
@@ -1653,24 +1644,22 @@ plot_cluster_mapping <- function(df_coords, ndim,
         alpha = aesthetic_config$arrow_alpha
       )
     
-    # Add arrow labels (length in parentheses) at midpoint
-    p <- p + 
-      geom_text(
-        data = top_vel,
-        aes(
-          x = V1 - v1 / 2,
-          y = V2 - v2 / 2,
-          label = sprintf("(%.2f)", mag)
-        ),
-        size = 0.8*(annotation_config$size / ggplot2::.pt),  # Small font size
-        hjust = 0.5,
-        vjust = 0.5,
-        alpha = 0.6
-      )
-    
-    
-    # Annotate top‐velocity points exactly like notable‐point labels
     if (annotate_arrows) {
+      # Add arrow labels (length in parentheses) at midpoint
+      p <- p + 
+        geom_text(
+          data = top_vel,
+          aes(
+            x = V1 - v1 / 2,
+            y = V2 - v2 / 2,
+            label = sprintf("(%.2f)", mag)
+          ),
+          size = 0.8*(annotation_config$size / ggplot2::.pt),  # Small font size
+          hjust = 0.5,
+          vjust = 0.5,
+          alpha = 0.8*annotation_config$alpha
+        )
+      # Annotate top‐velocity points exactly like notable‐point labels
       if (requireNamespace("ggrepel", quietly = TRUE)) {
         if (annotation_config$box) {
           p <- p +
