@@ -1432,16 +1432,16 @@ plot_cluster_mapping <- function(df_coords, ndim,
       }
     }
     
-    # Estimate kernel bandwidths based on Silverman's rule (bw.nrd0)
+    # Estimate kernel bandwidths based on Silverman's rule (bw.nrd)
     # Use 'dists' is of class "dist" and length n*(n-1)/2
     distmat_t <- dist(positions$year)
     sigma_t <- ifelse(is.null(layout_config$sigma_t),
-                      bw.nrd0(distmat_t),
+                      bw.nrd(distmat_t),
                       layout_config$sigma_t)
     
     distmat_x <- dist(positions[, c("V1", "V2")], method = "euclidean")
     sigma_x <- ifelse(is.null(layout_config$sigma_x),
-                      bw.nrd0(distmat_x),
+                      bw.nrd(distmat_x),
                       layout_config$sigma_x)
     
     # --- phylogenetic bandwidth via longest‐path distance to tree spine ---
@@ -1580,7 +1580,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
           y = V2 - v2 / 2,
           label = sprintf("(%.2f)", mag)
         ),
-        size = 2.8,  # Small font size
+        size = 0.8*(annotation_config$size / ggplot2::.pt),  # Small font size
         hjust = 0.5,
         vjust = 0.5,
         alpha = 0.6
