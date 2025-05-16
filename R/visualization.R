@@ -1524,8 +1524,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
     top_vel$u_x <- top_vel$v1 / top_vel$mag
     top_vel$u_y <- top_vel$v2 / top_vel$mag
     # new end points, pulled back by the radius
-    top_vel$end_x <- top_vel$V1 - u_x * point_radius
-    top_vel$end_y <- top_vel$V2 - u_y * point_radius
+    top_vel$end_x <- top_vel$V1 - top_vel$u_x * point_radius
+    top_vel$end_y <- top_vel$V2 - top_vel$u_y * point_radius
     
     # — overlay top-velocity points with filled shape + black outline —
     p <- p +
