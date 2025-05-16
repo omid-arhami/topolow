@@ -1208,7 +1208,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
                                   draw_arrows = FALSE,
                                   annotate_arrows = TRUE,
                                   phylo_tree = NULL,
-                                 show_one_arrow_per_cluster = FALSE) {
+                                 show_one_arrow_per_cluster = FALSE,
+                                 cluster_legend_order = NULL) {
   
   # Ensure ggrepel is available
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
@@ -1227,18 +1228,31 @@ plot_cluster_mapping <- function(df_coords, ndim,
   
   # Process row names to get strain names
   reduced_df$clean_name <- sub("^(V/|S/)", "", reduced_df$name)
-
+  
   # Create base theme
   base_theme <- create_base_theme(aesthetic_config, layout_config)
   
-  # Get color palette
-  n_clusters <- length(unique(reduced_df$cluster))
+  # Apply custom cluster legend order if provided
+  if (!is.null(cluster_legend_order)) {
+    reduced_df$cluster <- factor(reduced_df$cluster, levels = cluster_legend_order)
+  }
+
+  if (!is.null(cluster_legend_order)) {
+    cluster_levels <- cluster_legend_order
+  } else {
+    cluster_levels <- sort(unique(reduced_df$cluster))
+  }
+  
+  n_clusters <- length(cluster_levels)
   colors <- aesthetic_config$color_palette[1:min(n_clusters, length(aesthetic_config$color_palette))]
   
   if (n_clusters > length(aesthetic_config$color_palette)) {
     warning("More clusters than available colors. Colors will be recycled.")
     colors <- rep_len(aesthetic_config$color_palette, n_clusters)
   }
+  
+  reduced_df$cluster <- factor(reduced_df$cluster, levels = cluster_levels)
+  
   
   # Calculate optimal number of legend columns if legend is shown
   legend_theme <- if(aesthetic_config$show_legend) {
@@ -1528,7 +1542,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
     
     # Calculate point radius in data units (approximation)
     # Convert point size to data units
-    point_radius <- aesthetic_config$point_size * 1.5 / 72 * 2.54  # assuming point size is in points, convert to cm
+    point_radius <- aesthetic_config$point_size * 1.7 / 72 * 2.54  # assuming point size is in points, convert to cm
     
     # — overlay top-velocity points with filled shape + black outline —
     p <- p +
@@ -1556,6 +1570,22 @@ plot_cluster_mapping <- function(df_coords, ndim,
         arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm")),
         alpha = aesthetic_config$arrow_alpha
     )
+    
+    # Add arrow labels (length in parentheses) at midpoint
+    p <- p + 
+      geom_text(
+        data = top_vel,
+        aes(
+          x = V1 - v1 / 2,
+          y = V2 - v2 / 2,
+          label = sprintf("(%.2f)", mag)
+        ),
+        size = 2.8,  # Small font size
+        hjust = 0.5,
+        vjust = 0.5,
+        alpha = 0.6
+      )
+    
 
     # Annotate top‐velocity points exactly like notable‐point labels
     if (annotate_arrows) {
