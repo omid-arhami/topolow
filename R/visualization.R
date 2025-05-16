@@ -1217,11 +1217,6 @@ plot_cluster_mapping <- function(df_coords, ndim,
   # Validate input data
   df_coords <- validate_topolow_df(df_coords, ndim, require_clusters = TRUE)
   
-  # if no output_dir given, default to current working directory
-  if (is.null(output_dir) || length(output_dir) == 0) {
-    output_dir <- getwd()
-  }
-  
   # Perform dimension reduction
   reduced_df <- reduce_dimensions(df_coords, dim_config)
   
@@ -1398,7 +1393,6 @@ plot_cluster_mapping <- function(df_coords, ndim,
     if (!is.null(phylo_tree)) {
       library(ape)
       if (is.rooted(phylo_tree)) {
-        rooted_tree <- phylo_tree
         phylo_tree <- unroot(phylo_tree)
       }
       #— identify which tip names actually exist in the tree
@@ -1521,31 +1515,17 @@ plot_cluster_mapping <- function(df_coords, ndim,
       ))
     top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
     
+    ## Calculate arrows start and ends
+    start_x <- V1 - v1
+    start_y <- V2 - v2
     # compute a radius (in data units) — you may need to tweak the factor
     point_radius <- aesthetic_config$point_size * 0.5
-    
     # unit‐vector of the arrow
     u_x <- top_vel$v1 / top_vel$mag
     u_y <- top_vel$v2 / top_vel$mag
-    
     # new end points, pulled back by the radius
     top_vel$end_x <- top_vel$V1 - u_x * point_radius
     top_vel$end_y <- top_vel$V2 - u_y * point_radius
-    
-    # — Save unrooted tree with tip distances (only if phylo_tree) —
-    if (!is.null(phylo_tree)) {
-      unrooted <- if (is.rooted(phylo_tree)) unroot(phylo_tree) else phylo_tree
-      tip_labels <- paste0(unrooted$tip.label, " (", round(leaf_distances, 2), ")")
-      unrooted$tip.label <- tip_labels
-      write.tree(unrooted, file = file.path(output_dir, "unrooted_tree.tre"))
-      pdf(file.path(output_dir, "unrooted_tree.pdf")); plot(unrooted, type="unrooted", no.margin=TRUE); dev.off()
-  
-      # — Save rooted tree highlighting arrowed tips —
-      tip_col <- ifelse(rooted_tree$tip.label %in% top_vel$name, "red", "black")
-      write.tree(rooted_tree, file = file.path(output_dir, "rooted_tree.tre"))
-      pdf(file.path(output_dir, "rooted_tree.pdf")); plot(rooted_tree, tip.color=tip_col, no.margin=TRUE); dev.off()
-    }
-    
     
     # — overlay top-velocity points with filled shape + black outline —
     p <- p +
@@ -1565,8 +1545,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
       geom_segment(
         data      = top_vel,
         inherit.aes = FALSE,
-        aes(x    = V1 - v1,
-            y    = V2 - v2,
+        aes(x    = start_x,
+            y    = start_y,
             xend = end_x,
             yend = end_y),
         arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm")),
