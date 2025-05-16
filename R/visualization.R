@@ -1516,13 +1516,13 @@ plot_cluster_mapping <- function(df_coords, ndim,
     top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
     
     ## Calculate arrows start and ends
-    start_x <- V1 - v1
-    start_y <- V2 - v2
+    top_vel$start_x <- top_vel$V1 - top_vel$v1
+    top_vel$start_y <- top_vel$V2 - top_vel$v2
     # compute a radius (in data units) — you may need to tweak the factor
     point_radius <- aesthetic_config$point_size * 0.5
     # unit‐vector of the arrow
-    u_x <- top_vel$v1 / top_vel$mag
-    u_y <- top_vel$v2 / top_vel$mag
+    top_vel$u_x <- top_vel$v1 / top_vel$mag
+    top_vel$u_y <- top_vel$v2 / top_vel$mag
     # new end points, pulled back by the radius
     top_vel$end_x <- top_vel$V1 - u_x * point_radius
     top_vel$end_y <- top_vel$V2 - u_y * point_radius
