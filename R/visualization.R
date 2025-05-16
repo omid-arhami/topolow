@@ -233,8 +233,6 @@ new_aesthetic_config <- function(
 #' @param reverse_y Numeric multiplier for y-axis direction (1 or -1)
 #' @param x_limits Numeric vector of length 2 specifying c(min, max) for x-axis. If NULL, limits are set automatically.
 #' @param y_limits Numeric vector of length 2 specifying c(min, max) for y-axis. If NULL, limits are set automatically.
-#' @param sigma_x Spatial bandwidth of the kernel function of velocity arrows in antigenic units
-#' @param sigma_t Temporal bandwidth of the kernel function of velocity arrows in years or taime unit of the data
 #' @param arrow_plot_threshold Threshold for velocity arrows to be drawn in the same antigenic distance unit (default: 0.10)
 #' @return A layout_config object
 #' @export
@@ -260,9 +258,6 @@ new_layout_config <- function(
   reverse_y = 1,
   x_limits = NULL,
   y_limits = NULL,
-  sigma_x = NULL,    # spatial bandwidth (in antigenic units)
-  sigma_t = NULL,    # temporal bandwidth (in years)
-  sigma_phy = NULL, # bandwidth of phylogenetic distance
   arrow_plot_threshold   = 1  # velocity arrows larger than this are shown
 ) {
   config <- list(
@@ -287,9 +282,6 @@ new_layout_config <- function(
     reverse_y = reverse_y,
     x_limits = x_limits,
     y_limits = y_limits,
-    sigma_x = sigma_x,
-    sigma_t = sigma_t,
-    sigma_phy = sigma_phy,
     arrow_plot_threshold   = arrow_plot_threshold
   )
   
@@ -326,22 +318,6 @@ new_layout_config <- function(
   if (!is.null(y_limits)) {
     if (!is.numeric(y_limits) || length(y_limits) != 2 || y_limits[1] >= y_limits[2]) {
       stop("y_limits must be a numeric vector of length 2 with min < max")
-    }
-  }
-  # Validate sigmas if provided
-  if (!is.null(sigma_x)) {
-    if (!is.numeric(sigma_x) || sigma_x <= 0) {
-      stop("sigma_x must be a numeric positive value")
-    }
-  }
-  if (!is.null(sigma_t)) {
-    if (!is.numeric(sigma_t) || sigma_t <= 0) {
-      stop("sigma_x must be a numeric positive value")
-    }
-  }
-  if (!is.null(sigma_phy)) {
-    if (!is.numeric(sigma_phy) || sigma_phy <= 0) {
-      stop("sigma_x must be a numeric positive value")
     }
   }
   structure(config, class = "layout_config")
@@ -662,8 +638,8 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #'        Use x_limits and y_limits in layout_config to set axis limits.
 #' @param output_dir Character. Directory for output files. If NULL, uses current directory
 #' @param annotation_config Annotation configuration object for labeling notable points
-#' @param sigma_t Optional; numeric; bandwidth for the Gaussian kernel didcounting on time. If NULL, uses Silverman's rule of thumb.
-#' @param sigma_x Optional; numeric; bandwidth for the Gaussian kernel didcounting on antigenic distance. If NULL, uses Silverman's rule of thumb.
+#' @param sigma_t Optional; numeric; bandwidth for the Gaussian kernel discounting on time in years or the time unit of the data. If NULL, uses Silverman's rule of thumb.
+#' @param sigma_x Optional; numeric; bandwidth for the Gaussian kernel discounting on antigenic distancein antigenic units. If NULL, uses Silverman's rule of thumb.
 #' 
 #' @details
 #' The function performs these steps:
@@ -1154,11 +1130,11 @@ plot_temporal_mapping <- function(df_coords, ndim,
     if (draw_arrows){
       if (!is.null(phylo_tree)) {
         filename <- sprintf(
-          "temporal_map_ndim_%d_s_t_%g_s_x_%g_s_phy_%g_arrowthresh_%g.%s",
+          "temporal_map_ndim_%d_s_t_%g_s_x_%g_cladeDepth_%g_arrowthresh_%g.%s",
           ndim,
           sigma_t,
           sigma_x,
-          sigma_phy,
+          clade_node_depth,
           layout_config$arrow_plot_threshold,
           layout_config$save_format
         )
@@ -1211,8 +1187,8 @@ plot_temporal_mapping <- function(df_coords, ndim,
 #' @param show_shape_legend Logical. Whether to show the shape legend (default: TRUE)
 #' @param cluster_legend_title Character. Custom title for the cluster legend (default: "Cluster")
 #' @param annotation_config Annotation configuration object for labeling notable points
-#' @param sigma_t Optional; numeric; bandwidth for the Gaussian kernel didcounting on time. If NULL, uses Silverman's rule of thumb.
-#' @param sigma_x Optional; numeric; bandwidth for the Gaussian kernel didcounting on antigenic distance. If NULL, uses Silverman's rule of thumb.
+#' @param sigma_t Optional; numeric; bandwidth for the Gaussian kernel discounting on time in years or the time unit of the data. If NULL, uses Silverman's rule of thumb.
+#' @param sigma_x Optional; numeric; bandwidth for the Gaussian kernel discounting on antigenic distance in antigenic units. If NULL, uses Silverman's rule of thumb.
 #' @param show_one_arrow_per_cluster Shows only the largest antigenic velocity arrow in each cluster
 #' @param cluster_legend_order in case you prefer a certain order for clusters in the legend, 
 #'        provide a list with that order here; e.g., c("cluster 2", "cluster 1")
@@ -1770,11 +1746,11 @@ plot_cluster_mapping <- function(df_coords, ndim,
     if (draw_arrows){
       if (!is.null(phylo_tree)) {
         filename <- sprintf(
-          "clustered_map_ndim_%d_s_t_%g_s_x_%g_s_phy_%g_arrowthresh_%g.%s",
+          "clustered_map_ndim_%d_s_t_%g_s_x_%g_cladeDepth_%g_arrowthresh_%g.%s",
           ndim,
           sigma_t,
           sigma_x,
-          sigma_phy,
+          clade_node_depth,
           layout_config$arrow_plot_threshold,
           layout_config$save_format
         )
