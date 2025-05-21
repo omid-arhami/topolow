@@ -166,6 +166,7 @@ long_to_matrix <- function(data, chnames, chorder = NULL,
 }
 
 
+
 #' Convert Distance Matrix to Titer Panel Format
 #'
 #' @description
