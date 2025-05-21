@@ -117,7 +117,7 @@ hiv_titers <- hiv_titers %>% dplyr::filter(IC50 != "")
 
 hiv_titers <- hiv_titers %>% dplyr::filter(Subtype %in% c("B", "C")) #, "01_AE", "A1", "G", "07_BC", "02_AG", "D", "A1D", "02A1"
 
-hiv_titers$IC50 <- clean_data(hiv_titers$IC50, k=2, take_log=TRUE)
+hiv_titers$IC50 <- clean_data(hiv_titers$IC50, take_log=TRUE, k=2) # Base of log is 2; log is temporarily done only for outlier detection
 hiv_titers <- na.omit(hiv_titers)
 
 # Sort the dataset based on the "year" column
@@ -138,10 +138,7 @@ hiv_results <- process_antigenic_data(
   metadata_cols = c("Subtype", "Country")
 )
 
-# Extract distance matrix
-hiv_distance_matrix <- hiv_results$matrix
 hiv_long <- hiv_results$long
-
 
 # Create filtered dataset
 create_filtered_dataset <- function(data, optimal_cutoff, insufficient_thresh) {
@@ -193,7 +190,7 @@ filtered_data <- filtered_data %>%
   filter(Antibody %in% pairing_counts$antibodies$Antibody,
          Virus %in% pairing_counts$viruses$Virus)
 
-write.csv(filtered_data, "data_files/hiv_filtered_long_data.csv")
+write.csv(filtered_data, "data_files/hiv_filtered_long_data.csv", row.names = FALSE)
 
 hiv_matrix <- long_to_matrix(filtered_data,
                             chnames = "Virus",

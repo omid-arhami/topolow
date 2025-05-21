@@ -1140,6 +1140,7 @@ prune_distance_network_topn <- function(data, virus_col, antibody_col, year_col,
 #' @param data Numeric vector of values to analyze
 #' @param k Numeric threshold for outlier detection (default: 3). Points more than
 #'        k MADs from median are considered outliers.
+#' @param take_log Logical. Whether to log transform data before (and only for) outlier detection (default: FALSE)
 #' @return A list containing:
 #'   \item{outlier_mask}{Logical vector indicating outliers}
 #'   \item{stats}{List containing:
