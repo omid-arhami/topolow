@@ -1,0 +1,525 @@
+---
+title: "Parameter Fitting of Topolow for DenV"
+author: "Omid Arhami"
+date: "2025-05-16"
+output: html_document
+vignette: >
+  %\VignetteIndexEntry{Parameter Fitting with Topolow}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 8,
+  fig.height = 6,
+  warning = TRUE,
+ message = TRUE,    # Show messages
+  error = TRUE      # Continue on error
+)
+```
+
+## Introduction
+
+This vignette demonstrates how to fit parameters for the Topolow algorithm using a combination of initial Latin Hypercube Sampling (LHS) and Adaptive Monte Carlo (AMC) sampling.
+
+The output of all processes are provided as csv files in model_parameters directory, so, you can skip running samplings on your machine and use them to find the optimal parameter values. For this option, skip to section 'Convergence Diagnostics'.
+
+You can also use the optimal parameters:
+
+optimal_params <- list(
+    N = ?,
+    k0 = ?,
+    cooling_rate = ?, 
+    c_repulsion = ?
+  )
+
+We'll cover:
+
+* Initial parameter space exploration with LHS
+* Adaptive sampling to refine parameter estimates
+* Convergence diagnostics and visualization
+* Profile likelihood analysis
+* Results interpretation
+
+The workflow combines several approaches to ensure robust parameter estimation:
+
+1. Initial exploration using LHS to efficiently sample parameter space
+2. K-fold cross-validation to assess prediction accuracy
+3. Adaptive sampling that focuses on high-likelihood regions
+4. Statistical diagnostics to verify convergence
+5. Profile likelihood analysis to assess parameter uncertainty
+
+## Setup
+
+First, let's load required packages:
+
+```{r}
+library(topolow)
+library(ggplot2)
+library(dplyr)
+library(data.table)
+library(foreach)
+library(doParallel)
+```
+
+## Data Loading and Preprocessing 
+
+We'll demonstrate using the Smith et al. 2004 influenza dataset included in topolow:
+
+```{r}
+# Load and process Denv data of Bell et al 2019
+denv_data <- read.csv("data_files/DENV_titers.csv")
+# Extract year from rownames - assuming format like "V/strain/year" or "S/strain/year"
+denv_data$virusYear <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", denv_data$virus_strain))
+denv_data$serumYear <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", denv_data$serum_strain))
+
+# extract serotype cluster (everything before the first “/”)
+denv_data$cluster    <- sub("/.*", "", denv_data$virus_strain)
+
+# define a named color vector matching your project palette
+cluster_colors <- c(
+  DENV1 = "#ff7f00",  # orange
+  DENV2 = "#1f78b4",  # blue 
+  DENV3 = "#33a02c",  # green
+  DENV4 = "#e31a1c"   # red
+)
+
+# assign the corresponding color to each row
+denv_data$color <- cluster_colors[ denv_data$cluster ]
+
+write.csv(denv_data, "data_files/DENV_titers.csv", row.names = FALSE)
+
+
+denv_data_results <- process_antigenic_data(
+  file_path = "data_files/DENV_titers.csv",
+  antigen_col = "virus_strain",
+  serum_col = "serum_strain",
+  value_col = "titer", 
+  is_titer = TRUE,
+  metadata_cols = c("virusYear", "serumYear", "cluster", "color")
+)
+
+# Extract distance matrix
+denv_distance_matrix <- denv_data_results$matrix
+# Quick look at the processed data
+head(denv_data_results$long)
+```
+
+```{r}
+hist(as.numeric(denv_data_results$long$distance))
+```
+
+## Initial Parameter Optimization with LHS
+
+We'll first explore the parameter space using Latin Hypercube Sampling combined with leave 5% out (20-fold) cross-validation:
+
+```{r}
+# Define parameter ranges
+param_ranges <- list(
+  N_min = 5,          # Minimum dimensions 
+  N_max = 23,         # Maximum dimensions
+  k0_min = 5,         # Minimum spring constant
+  k0_max = 18,        # Maximum spring constant 
+  cooling_rate_min = 1e-3, # Minimum decay rate
+  cooling_rate_max = 0.1,  # Maximum decay rate
+  c_repulsion_min = 1e-3,     # Minimum repulsion constant
+  c_repulsion_max = 0.07       # Maximum repulsion constant
+)
+
+# Setup optimization parameters
+opt_params <- list(
+  mapping_max_iter = 500,    # Maximum mapping optimization iterations
+  folds = 20,         # Number of CV folds
+  num_samples = 80, 
+  use_slurm = FALSE,
+  cider = FALSE,
+  write_files = FALSE # Only set TRUE on SLURM
+)
+```
+
+
+```{r eval=FALSE}
+scenario_name = "denv_data_AMC04"
+samples_file = "model_parameters/denv_data_AMC04_model_parameters.csv"
+
+# Record start time for timing report
+start_time <- Sys.time()
+
+# Run initial parameter optimization
+results <- initial_parameter_optimization(
+  distance_matrix = denv_distance_matrix,
+  mapping_max_iter = opt_params$mapping_max_iter,
+  relative_epsilon = 1e-4,
+  convergence_counter = 2,
+  scenario_name = scenario_name,
+  N_min = param_ranges$N_min, 
+  N_max = param_ranges$N_max,
+  k0_min = param_ranges$k0_min,
+  k0_max = param_ranges$k0_max,
+  c_repulsion_min = param_ranges$c_repulsion_min,
+  c_repulsion_max = param_ranges$c_repulsion_max,
+  cooling_rate_min = param_ranges$cooling_rate_min,
+  cooling_rate_max = param_ranges$cooling_rate_max,
+  num_samples = opt_params$num_samples,
+  folds = opt_params$folds,
+  write_files = opt_params$write_files,
+  time = "1:00:00",
+  memory = "2G",
+  use_slurm = opt_params$use_slurm,
+  cider = opt_params$cider,
+  verbose = TRUE
+)
+
+# Calculate and report total execution time
+end_time <- Sys.time()
+time_diff <- difftime(end_time, start_time, units = "auto")
+
+cat("\n Initial LHS CV sampling completed in: ")
+time_diff
+
+if(!opt_params$use_slurm){
+  write.csv(results, samples_file, row.names=FALSE)
+}
+```
+
+## Aggregate the results
+
+Aggregation is only needed if the argument write_files was TRUE in previous step which creates one file for each sample (typically when task is done through submitting jobs to SLURM). If so, Wait until the jobs are done.
+ Wait until the jobs are done.
+
+```{r eval=FALSE}
+# scenario_name <- "denv_data_AMC03"
+# aggregate_parameter_optimization_results(scenario_name, write_files=TRUE)
+```
+
+## Adaptive Monte Carlo Sampling
+
+Using the initial results as a starting point, we'll now perform adaptive sampling to refine our parameter estimates:
+
+
+```{r eval=FALSE}
+# Transform samples (with previous code's path)
+scenario_name = "denv_data_AMC06"
+samples_file = "model_parameters/denv_data_AMC06_model_parameters.csv"
+samples <- log_transform_parameters(samples_file)
+
+# Setup adaptive sampling parameters
+amc_params <- list(
+  num_samples = 100, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
+  num_parallel_jobs = 7,  # For local execution: Number of CPU cores available (Can try parallel::detectCores() ); For SLURM: Number of jobs to submit
+  mapping_max_iter = 500, # Maximum iterations per map optimization
+  relative_epsilon = 1e-4,
+  folds = 20, # Number of CV folds
+  use_slurm = FALSE,
+  cider = FALSE
+)
+
+# Record start time for timing report
+start_time <- Sys.time()
+
+run_adaptive_sampling(
+  initial_samples_file = samples_file,
+  distance_matrix = denv_distance_matrix,
+  num_samples = amc_params$num_samples,
+  num_parallel_jobs = amc_params$num_parallel_jobs,
+  mapping_max_iter = amc_params$mapping_max_iter,
+  scenario_name = scenario_name,
+  relative_epsilon = amc_params$relative_epsilon,
+  folds = amc_params$folds,
+  time = "4:00:00",
+  memory = "2G",
+  use_slurm = amc_params$use_slurm,
+  cider = amc_params$cider,
+  verbose = TRUE
+)
+
+# Calculate and report total execution time
+end_time <- Sys.time()
+time_diff <- difftime(end_time, start_time, units = "auto")
+
+cat("\n AMC sampling completed in: ")
+time_diff
+```
+
+
+## Convergence Diagnostics
+
+We can run the AMC sampling more than once and compare the results to asses the convergence of the sampling probabilities. If they are close, 
+it indicates that all sampling attempts are moving toward the same optimom, which increases its likelihood of being the global optimum. 
+
+Let's run the previous parts twice and check if our chains have converged:
+
+```{r}
+# List chain files
+chain_files <- c(
+  "model_parameters/denv_data_AMC04_model_parameters.csv",
+  "model_parameters/denv_data_AMC05_model_parameters.csv",
+  "model_parameters/denv_data_AMC06_model_parameters.csv"
+)
+
+# Function to read and clean one CSV
+clean_and_overwrite <- function(file_path) {
+  # 1. Read every column in as character
+  df <- read.csv(file_path, stringsAsFactors = FALSE, colClasses = "character")
+  
+  # 2. For each column: remove any literal double‐quotes and coerce to numeric
+  df[] <- lapply(df, function(col) {
+    # strip all " characters (in case they were embedded in the field)
+    col_stripped <- gsub('"', "", col, fixed = TRUE)
+    # convert the result to numeric
+    as.numeric(col_stripped)
+  })
+  df <- as.data.frame(lapply(df, clean_data, k = 3))
+  # 3. Write back to the same path, preserving only the data
+  write.csv(df, file = file_path, row.names = FALSE)
+}
+
+# 4. Apply to every file
+invisible(lapply(chain_files, clean_and_overwrite))
+
+
+mutual_size = 500  # Number of samples to use from end of chains
+
+# Calculate diagnostics
+diagnostics <- calculate_diagnostics(
+  chain_files = chain_files,
+  mutual_size = mutual_size
+)
+
+# Print results
+print(diagnostics)
+
+# Create and display diagnostic plots
+diag_plots <- create_diagnostic_plots(
+  chain_files = chain_files,
+  mutual_size = mutual_size,
+  output_file = "denv_data_diagnostic_plots.png"
+)
+print(diag_plots)
+```
+
+## Profile Likelihood Analysis
+
+Now we'll analyze parameter uncertainties using profile likelihood:
+
+```{r}
+# Combine chain results
+samples <- do.call(rbind, lapply(chain_files, read.csv))
+samples <- samples %>%
+  filter(!is.na(NLL) & !is.na(Holdout_MAE) & 
+           is.finite(NLL) & is.finite(Holdout_MAE)) %>%
+  na.omit()
+
+samples <- samples[samples$log_N >= log(2),]
+
+# Apply clean_data to all columns of the dataframe
+samples <- as.data.frame(lapply(samples, clean_data, k = 3))
+samples <- na.omit(samples)
+# Calculate maximum likelihood (average over top n to smooth out any peculiar situation)
+samples$LL <- -samples$NLL
+top_ll <- sort(samples$LL, decreasing = TRUE)[1:5]
+max_ll <- max(top_ll) + log(sum(exp(top_ll - max(top_ll)))/5)
+
+# Parameters to analyze
+params <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
+
+# Calculate profile likelihoods
+for (param in params) {
+  pl_result <- profile_likelihood(
+    param = param,
+    samples = samples,
+    grid_size = 65,
+    bandwidth_factor = 0.04,
+    start_factor = 0.7, 
+    end_factor = 1.3
+  )
+  
+  # Plot results
+  pl_plot <- plot(pl_result, max_ll)
+  #ggsave(paste0("profile_likelihood_denv_data_", param, ".png"), pl_plot)
+  print(pl_plot)
+}
+```
+
+```{r}
+# Analyze parameter sensitivity
+for (param in params) {
+  sensitivity <- parameter_sensitivity_analysis(
+    param = param,
+    samples = samples,
+    bins = 40
+  )
+  
+  # Plot results
+  sens_plot <- plot(sensitivity, y_limit_factor=NULL)
+  #ggsave(paste0("parameter_sensitivity_", param, ".pdf"), sens_plot)
+  print(sens_plot)
+}
+```
+
+## Finding Optimal Parameters
+
+Based on our analysis, we can extract optimal parameter values. Modes of marginal sampling probability distributions are maximum likelihood estimators.
+
+(If the Profile Likelihood surfaces are too ragged and the optimal point appeared as a sharp peak, choosing the parameters with the maximum likelihood is a better approach than using the mode.)
+
+```{r}
+best_params <- samples[which.min(samples$Holdout_MAE),]
+optimal_params <- list(
+  N = round(exp(as.numeric(best_params$log_N))),
+  k0 = exp(as.numeric(best_params$log_k0)),
+  cooling_rate = exp(as.numeric(best_params$log_cooling_rate)),
+  c_repulsion = exp(as.numeric(best_params$log_c_repulsion))
+)
+
+# Print optimal parameters
+print(optimal_params)
+```
+
+
+## Validation Run
+
+Finally, let's validate our optimal parameters:
+
+(The internal variable convergence_error is the objective of the algorithm. It is slightly different from MAE. MAE is calculated between the predicted distances and measured distances in the assays wherever the measurement is reported as an exact number. However, convergence_error adds the thresholded measurements, only when the fitted distance does not satisfy the inequality.)
+
+```{r}
+# Record start time for timing report
+start_time <- Sys.time()
+
+# Run topolow with optimal parameters
+result <- create_topolow_map(
+  distance_matrix = denv_distance_matrix,
+  ndim = optimal_params$N,
+  mapping_max_iter = 500,
+  k0 = optimal_params$k0,
+  cooling_rate = optimal_params$cooling_rate,
+  c_repulsion = optimal_params$c_repulsion,
+  relative_epsilon = 1e-10,
+  convergence_counter = 2,
+  write_positions_to_csv = FALSE,
+  verbose = TRUE
+)
+
+# Calculate and report total execution time
+end_time <- Sys.time()
+time_diff <- difftime(end_time, start_time, units = "auto")
+
+cat("\n Mapping completed in: ")
+time_diff
+
+# Print performance metrics
+cat("MAE:", round(result$mae, 4), "\n")
+
+```
+
+```{r}
+# Convert positions matrix to data frame
+positions <- as.data.frame(result$positions)
+positions$name <- rownames(positions)
+
+# Add antigen/antiserum indicators based on rownames
+positions$antigen <- startsWith(positions$name, "V/")
+positions$antiserum <- startsWith(positions$name, "S/")
+
+# Extract year from rownames - assuming format like "V/strain/year" or "S/strain/year"
+positions$year <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", positions$name))
+
+# Clean names to match with metadata
+positions$name <- sub("^S/", "", positions$name)
+positions$name <- sub("^V/", "", positions$name)
+
+# Join with original data to get cluster and color information
+metadata <- denv_data_results$long %>%
+  select(virus_strain, cluster, color) %>%
+  distinct()
+
+positions <- positions %>%
+  left_join(metadata, by = c("name" = "virus_strain"))
+
+# Remove any rows that didn't get metadata matched
+positions <- na.omit(positions)
+
+#write.csv(positions, "data_files/denv_Positions.csv", row.names=FALSE)
+```
+
+## The resulting map
+
+
+```{r}
+library(topolow)
+
+annotation_config <- new_annotation_config(
+  size = 4.9,                              # Text size
+  color = "black",                         # Text color
+  #fontface = "bold",                       # Text style
+  outline_size = 0.4                       # Size of point outlines
+)
+
+# Aesthetic configuration 
+aesthetic_config <- new_aesthetic_config(
+  point_size = 2.5,
+  point_alpha = 0.6,
+  point_shapes = c(antigen = 16, antiserum = 5),
+  color_palette = "c25", 
+  gradient_colors = list(
+    low = "blue",
+    high = "red"
+  ),
+  show_labels = FALSE,
+  title_size = 12,
+  axis_text_size = 10,
+  show_legend = TRUE,
+  legend_position = "right",
+  arrow_alpha = 0.5
+)
+
+# To mirror the maps to make them comparable with other maps set the reverse parameter to -1
+layout_config <- new_layout_config(
+  width = 4.5, height = 4.5,
+  reverse_y = -1,
+  save_format = "png",
+  arrow_plot_threshold = .3
+)
+
+library(ape)
+phylo_tree <- read.tree("data_files/DENV1234_timetree.nwk")
+positions$name <- toupper(positions$name)
+
+library(topolow)
+# Cluster mapping
+p2 <- plot_cluster_mapping(positions, ndim = optimal_params$N, 
+                           aesthetic_config = aesthetic_config, 
+                           layout_config = layout_config, 
+                           annotation_config = annotation_config,
+                           draw_arrows=TRUE,
+                           annotate_arrows = TRUE,
+                          phylo_tree = phylo_tree,
+                          show_one_arrow_per_cluster = FALSE
+                           )
+
+print(p2)
+
+# Create and display temporal mapping
+cart_plot <- plot_temporal_mapping(positions, ndim = optimal_params$N,
+                                   aesthetic_config = aesthetic_config, 
+                                   layout_config=layout_config, 
+                                   annotation_config = annotation_config,
+                                   draw_arrows=TRUE,
+                                   annotate_arrows = FALSE,
+                                   phylo_tree = phylo_tree
+                                   )
+print(cart_plot)
+
+```
+
+
+
+## Session Info
+
+```{r}
+sessionInfo()
+```
