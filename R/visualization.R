@@ -344,7 +344,7 @@ new_layout_config <- function(
 new_dim_reduction_config <- function(
     method = "pca",
     n_components = 2,
-    scale = FALSE,
+    scale = TRUE,
     center = TRUE,
     pca_params = list(
       tol = sqrt(.Machine$double.eps),
@@ -479,8 +479,8 @@ reduce_dimensions <- function(df, config) {
                    "pca" = {
                      pca_result <- do.call(prcomp,
                                            c(list(x = coords, 
-                                                  scale. = config$scale,
-                                                  center = config$center),
+                                                  scale. = FALSE,
+                                                  center = TRUE),
                                              config$pca_params))
                      
                      # Scale components if requested
@@ -543,12 +543,12 @@ scale_to_original_distances <- function(reduced_coords, orig_dist) {
   # Define optimization function for scaling factor
   sum_squared_diff <- function(scale_factor) {
     scaled_dist <- reduced_dist * scale_factor
-    sum((orig_dist - scaled_dist)^2)
+    sum(abs(orig_dist - scaled_dist))
   }
   
   # Find optimal scaling factor
   optimal_scale <- optimize(sum_squared_diff, 
-                            interval = c(0, 10))$minimum
+                            interval = c(0.01, 40))$minimum
   
   # Return scaled coordinates
   reduced_coords * optimal_scale

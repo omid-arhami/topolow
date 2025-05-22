@@ -278,7 +278,8 @@ denv_data_results <- process_antigenic_data(
 # Extract distance matrix
 denv_distance_matrix <- denv_data_results$matrix
 # Quick look at the processed data
-head(denv_data_results$long)
+denv_long <- denv_data_results$long
+head(denv_long)
 ```
 
 ```{r}
@@ -666,6 +667,58 @@ for (dataset_name in names(datasets)) {
 }
 ```
 
+DENV:
+
+```{r}
+# Run topolow with optimal parameters
+result <- create_topolow_map(
+  distance_matrix = denv_distance_matrix,
+  ndim = denv_topolow_params$N,
+  mapping_max_iter = 200,
+  k0 = denv_topolow_params$k0,
+  cooling_rate = denv_topolow_params$cooling_rate,
+  c_repulsion = denv_topolow_params$c_repulsion,
+  relative_epsilon = 1e-10,
+  convergence_counter = 2,
+  write_positions_to_csv = FALSE,
+  verbose = TRUE
+)
+
+# Print performance metrics
+cat("MAE:", round(result$mae, 4), "\n")
+
+```
+
+```{r}
+# Convert positions matrix to data frame
+positions <- as.data.frame(result$positions)
+positions$name <- rownames(positions)
+
+# Add antigen/antiserum indicators based on rownames
+positions$antigen <- startsWith(positions$name, "V/")
+positions$antiserum <- startsWith(positions$name, "S/")
+
+# Extract year from rownames - assuming format like "V/strain/year" or "S/strain/year"
+positions$year <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", positions$name))
+
+# Clean names to match with metadata
+positions$name <- sub("^S/", "", positions$name)
+positions$name <- sub("^V/", "", positions$name)
+
+# Join with original data to get cluster and color information
+metadata <- denv_data_results$long %>%
+  select(virus_strain, cluster, color) %>%
+  distinct()
+
+positions <- positions %>%
+  left_join(metadata, by = c("name" = "virus_strain"))
+
+# Remove any rows that didn't get metadata matched
+positions <- na.omit(positions)
+
+write.csv(positions, file.path(coords_dir, "topolow_DENV_coords.csv"), row.names=FALSE)
+```
+
 
 ## Create antigenic maps
 ### Setup
@@ -943,13 +996,13 @@ dim_config <- new_dim_reduction_config(
 
 layout_config <- new_layout_config(
   width = 3.26772*0.47,
-  height = 2.6,
+  height = 1.9,
   dpi = 300,
   x_limits = c(-3.1, 3.1),
   y_limits = c(-3, 4),
   plot_margin = margin(0.05, 0.05, 0.05, 0.05, "cm"),
   save_format = "pdf",
-  arrow_plot_threshold = 1
+  arrow_plot_threshold = 1.1
 )
 
 aesthetic_config <- new_aesthetic_config(
@@ -964,7 +1017,8 @@ aesthetic_config <- new_aesthetic_config(
   legend_title_size = 6,
   show_legend = FALSE,
   legend_position = "none",
-  show_title = FALSE
+  show_title = FALSE,
+  arrow_head_size=0.15
 )
 
 annotation_config <- new_annotation_config(
@@ -972,6 +1026,13 @@ annotation_config <- new_annotation_config(
   color = "black",                         # Text color
   fontface = "bold",                       # Text style
   outline_size = 0.4                       # Size of point outlines
+)
+
+# Add text labels to topolow
+text_labels_topolow <- data.frame(
+  x = c( 2.2, -2.3),
+  y = c( -2.2, 1.1), # Adjust y for label positioning
+  label = c( "C", "B")
 )
 
 phylo_tree_hiv <- read.tree("data_files/HIV1BC_phylo_groupings_rooted.nwk")
@@ -988,7 +1049,12 @@ topolow_plot_hiv <- plot_cluster_mapping(
   annotate_arrows = FALSE,
   phylo_tree = phylo_tree_hiv
   #cluster_legend_title = "Subtype"
-) 
+) + 
+  geom_text(data = text_labels_topolow, 
+            aes(x = x, y = y, label = label, colour = label),
+            size = annotation_config$size / ggplot2::.pt,
+            fontface = annotation_config$fontface
+            )
 topolow_plot_hiv
 # # Create the individual plots
 # topolow_plot <- plot_cluster_mapping(
@@ -1032,72 +1098,28 @@ topolow_plot_hiv
 ### DENV
 
 
+The resulting map
 ```{r}
-# Run topolow with optimal parameters
-result <- create_topolow_map(
-  distance_matrix = denv_distance_matrix,
-  ndim = denv_topolow_params$N,
-  mapping_max_iter = 200,
-  k0 = denv_topolow_params$k0,
-  cooling_rate = denv_topolow_params$cooling_rate,
-  c_repulsion = denv_topolow_params$c_repulsion,
-  relative_epsilon = 1e-10,
-  convergence_counter = 2,
-  write_positions_to_csv = FALSE,
-  verbose = TRUE
+topo_file <- file.path(coords_dir, "topolow_DENV_coords.csv")
+positions <- read.csv(topo_file)
+
+
+dim_config <- new_dim_reduction_config(
+  method = "pca",
+  n_components = 2,
+  scale = FALSE
 )
-
-# Print performance metrics
-cat("MAE:", round(result$mae, 4), "\n")
-
-```
-
-```{r}
-# Convert positions matrix to data frame
-positions <- as.data.frame(result$positions)
-positions$name <- rownames(positions)
-
-# Add antigen/antiserum indicators based on rownames
-positions$antigen <- startsWith(positions$name, "V/")
-positions$antiserum <- startsWith(positions$name, "S/")
-
-# Extract year from rownames - assuming format like "V/strain/year" or "S/strain/year"
-positions$year <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", positions$name))
-
-# Clean names to match with metadata
-positions$name <- sub("^S/", "", positions$name)
-positions$name <- sub("^V/", "", positions$name)
-
-# Join with original data to get cluster and color information
-metadata <- denv_data_results$long %>%
-  select(virus_strain, cluster, color) %>%
-  distinct()
-
-positions <- positions %>%
-  left_join(metadata, by = c("name" = "virus_strain"))
-
-# Remove any rows that didn't get metadata matched
-positions <- na.omit(positions)
-
-#write.csv(positions, "data_files/denv_Positions.csv", row.names=FALSE)
-```
-
-## The resulting map
-
-
-```{r}
-library(topolow)
 
 annotation_config <- new_annotation_config(
   size = 4.9,                              # Text size
   color = "black",                         # Text color
-  #fontface = "bold",                       # Text style
+  fontface = "bold",                       # Text style
   outline_size = 0.4                       # Size of point outlines
 )
 
 # Aesthetic configuration 
 aesthetic_config <- new_aesthetic_config(
-  point_size = 2.5,
+  point_size = 1.5,
   point_alpha = 0.6,
   point_shapes = c(antigen = 16, antiserum = 5),
   color_palette = "c25", 
@@ -1106,56 +1128,135 @@ aesthetic_config <- new_aesthetic_config(
     high = "red"
   ),
   show_labels = FALSE,
-  title_size = 12,
-  axis_text_size = 10,
-  show_legend = TRUE,
-  legend_position = "right",
+  title_size = 7,
+  subtitle_size = 6,
+  axis_title_size = 6,
+  axis_text_size = 6,
+  show_legend = FALSE,
+  legend_position = "none",
+  show_title = FALSE,
+  arrow_head_size=0.1,
   arrow_alpha = 0.5
 )
 
 # To mirror the maps to make them comparable with other maps set the reverse parameter to -1
 layout_config <- new_layout_config(
-  width = 4.5, 
-  height = 4.5,
-  reverse_y = -1,
+  width = 3.26772*0.47,
+  height = 1.9,
+  dpi = 300,
+  #x_limits = c(-3.1, 3.1),
+  #y_limits = c(-3, 4),
+  reverse_x = -1,
+  reverse_y = 1,
+  plot_margin = margin(0.05, 0.05, 0.05, 0.05, "cm"),
   save_format = "pdf",
-  arrow_plot_threshold = .3
+  arrow_plot_threshold = .12
 )
+
+# Add text labels to topolow
+text_labels_topolow <- data.frame(
+  x = c( -2.5, -0.7, -0.4, 1.2),
+  y = c( 1.2, 2, -1.5, -0.9), # Adjust y for label positioning
+  label = c( "DENV1", "DENV2", "DENV3", "DENV4")
+)  
 
 library(ape)
 phylo_tree <- read.tree("data_files/DENV1234_timetree.nwk")
 positions$name <- toupper(positions$name)
 
-library(topolow)
 # Cluster mapping
-p2 <- plot_cluster_mapping(positions, ndim = optimal_params$N, 
+topolow_plot_denv <- plot_cluster_mapping(positions, ndim = optimal_params$N, 
                            aesthetic_config = aesthetic_config, 
                            layout_config = layout_config, 
                            annotation_config = annotation_config,
                            draw_arrows=TRUE,
-                           annotate_arrows = TRUE,
-                          phylo_tree = phylo_tree,
-                          show_one_arrow_per_cluster = FALSE
-                           )
+                           annotate_arrows = FALSE,
+                           phylo_tree = phylo_tree
+                           ) + 
+      geom_text(data = text_labels_topolow, 
+            aes(x = x, y = y, label = label, colour = label),
+            size = annotation_config$size / ggplot2::.pt,
+            fontface = annotation_config$fontface
+            )
 
-print(p2)
-
-# Create and display temporal mapping
-cart_plot <- plot_temporal_mapping(positions, ndim = optimal_params$N,
-                                   aesthetic_config = aesthetic_config, 
-                                   layout_config=layout_config, 
-                                   annotation_config = annotation_config,
-                                   draw_arrows=TRUE,
-                                   annotate_arrows = FALSE,
-                                   phylo_tree = phylo_tree
-                                   )
-print(cart_plot)
-
+print(topolow_plot_denv)
 ```
 
 
-
+Below we calculate the average distances between viruses of different serotypes from the input data in function avg_prefix_distance
+and compare it with the distances from Topolow coordinates in function avg_intercluster_distanceto validate the distances on the map visually.
 ```{r}
+library(data.table)
+
+#’ Compute average inter‐prefix distance
+#’
+#’ @param data           data.frame or data.table containing at least the
+#’                       columns virus_col, serum_col, and distance_col
+#’ @param virus_prefix   character; prefix to match at start of virus_strain
+#’ @param serum_prefix   character; prefix to match at start of serum_strain
+#’ @param virus_col      name of the virus‐strain column (default "virus_strain")
+#’ @param serum_col      name of the serum‐strain column (default "serum_strain")
+#’ @param distance_col   name of the distance column (default "distance")
+#’ @param na.rm          logical; whether to remove NA distances before averaging
+#’
+#’ @return               numeric; the mean of distance_col for matching rows
+#’ @examples
+#’ avg_prefix_distance(denv_long, "DENV1", "DENV2")
+avg_prefix_distance <- function(data,
+                                virus_prefix,
+                                serum_prefix,
+                                virus_col    = "virus_strain",
+                                serum_col    = "serum_strain",
+                                distance_col = "distance",
+                                na.rm        = TRUE) {
+  # ensure a data.table
+  dt <- as.data.table(data)
+  
+  # convert distance column to numeric if needed
+  if (!is.numeric(dt[[distance_col]])) {
+    dt[, (distance_col) := as.numeric(dt[[distance_col]]) ]
+  }
+  
+  # select only rows matching both prefixes
+  subset_dt <- dt[
+    startsWith(get(virus_col), virus_prefix) &
+    startsWith(get(serum_col), serum_prefix)
+  ]
+  
+  # compute and return mean distance
+  mean(subset_dt[[distance_col]], na.rm = na.rm)
+}
+
+
+# assume your data.frame 'positions' is already in memory
+dt <- as.data.table(positions)
+
+# identify the coordinate columns
+coord_cols <- paste0("V", 1:18)
+
+avg_intercluster_distance <- function(dt, coord_cols, cluster_col, c1, c2){
+  m1 <- as.matrix( dt[get(cluster_col) == c1, ..coord_cols] )
+  m2 <- as.matrix( dt[get(cluster_col) == c2, ..coord_cols] )
+  A  <- rowSums(m1^2)
+  B  <- rowSums(m2^2)
+  C  <- tcrossprod(m1, m2)
+  sq <- outer(A, B, "+") - 2*C
+  sq[sq < 0] <- 0
+  mean(sqrt(sq))
+}
+
+
+
+avg_prefix_distance(denv_long, "DENV3", "DENV4")
+
+
+avg_intercluster_distance(
+  dt           = dt,
+  coord_cols   = coord_cols,
+  cluster_col  = "cluster",
+  c1           = "DENV3",
+  c2           = "DENV4"
+)
 
 ```
 
