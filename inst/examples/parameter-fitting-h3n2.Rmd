@@ -456,7 +456,7 @@ layout_config <- new_layout_config(
 )
 
 library(ape)
-phylo_tree <- read.tree("data_files/phylo_groupings_DNA.nwk")
+phylo_tree <- read.tree("data_files/phylo_groupings_rooted.nwk")
 positions$name <- toupper(positions$name)
 
 library(topolow)

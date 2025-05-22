@@ -479,9 +479,10 @@ aesthetic_config <- new_aesthetic_config(
 
 # To mirror the maps to make them comparable with other maps set the reverse parameter to -1
 layout_config <- new_layout_config(
-  width = 4.5, height = 4.5,
+  width = 4.5, 
+  height = 4.5,
   reverse_y = -1,
-  save_format = "png",
+  save_format = "pdf",
   arrow_plot_threshold = .3
 )
 

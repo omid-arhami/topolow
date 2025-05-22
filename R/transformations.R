@@ -78,89 +78,101 @@ long_to_matrix <- function(data, chnames, chorder = NULL,
                           rnames, rorder = NULL, values_column, 
                           rc = FALSE, sort = FALSE) {
   
-  #---- 1) VALIDATE INPUTS ----
+  # Validate inputs 
   if (!is.data.frame(data)) {
     stop("'data' must be a data frame")
   }
+  
   required_cols <- c(chnames, rnames, values_column)
   if (!all(required_cols %in% names(data))) {
     missing <- setdiff(required_cols, names(data))
     stop("Missing required columns: ", paste(missing, collapse = ", "))
   }
+  
+  # Validate order columns if specified
   if (!is.null(chorder) && !(chorder %in% names(data))) {
     stop("chorder column '", chorder, "' not found in data")
   }
+  
   if (!is.null(rorder) && !(rorder %in% names(data))) {
     stop("rorder column '", rorder, "' not found in data") 
   }
+  
+  # Validate numeric/character columns
   if (!is.character(data[[chnames]]) && !is.factor(data[[chnames]])) {
     stop("Challenge names column must be character or factor")
   }
+  
   if (!is.character(data[[rnames]]) && !is.factor(data[[rnames]])) {
     stop("Reference names column must be character or factor")
   }
-  if (!is.numeric(data[[values_column]]) &&
+  
+  if (!is.numeric(data[[values_column]]) && 
       !all(grepl("^[0-9<>]", na.omit(data[[values_column]])))) {
     stop("Values column must be numeric or contain valid threshold indicators (< or >)")
   }
   
-  #---- 2) DATA.TABLE AND PREFIXING ----
+  # Convert to data.table for efficiency
   data.table::setDT(data)
+  
   if (rc == FALSE) {
-    # Mark antigens and antisera with prefixes
+    # Mark antigens and antisera
     data[, (chnames) := paste0("V/", get(chnames))]
     data[, (rnames) := paste0("S/", get(rnames))]
   }
   
-  #---- 3) BUILD & ORDER THE POINT LIST ----
-  pts <- unique(c(data[[chnames]], data[[rnames]]))
-  if (sort) {
-    # compute a “rank” for each point from chorder/rorder
-    ranks <- integer(length(pts))
-    for (i in seq_along(pts)) {
-      nm <- pts[i]; yr <- 0L
+  # Get unique point names
+  #all_points <- sort(unique(unlist(data[, .(get(chnames), get(rnames))])))
+  all_points <- sort(unique(c(data[[chnames]], data[[rnames]])))
+
+  # Create square matrix with NA values
+  n <- length(all_points)
+  distance_matrix <- matrix(NA, nrow = n, ncol = n)
+  rownames(distance_matrix) <- all_points
+  colnames(distance_matrix) <- all_points
+
+  if (sort == TRUE) {
+    # Get one rank per name
+    ranks <- numeric(length(all_points))
+    for (i in seq_along(all_points)) {
+      name <- all_points[i]
+      yr <- 0
+      
       # Try to get rank from challenge order
       if (!is.null(chorder)) {
-        tmp <- unique(data[get(chnames) == nm, get(chorder)])
-        if (length(tmp)>0) yr <- min(tmp)
+        name_rank <- unique(data[get(chnames) == name, get(chorder)])
+        if (length(name_rank) > 0) yr <- min(name_rank)
       }
+      
       # If not found, try reference order
-      if (yr==0L && !is.null(rorder)) {
-        tmp <- unique(data[get(rnames) == nm, get(rorder)])
-        if (length(tmp)>0) yr <- min(tmp)
+      if (yr == 0 && !is.null(rorder)) {
+        name_rank <- unique(data[get(rnames) == name, get(rorder)])
+        if (length(name_rank) > 0) yr <- min(name_rank)
       }
+      
       ranks[i] <- yr
     }
-    pts <- pts[order(ranks)]
-  } else {
-    pts <- sort(pts)
+    
+    ranks <- as.numeric(ranks)
+    
+    # Reorder matrix by ranks
+    idx <- order(ranks)
+    distance_matrix <- distance_matrix[idx, idx]
+  }
+
+  # Fill in the distances
+  for (i in seq_len(nrow(data))) {
+    r   <- data[i, get(chnames)]
+    c   <- data[i, get(rnames)]
+    val <- data[i, get(values_column)]
+
+    # Set both matrix elements for symmetry
+    distance_matrix[r, c] <- val
+    distance_matrix[c, r] <- val
   }
   
-  #---- 4) PIVOT WITH A SINGLE dcast() INSTEAD OF A LOOP ----
-  #   prepare long form
-  dt2    <- data[, .(from = get(chnames),
-                     to   = get(rnames),
-                     val  = get(values_column))]
-  #   add symmetric entries
-  dt_sym <- data.table::rbindlist(list(
-                dt2,
-                dt2[, .(from = to, to = from, val = val)]
-             ))
-  #   cast to wide, filling missing with NA
-  mat_dt <- data.table::dcast(
-              dt_sym,
-              from ~ to,
-              value.var = "val",
-              fill     = NA
-            )
-  #   reorder rows & columns to the same pts-vector
-  mat_dt <- mat_dt[, c("from", pts), with = FALSE]
-  
-  #---- 5) FINALIZE MATRIX ----
-  distance_matrix    <- as.matrix(mat_dt[, -1, with = FALSE])
-  rownames(distance_matrix) <- mat_dt[[1]]
-  colnames(distance_matrix) <- pts
-  diag(distance_matrix)    <- 0
+  # Set diagonal to 0
+  diag(distance_matrix) <- 0
   
   return(distance_matrix)
 }

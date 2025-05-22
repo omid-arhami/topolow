@@ -252,10 +252,10 @@ denv_data$cluster    <- sub("/.*", "", denv_data$virus_strain)
 
 # define a named color vector matching your project palette
 cluster_colors <- c(
-  DENV1 = "#1f78b4",  # blue
-  DENV2 = "#33a02c",  # green
-  DENV3 = "#e31a1c",  # red
-  DENV4 = "#ff7f00"   # orange
+  DENV1 = "#ff7f00",  # orange
+  DENV2 = "#1f78b4",  # blue 
+  DENV3 = "#33a02c",  # green
+  DENV4 = "#e31a1c"   # red
 )
 
 # assign the corresponding color to each row
@@ -335,7 +335,9 @@ clean_and_overwrite <- function(file_path) {
 }
 
 # 4. Apply to every file
-invisible(lapply(chain_files, clean_and_overwrite))
+invisible(lapply(hiv_chains, clean_and_overwrite))
+invisible(lapply(h3n2_chains, clean_and_overwrite))
+invisible(lapply(denv_chains, clean_and_overwrite))
 
 # Function to get optimal parameters from chains
 get_optimal_topolow_params <- function(chain_files) {
@@ -608,7 +610,7 @@ save_plot(
 ### Part 1: Find and save coordinates ###
 message("\nFinding coordinates for all datasets...")
 
-for (dataset_name in "DENV") { # names(datasets) #$$$$$$$$$$
+for (dataset_name in names(datasets)) {
   dataset <- datasets[[dataset_name]]
   distance_matrix <- dataset$matrix
   topolow_params <- dataset$topolow_params
@@ -669,6 +671,13 @@ for (dataset_name in "DENV") { # names(datasets) #$$$$$$$$$$
 ### Setup
 ```{r}
 # Create visualization configurations
+annotation_config <- new_annotation_config(
+  size = 4.9,                       # Text size
+  color = "black",                  # Text color
+  #fontface = "bold",               # Text style
+  outline_size = 0.3                # Size of point outlines
+)
+
 dim_config <- new_dim_reduction_config(
   method = "pca",
   n_components = 2,
@@ -677,9 +686,10 @@ dim_config <- new_dim_reduction_config(
 
 sc = 1
 aesthetic_config <- new_aesthetic_config(
-  point_shapes = c(antigen = 16, antiserum = 4),
+  point_shapes = c(antigen = 16, antiserum = 5),
   point_size = 1.5,
   point_alpha = 0.65,
+  color_palette = "c25", 
   gradient_colors = list(low = "blue", high = "red"),
   title_size = 7*sc,
   subtitle_size = 7*sc,
@@ -687,7 +697,10 @@ aesthetic_config <- new_aesthetic_config(
   axis_text_size = 6*sc,
   show_legend = FALSE,
   legend_position = "none",
-  show_title = FALSE
+  show_title = FALSE,
+  show_labels = FALSE,
+  arrow_head_size=0.1,
+  arrow_alpha = 0.55
 )
 
 layout_config <- new_layout_config(
@@ -696,10 +709,11 @@ layout_config <- new_layout_config(
   dpi = 300,
   x_limits = c(-8, 8),
   y_limits = c(-18, 18),
-  reverse_x = 1, 
-  reverse_y = -1,
+  reverse_x = -1, 
+  reverse_y = 1,
   plot_margin = margin(0.05, 0.05, 0.05, 0.05, "cm"),
-  save_format = "pdf"
+  save_format = "pdf",
+  arrow_plot_threshold = 2.5
 )
 ```
 
@@ -781,28 +795,51 @@ positions_racmacs <- na.omit(positions_racmacs)
 print(dim(positions_topolow))
 print(dim(positions_racmacs))
 
-# Create the individual plots
+
+library(ape)
+phylo_tree <- read.tree("data_files/phylo_groupings_rooted.nwk")
+positions_topolow$name <- toupper(positions_topolow$name)
+
+#### Create the individual plots
+
+# Add text labels to topolow
+text_labels_topolow <- data.frame(
+  x = c( 2.5, 3.6, -2.7, 2.9, -3.6, 5.3, -5, 5.3, -4, 2, -3),
+  y = c( 17, 13, 9, 7.7, 5.6, 1, -2.7, -5, -8, -11, -14.5), # Adjust y for label positioning
+  label = c( "HK68", "EN72", "VI75", "TX77", "BK79", "SI87", "BE89", "BE92", "WU95", "SY97", "FU02")
+)
+layout_config$reverse_x <- 1
 topolow_plot <- plot_cluster_mapping(
   positions_topolow,
   ndim = datasets$H3N2$topolow_params$N,
   dim_config = dim_config,
+  annotation_config = annotation_config,
   aesthetic_config = aesthetic_config,
-  layout_config = layout_config
-) + ggtitle("TopoLow")
+  layout_config = layout_config,
+  draw_arrows=TRUE,
+   annotate_arrows = FALSE,
+   phylo_tree = phylo_tree
+) + 
+  ggtitle("TopoLow") + 
+  geom_text(data = text_labels_topolow, 
+            aes(x = x, y = y, label = label, colour = label),
+            size = annotation_config$size / ggplot2::.pt)
 
+
+layout_config$reverse_x <- -1
 racmacs_plot <- plot_cluster_mapping(
   positions_racmacs,
   ndim = datasets$H3N2$racmacs_dim,
   dim_config = dim_config,
   aesthetic_config = aesthetic_config,
   layout_config = layout_config
-) + ggtitle("RACMACS")
+) + ggtitle("MDS")
 
 # Combine plots
 combined_plot <- plot_grid(
   topolow_plot, racmacs_plot,
   labels = c("A", "B"),
-  label_size = 8,
+  label_size = 6,
   nrow = 1,
   align = 'h',
   axis = 'tb'
@@ -826,9 +863,12 @@ save_plot(
 # Get HIV metadata once
 hiv_metadata <- NULL
 hiv_metadata <- hiv_long %>%
-  select(Virus, Subtype) %>%
+  select(Virus, Subtype, virusYear) %>%
   distinct()
 
+# Add  year
+hiv_metadata <- hiv_metadata %>% 
+  dplyr::rename("year" = "virusYear")
 
 # First verify files exist and check their content
 topo_file <- file.path(coords_dir, "topolow_HIV_coords.csv")
@@ -893,6 +933,63 @@ positions_racmacs$cluster <- positions_racmacs$Subtype
 print(dim(positions_topolow))
 print(dim(positions_racmacs))
 
+###### PLOT
+
+dim_config <- new_dim_reduction_config(
+  method = "pca",
+  n_components = 2,
+  scale = FALSE
+)
+
+layout_config <- new_layout_config(
+  width = 3.26772*0.47,
+  height = 2.6,
+  dpi = 300,
+  x_limits = c(-3.1, 3.1),
+  y_limits = c(-3, 4),
+  plot_margin = margin(0.05, 0.05, 0.05, 0.05, "cm"),
+  save_format = "pdf",
+  arrow_plot_threshold = 1
+)
+
+aesthetic_config <- new_aesthetic_config(
+  point_shapes = c(antigen = 16, antiserum = 4),
+  point_size = 1.5,
+  point_alpha = 0.65,
+  title_size = 7,
+  subtitle_size = 6,
+  axis_title_size = 6,
+  axis_text_size = 6,
+  legend_text_size =  6,
+  legend_title_size = 6,
+  show_legend = FALSE,
+  legend_position = "none",
+  show_title = FALSE
+)
+
+annotation_config <- new_annotation_config(
+  size = 4.9,                              # Text size
+  color = "black",                         # Text color
+  fontface = "bold",                       # Text style
+  outline_size = 0.4                       # Size of point outlines
+)
+
+phylo_tree_hiv <- read.tree("data_files/HIV1BC_phylo_groupings_rooted.nwk")
+positions_topolow$name <- toupper(positions_topolow$name)
+
+topolow_plot_hiv <- plot_cluster_mapping(
+  positions_topolow,
+  ndim = datasets$HIV$topolow_params$N,
+  dim_config = dim_config,
+  aesthetic_config = aesthetic_config,
+  layout_config = layout_config,
+  show_shape_legend = FALSE,
+  draw_arrows=TRUE,
+  annotate_arrows = FALSE,
+  phylo_tree = phylo_tree_hiv
+  #cluster_legend_title = "Subtype"
+) 
+topolow_plot_hiv
 # # Create the individual plots
 # topolow_plot <- plot_cluster_mapping(
 #   positions_topolow,
@@ -932,6 +1029,162 @@ print(dim(positions_racmacs))
 ```
 
 
+### DENV
+
+
+```{r}
+# Run topolow with optimal parameters
+result <- create_topolow_map(
+  distance_matrix = denv_distance_matrix,
+  ndim = denv_topolow_params$N,
+  mapping_max_iter = 200,
+  k0 = denv_topolow_params$k0,
+  cooling_rate = denv_topolow_params$cooling_rate,
+  c_repulsion = denv_topolow_params$c_repulsion,
+  relative_epsilon = 1e-10,
+  convergence_counter = 2,
+  write_positions_to_csv = FALSE,
+  verbose = TRUE
+)
+
+# Print performance metrics
+cat("MAE:", round(result$mae, 4), "\n")
+
+```
+
+```{r}
+# Convert positions matrix to data frame
+positions <- as.data.frame(result$positions)
+positions$name <- rownames(positions)
+
+# Add antigen/antiserum indicators based on rownames
+positions$antigen <- startsWith(positions$name, "V/")
+positions$antiserum <- startsWith(positions$name, "S/")
+
+# Extract year from rownames - assuming format like "V/strain/year" or "S/strain/year"
+positions$year <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", positions$name))
+
+# Clean names to match with metadata
+positions$name <- sub("^S/", "", positions$name)
+positions$name <- sub("^V/", "", positions$name)
+
+# Join with original data to get cluster and color information
+metadata <- denv_data_results$long %>%
+  select(virus_strain, cluster, color) %>%
+  distinct()
+
+positions <- positions %>%
+  left_join(metadata, by = c("name" = "virus_strain"))
+
+# Remove any rows that didn't get metadata matched
+positions <- na.omit(positions)
+
+#write.csv(positions, "data_files/denv_Positions.csv", row.names=FALSE)
+```
+
+## The resulting map
+
+
+```{r}
+library(topolow)
+
+annotation_config <- new_annotation_config(
+  size = 4.9,                              # Text size
+  color = "black",                         # Text color
+  #fontface = "bold",                       # Text style
+  outline_size = 0.4                       # Size of point outlines
+)
+
+# Aesthetic configuration 
+aesthetic_config <- new_aesthetic_config(
+  point_size = 2.5,
+  point_alpha = 0.6,
+  point_shapes = c(antigen = 16, antiserum = 5),
+  color_palette = "c25", 
+  gradient_colors = list(
+    low = "blue",
+    high = "red"
+  ),
+  show_labels = FALSE,
+  title_size = 12,
+  axis_text_size = 10,
+  show_legend = TRUE,
+  legend_position = "right",
+  arrow_alpha = 0.5
+)
+
+# To mirror the maps to make them comparable with other maps set the reverse parameter to -1
+layout_config <- new_layout_config(
+  width = 4.5, 
+  height = 4.5,
+  reverse_y = -1,
+  save_format = "pdf",
+  arrow_plot_threshold = .3
+)
+
+library(ape)
+phylo_tree <- read.tree("data_files/DENV1234_timetree.nwk")
+positions$name <- toupper(positions$name)
+
+library(topolow)
+# Cluster mapping
+p2 <- plot_cluster_mapping(positions, ndim = optimal_params$N, 
+                           aesthetic_config = aesthetic_config, 
+                           layout_config = layout_config, 
+                           annotation_config = annotation_config,
+                           draw_arrows=TRUE,
+                           annotate_arrows = TRUE,
+                          phylo_tree = phylo_tree,
+                          show_one_arrow_per_cluster = FALSE
+                           )
+
+print(p2)
+
+# Create and display temporal mapping
+cart_plot <- plot_temporal_mapping(positions, ndim = optimal_params$N,
+                                   aesthetic_config = aesthetic_config, 
+                                   layout_config=layout_config, 
+                                   annotation_config = annotation_config,
+                                   draw_arrows=TRUE,
+                                   annotate_arrows = FALSE,
+                                   phylo_tree = phylo_tree
+                                   )
+print(cart_plot)
+
+```
+
+
+
+```{r}
+
+```
+
+
+HIV + DENV for paper:
+```{r}
+# Combine plots
+combined_plot <- plot_grid(
+  topolow_plot_hiv, topolow_plot_denv,
+  labels = c("A", "B"),
+  label_size = 6,
+  nrow = 1,
+  align = 'h',
+  axis = 'tb'
+)
+
+# Save combined plot
+save_plot(
+  file.path(plots_dir, "combined_HIV_DENV.pdf"),
+  combined_plot,
+  ncol = 2,
+  nrow = 1,
+  base_width = 3.26772*0.5,
+  base_height = layout_config$height
+)
+```
+
+
+### notable HIV-1 strains
 ```{r}
 # list of notable HIV-1 strains from subtypes B and C
 notable_hiv1_isolates <- list(
