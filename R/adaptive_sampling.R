@@ -891,9 +891,6 @@ run_adaptive_sampling <- function(initial_samples_file,
     cat(sprintf("This will produce approximately %d total new samples\n", 
                 iterations * num_parallel_jobs))
   }
-
-  # Record start time for timing report
-  start_time <- Sys.time()
   
   if(!is.matrix(distance_matrix)) {
     stop("distance_matrix must be a matrix")
@@ -946,19 +943,6 @@ run_adaptive_sampling <- function(initial_samples_file,
   
   # Validate or repair existing result file
   results_file <- file.path(param_dir, paste0(scenario_name, "_model_parameters.csv"))
-  if (file.exists(results_file)) {
-    peek <- tryCatch(read.csv(results_file, nrows = 5, stringsAsFactors = FALSE), error = function(e) NULL)
-    expected <- c(par_names, "NLL")
-    if (is.null(peek) || !identical(names(peek), expected) || any(!sapply(peek, is.numeric))) {
-      backup <- file.path(param_dir,
-                          paste0(scenario_name, "_corrupt_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".csv"))
-      file.rename(results_file, backup)
-      warning("Backed up corrupt results to ", backup, "; recreating from initial samples.")
-      if (!file.exists(initial_samples_file)) stop("Initial samples missing; cannot recreate results.")
-      file.copy(initial_samples_file, results_file, overwrite = TRUE)
-    }
-  }
-
   # Check initial samples
   if (!file.exists(initial_samples_file)) stop("initial_samples_file not found: ", initial_samples_file)
   init <- read.csv(initial_samples_file, stringsAsFactors = FALSE)
@@ -973,10 +957,6 @@ run_adaptive_sampling <- function(initial_samples_file,
   # Create per-job temp files and gather strategy for both SLURM and local
   make_temp <- function(i) file.path(adaptive_dir, sprintf("job_%02d_%s.csv", i, scenario_name))
 
-  
-  # Calculate total expected samples for progress reporting
-  total_expected_samples <- num_parallel_jobs * iterations
-  
   if (use_slurm) {
     # SLURM handling - prepare the distance matrix file
     dist_file <- file.path(adaptive_dir, paste0(scenario_name, "_distance_matrix.rds"))
@@ -1045,8 +1025,8 @@ run_adaptive_sampling <- function(initial_samples_file,
       args = c(initial_samples_file, adaptive_dir, scenario_name, output_dir),
       sbatch_args = paste0("--dependency=afterok:", dep),
       num_cores = 1, time = "00:10:00", memory = "1G",
-      output_file = file.path(adaptive_dir, paste0("gather.out")),
-      error_file  = file.path(adaptive_dir, paste0("gather.err"))
+      output_file = file.path(adaptive_dir, "gather.out"),
+      error_file  = file.path(adaptive_dir, "gather.err")
     )
     submit_job(gather_script, use_slurm = TRUE, cider = cider)
     if (verbose) cat("Gather job scheduled afterok:", dep, "\n")
@@ -1097,13 +1077,13 @@ run_adaptive_sampling <- function(initial_samples_file,
   }
 
   # Gather local results
-  init <- read.csv(initial_samples_file, stringsAsFactors = FALSE)
-  n0   <- nrow(init)
+  init2 <- read.csv(initial_samples_file, stringsAsFactors = FALSE)
+  n0   <- nrow(init2)
   new_list <- lapply(temps, function(f) {
     df <- read.csv(f, stringsAsFactors = FALSE)
     if (nrow(df) > n0) df[(n0+1):nrow(df), ] else NULL
   })
-  all <- do.call(rbind, c(list(init), new_list))
+  all <- do.call(rbind, c(list(init2), new_list))
   write.csv(all, results_file, row.names = FALSE)
   file.remove(temps)
   if (verbose) cat("Local parallel jobs complete; results in", results_file, "\n")
