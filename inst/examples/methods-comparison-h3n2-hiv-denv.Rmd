@@ -1018,7 +1018,7 @@ aesthetic_config <- new_aesthetic_config(
   show_legend = FALSE,
   legend_position = "none",
   show_title = FALSE,
-  arrow_head_size=0.15
+  arrow_head_size=0.11
 )
 
 annotation_config <- new_annotation_config(
@@ -1097,8 +1097,6 @@ topolow_plot_hiv
 
 ### DENV
 
-
-The resulting map
 ```{r}
 topo_file <- file.path(coords_dir, "topolow_DENV_coords.csv")
 positions <- read.csv(topo_file)
@@ -1107,7 +1105,7 @@ positions <- read.csv(topo_file)
 dim_config <- new_dim_reduction_config(
   method = "pca",
   n_components = 2,
-  scale = FALSE
+  scale = TRUE
 )
 
 annotation_config <- new_annotation_config(
@@ -1135,7 +1133,7 @@ aesthetic_config <- new_aesthetic_config(
   show_legend = FALSE,
   legend_position = "none",
   show_title = FALSE,
-  arrow_head_size=0.1,
+  arrow_head_size=0.11,
   arrow_alpha = 0.5
 )
 
@@ -1155,8 +1153,8 @@ layout_config <- new_layout_config(
 
 # Add text labels to topolow
 text_labels_topolow <- data.frame(
-  x = c( -2.5, -0.7, -0.4, 1.2),
-  y = c( 1.2, 2, -1.5, -0.9), # Adjust y for label positioning
+  x = c( -2.5, -0.7, -0.4, 0),
+  y = c( 1.7, 2.2, -1.8, 0.2), # Adjust y for label positioning
   label = c( "DENV1", "DENV2", "DENV3", "DENV4")
 )  
 
@@ -1165,7 +1163,7 @@ phylo_tree <- read.tree("data_files/DENV1234_timetree.nwk")
 positions$name <- toupper(positions$name)
 
 # Cluster mapping
-topolow_plot_denv <- plot_cluster_mapping(positions, ndim = optimal_params$N, 
+topolow_plot_denv <- plot_cluster_mapping(positions, ndim = denv_topolow_params$N, 
                            aesthetic_config = aesthetic_config, 
                            layout_config = layout_config, 
                            annotation_config = annotation_config,
@@ -1184,7 +1182,7 @@ print(topolow_plot_denv)
 
 
 Below we calculate the average distances between viruses of different serotypes from the input data in function avg_prefix_distance
-and compare it with the distances from Topolow coordinates in function avg_intercluster_distanceto validate the distances on the map visually.
+and compare it with the distances from Topolow coordinates in function avg_intercluster_distanceto validate whether the visual distances on the map are to the scale or not. 
 ```{r}
 library(data.table)
 
@@ -1247,15 +1245,15 @@ avg_intercluster_distance <- function(dt, coord_cols, cluster_col, c1, c2){
 
 
 
-avg_prefix_distance(denv_long, "DENV3", "DENV4")
+avg_prefix_distance(denv_long, "DENV1", "DENV2")
 
 
 avg_intercluster_distance(
   dt           = dt,
   coord_cols   = coord_cols,
   cluster_col  = "cluster",
-  c1           = "DENV3",
-  c2           = "DENV4"
+  c1           = "DENV1",
+  c2           = "DENV2"
 )
 
 ```

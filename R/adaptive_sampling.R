@@ -863,6 +863,7 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #'
 #' @export
 run_adaptive_sampling <- function(initial_samples_file,
+                                  scenario_name,
                                   distance_matrix,
                                   num_parallel_jobs = 5,
                                   max_cores = NULL,
@@ -872,14 +873,14 @@ run_adaptive_sampling <- function(initial_samples_file,
                                   folds = 20, 
                                   time = "8:00:00",
                                   memory = "10G",
-                                  scenario_name,
                                   output_dir = NULL,
                                   use_slurm = FALSE,
                                   cider = FALSE,
                                   verbose = FALSE) {
+  # Parameter names
   par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
-  batch_size <- 1  # Fixed to 1 by design
-  # Calculate iterations from num_samples
+
+  # Validate num_samples
   if (!is.numeric(num_samples) || num_samples < 1 || num_samples != round(num_samples)) {
     stop("num_samples must be a positive integer")
   }
@@ -897,36 +898,24 @@ run_adaptive_sampling <- function(initial_samples_file,
   if(!is.matrix(distance_matrix)) {
     stop("distance_matrix must be a matrix")
   }
-  
+
   # Validate numeric parameters
-  integer_params <- list(
-    mapping_max_iter = mapping_max_iter,
+  integer_params <- list(mapping_max_iter = mapping_max_iter,
     folds = folds, 
     num_parallel_jobs = num_parallel_jobs,
-    iterations = iterations
-  )
+    iterations = iterations)
   
-  for(param_name in names(integer_params)) {
-    param_value <- integer_params[[param_name]]
-    if(!is.numeric(param_value) || param_value != round(param_value) || param_value < 1) {
-      stop(sprintf("%s must be a positive integer", param_name))
+  for (param in names(integer_params)) {
+    val <- integer_params[[param]]
+    if (!is.numeric(val) || val < 1 || val != round(val)) {
+      stop(sprintf("%s must be a positive integer", param))
     }
   }
-  
-  if(!is.numeric(relative_epsilon) || relative_epsilon <= 0) {
-    stop("relative_epsilon must be a positive number")
-  }
-  
-  if(!is.character(scenario_name) || length(scenario_name) != 1) {
-    stop("scenario_name must be a single character string")
-  }
-  
-  # Check SLURM availability if requested
-  if(use_slurm && !has_slurm()) {
-    stop("SLURM requested but not available")
-  }
-  
-  # Determine maximum cores for parallel processing
+  if (!is.numeric(relative_epsilon) || relative_epsilon <= 0) stop("relative_epsilon must be positive")
+  if (!is.character(scenario_name) || length(scenario_name) != 1) stop("scenario_name must be a single string")
+  if (use_slurm && !has_slurm()) stop("SLURM requested but not available")
+
+  # Determine available cores
   available_cores <- parallel::detectCores()
   if (is.null(max_cores)) {
     # Use all cores minus 1 to avoid bogging down the system
@@ -945,64 +934,62 @@ run_adaptive_sampling <- function(initial_samples_file,
                num_parallel_jobs, max_cores))
   }
   
-  # Handle output directory
-  if (is.null(output_dir)) {
-    output_dir <- getwd()
-  }
-  
-  # Create required directories
-  adaptive_sampling_dir <- file.path(output_dir, "adaptive_sampling_jobs")
-  param_dir <- file.path(output_dir, "model_parameters")
-  
-  for (dir in c(adaptive_sampling_dir, param_dir)) {
+  # Setup directories
+  if (is.null(output_dir)) output_dir <- getwd()
+  adaptive_dir <- file.path(output_dir, "adaptive_sampling_jobs")
+  param_dir    <- file.path(output_dir, "model_parameters")
+  for (dir in c(adaptive_dir, param_dir)) {
     if (!dir.exists(dir)) {
       dir.create(dir, recursive = TRUE, showWarnings = FALSE)
     }
   }
   
-  # Verify input file exists and has valid data
-  if(!file.exists(initial_samples_file)) {
-    stop("initial_samples_file not found: ", initial_samples_file)
-  }
-  
-  # Read and validate initial samples
-  init_samples <- read.csv(initial_samples_file)
-  required_cols <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion", "NLL")
-  if(!all(required_cols %in% names(init_samples))) {
-    stop("Missing required columns: ", 
-         paste(setdiff(required_cols, names(init_samples)), collapse=", "))
-  }
-  
-  # Verify we have valid initial samples
-  init_samples <- init_samples[complete.cases(init_samples) & 
-                                 apply(init_samples[required_cols], 1, 
-                                       function(x) all(is.finite(x))), ]
-  if(nrow(init_samples) == 0) {
-    stop("No valid samples in initial samples file after filtering NAs and infinities")
-  }
-  
-  # Prepare the results file - ensure it exists with initial samples
+  # Validate or repair existing result file
   results_file <- file.path(param_dir, paste0(scenario_name, "_model_parameters.csv"))
-  if (!file.exists(results_file)) {
-    # Copy initial samples to results file if it doesn't exist
-    file.copy(initial_samples_file, results_file)
+  if (file.exists(results_file)) {
+    peek <- tryCatch(read.csv(results_file, nrows = 5, stringsAsFactors = FALSE), error = function(e) NULL)
+    expected <- c(par_names, "NLL")
+    if (is.null(peek) || !identical(names(peek), expected) || any(!sapply(peek, is.numeric))) {
+      backup <- file.path(param_dir,
+                          paste0(scenario_name, "_corrupt_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".csv"))
+      file.rename(results_file, backup)
+      warning("Backed up corrupt results to ", backup, "; recreating from initial samples.")
+      if (!file.exists(initial_samples_file)) stop("Initial samples missing; cannot recreate results.")
+      file.copy(initial_samples_file, results_file, overwrite = TRUE)
+    }
   }
+
+  # Check initial samples
+  if (!file.exists(initial_samples_file)) stop("initial_samples_file not found: ", initial_samples_file)
+  init <- read.csv(initial_samples_file, stringsAsFactors = FALSE)
+  req <- c(par_names, "NLL")
+  if (!all(req %in% names(init))) stop("Missing columns in initial samples: ", paste(setdiff(req, names(init)), collapse = ", "))
+  init <- init[complete.cases(init[, req]) & apply(init[, req], 1, function(x) all(is.finite(x))), ]
+  if (nrow(init) == 0) stop("No valid initial samples after filtering")
+
+  # Prepare result for first run
+  if (!file.exists(results_file)) file.copy(initial_samples_file, results_file)
+
+  # Create per-job temp files and gather strategy for both SLURM and local
+  make_temp <- function(i) file.path(adaptive_dir, sprintf("job_%02d_%s.csv", i, scenario_name))
+
   
   # Calculate total expected samples for progress reporting
   total_expected_samples <- num_parallel_jobs * iterations
   
-  if(use_slurm) {
+  if (use_slurm) {
     # SLURM handling - prepare the distance matrix file
-    distance_matrix_file <- file.path(adaptive_sampling_dir,
-                                      paste0(scenario_name, "_distance_matrix.rds"))
-    saveRDS(distance_matrix, distance_matrix_file)
+    dist_file <- file.path(adaptive_dir, paste0(scenario_name, "_distance_matrix.rds"))
+    saveRDS(distance_matrix, dist_file)
     
-    # Submit parallel jobs to SLURM
-    for(i in 1:num_parallel_jobs) {
-      # Prepare arguments
+    # Submit jobs
+    job_ids <- character(num_parallel_jobs)
+    for (i in seq_len(num_parallel_jobs)) {
+      temp_f <- make_temp(i)
+      file.copy(initial_samples_file, temp_f, overwrite = TRUE)
       args <- c(
-        results_file,  # Use the shared results file instead of initial_samples_file
-        distance_matrix_file,
+        temp_f,
+        dist_file,
         as.character(mapping_max_iter),
         as.character(relative_epsilon),
         "1", # num_cores (each job uses 1 core)
@@ -1012,29 +999,18 @@ run_adaptive_sampling <- function(initial_samples_file,
         output_dir,
         as.character(folds)
       )
-      
-      job_name <- paste0(i, "_adaptive_sampling_", scenario_name)
-      output_file <- file.path(adaptive_sampling_dir,
-                               paste0(i, "_", scenario_name, ".out"))
-      error_file <- file.path(adaptive_sampling_dir,
-                              paste0(i, "_", scenario_name, ".err"))
-      
-      script_file <- create_slurm_script(
-        job_name = job_name,
-        script_path = system.file("scripts/run_adaptive_sampling_jobs.R",
-                                  package = "topolow"),
+      script <- create_slurm_script(
+        job_name = paste0("job", i, "_", scenario_name),
+        script_path = system.file("scripts/run_adaptive_sampling_jobs.R", package = "topolow"),
         args = args,
         num_cores = 1, # Each SLURM job uses 1 core
         time = time,
         memory = memory,
-        output_file = output_file,
-        error_file = error_file
+        output_file = file.path(adaptive_dir, paste0(i, "_", scenario_name, ".out")),
+        error_file = file.path(adaptive_dir, paste0(i, "_", scenario_name, ".err"))
       )
-      
-      submit_job(script_file, use_slurm = TRUE, cider = cider)
-      
-      if(verbose) cat(sprintf("Submitted job %d of %d with %d iterations\n", 
-                             i, num_parallel_jobs, iterations))
+      job_ids[i] <- submit_job(script, use_slurm = TRUE, cider = cider)
+      if (verbose) cat("Submitted SLURM job", job_ids[i], "->", temp_f, "\n")
     }
     
     if(verbose) {
@@ -1042,147 +1018,96 @@ run_adaptive_sampling <- function(initial_samples_file,
       cat("The initial samples file will be updated with results when SLURM jobs complete.\n")
     }
     
+    # Gather script: drop initial rows, keep only new
+    gather_R <- file.path(adaptive_dir, paste0("gather_", scenario_name, ".R"))
+    gather_code <- c(
+      "#!/usr/bin/env Rscript",
+      "args <- commandArgs(trailingOnly=TRUE)",
+      "init <- read.csv(args[1], stringsAsFactors=FALSE)",
+      "n0 <- nrow(init)",
+      "files <- list.files(args[2], pattern=paste0('job_.*_', args[3], '\\\.csv'), full.names=TRUE)",
+      "new_list <- lapply(files, function(f) { df <- read.csv(f, stringsAsFactors=FALSE); if (nrow(df) > n0) df[(n0+1):nrow(df), ] else NULL })",
+      "all <- do.call(rbind, c(list(init), new_list))",
+      "out_dir <- file.path(args[4], 'model_parameters')",
+      "if (!dir.exists(out_dir)) dir.create(out_dir, recursive=TRUE)",
+      "final <- file.path(out_dir, paste0(args[3], '_model_parameters.csv'))",
+      "write.csv(all, final, row.names=FALSE)",
+      "file.remove(files)"
+    )
+    writeLines(gather_code, con = gather_R)
+    Sys.chmod(gather_R, "0755")
+
+    # Submit gather with dependency
+    dep <- paste(job_ids, collapse = ":")
+    gather_script <- create_slurm_script(
+      job_name = paste0("gather_", scenario_name),
+      script_path = gather_R,
+      args = c(initial_samples_file, adaptive_dir, scenario_name, output_dir),
+      sbatch_args = paste0("--dependency=afterok:", dep),
+      num_cores = 1, time = "00:10:00", memory = "1G",
+      output_file = file.path(adaptive_dir, paste0("gather.out")),
+      error_file  = file.path(adaptive_dir, paste0("gather.err"))
+    )
+    submit_job(gather_script, use_slurm = TRUE, cider = cider)
+    if (verbose) cat("Gather job scheduled afterok:", dep, "\n")
     return(invisible(NULL))
-    
-  } else {
-    # Run sampling locally with proper parallelization
-    if(verbose) {
-      cat(sprintf("Running locally with %d parallel jobs and %d iterations per job\n", 
-                 num_parallel_jobs, iterations))
-      cat(sprintf("Expecting to generate approximately %d total new samples\n", 
-                 total_expected_samples))
-    }
-    
-    # Create a progress counter file if verbose mode is enabled
-    progress_file <- NULL
-    if(verbose) {
-      progress_file <- file.path(adaptive_sampling_dir, 
-                                paste0(scenario_name, "_progress.txt"))
-      write(0, file = progress_file)
-    }
-    
-    # Determine the optimal number of cores to use
-    local_cores <- min(num_parallel_jobs, max_cores)
-    if(verbose) cat(sprintf("Using %d cores for processing\n", local_cores))
-    
-    # Define the worker function for each parallel job
-    worker_function <- function(job_id) {
-      tryCatch({
-        for(iter in 1:iterations) {
-          if(verbose) {
-            cat(sprintf("Job %d: Starting iteration %d of %d\n", 
-                      job_id, iter, iterations))
-          }
-          
-          # Run one iteration - let adaptive_MC_sampling handle the file writing
-          adaptive_MC_sampling(
-            samples_file = results_file,
-            distance_matrix = distance_matrix,
-            iterations = 1,
-            batch_size = 1,
-            mapping_max_iter = mapping_max_iter,
-            relative_epsilon = relative_epsilon,
-            folds = folds,
-            num_cores = 1,  # Use 1 core within each job
-            scenario_name = scenario_name,
-            output_dir = output_dir,
-            verbose = FALSE  # Disable verbose within subfunction
-          )
-          
-          # Update progress counter
-          if(verbose && !is.null(progress_file)) {
-            # Atomic read-modify-write to update progress
-            tryCatch({
-              current <- as.numeric(readLines(progress_file)[1])
-              write(current + 1, file = progress_file)
-              
-              # Report progress
-              cat(sprintf("Completed %d of %d total iterations (%.1f%%)\n", 
-                         current + 1, total_expected_samples,
-                         (current + 1) / total_expected_samples * 100))
-            }, error = function(e) {
-              # Silently ignore errors in progress tracking
-            })
-          }
-        }
-        
-        return(TRUE)  # Return success indicator
-      }, error = function(e) {
-        if(verbose) {
-          cat(sprintf("Error in job %d: %s\n", job_id, e$message))
-        }
-        return(FALSE)  # Return failure indicator
-      })
-    }
-    
-    # Create a batching mechanism if required
-    batch_size <- min(local_cores, num_parallel_jobs)  # Process in reasonable batches
-    num_batches <- ceiling(num_parallel_jobs / batch_size)
-    
-    for(batch in 1:num_batches) {
-      batch_start <- (batch - 1) * batch_size + 1
-      batch_end <- min(batch * batch_size, num_parallel_jobs)
-      batch_indices <- batch_start:batch_end
-      
-      if(verbose && num_batches > 1) {
-        cat(sprintf("Processing batch %d/%d (jobs %d-%d)\n", 
-                   batch, num_batches, batch_start, batch_end))
-      }
-      
-      # Run parallel jobs using appropriate method based on OS
-      if(.Platform$OS.type == "windows") {
-        if(local_cores > 1) {
-          if(verbose) cat("Using parallel cluster on Windows\n")
-          
-          # Create cluster
-          cl <- parallel::makeCluster(min(local_cores, length(batch_indices)))
-          on.exit(parallel::stopCluster(cl))
-          
-          # Export required objects and functions
-          parallel::clusterExport(cl, c("results_file", "distance_matrix", 
-                                       "iterations", "mapping_max_iter", "relative_epsilon", 
-                                       "folds", "scenario_name", "output_dir", "verbose",
-                                       "progress_file", "total_expected_samples"),
-                                 envir = environment())
-          
-          # Load packages on each node
-          parallel::clusterEvalQ(cl, {
-            library(topolow)
-          })
-          
-          # Run parallel jobs
-          batch_results <- parallel::parLapply(cl, batch_indices, worker_function)
-        } else {
-          # Sequential processing
-          batch_results <- lapply(batch_indices, worker_function)
-        }
-      } else {
-        # For Unix-like systems, use mclapply
-        batch_results <- parallel::mclapply(batch_indices, worker_function, 
-                                          mc.cores = min(local_cores, length(batch_indices)))
-      }
-      
-      # Clean memory between batches
-      gc()
-    }
-    
-    # Clean up progress file
-    if(verbose && !is.null(progress_file)) {
-      if(file.exists(progress_file)) {
-        unlink(progress_file)
-      }
-    }
-    
-    # Calculate and report total execution time
-    end_time <- Sys.time()
-    time_diff <- difftime(end_time, start_time, units = "auto")
-    
-    if(verbose) {
-      cat("Results saved to:", results_file, "\n")
-      cat("\nAdaptive sampling completed in: ", time_diff, "\n")
-    }
-    
   }
+
+    # -------- Local per-job & gather --------
+  # Create per-job temp copies
+  temps <- vapply(seq_len(num_parallel_jobs), make_temp, FUN.VALUE = "")
+  for (i in seq_along(temps)) file.copy(initial_samples_file, temps[i], overwrite = TRUE)
+
+  # Launch parallel runs
+  if (.Platform$OS.type == "windows") {
+    cl <- parallel::makeCluster(min(num_parallel_jobs, max_cores))
+    parallel::clusterExport(cl, c("adaptive_MC_sampling", "temps", "distance_matrix",
+                                 "mapping_max_iter", "relative_epsilon", "folds",
+                                 "output_dir", "scenario_name"), envir = environment())
+    parallel::clusterEvalQ(cl, library(topolow))
+    parallel::parLapply(cl, seq_along(temps), function(i) {
+      adaptive_MC_sampling(
+        samples_file    = temps[i],
+                           distance_matrix = distance_matrix,
+                           iterations      = iterations,
+                           batch_size      = 1,
+                           mapping_max_iter= mapping_max_iter,
+                           relative_epsilon= relative_epsilon,
+                           folds           = folds,
+                           num_cores       = 1,
+                           scenario_name   = scenario_name,
+                           output_dir      = output_dir,
+                           verbose         = FALSE)
+    })
+    parallel::stopCluster(cl)
+  } else {
+    parallel::mclapply(seq_along(temps), function(i) {
+      adaptive_MC_sampling(samples_file    = temps[i],
+                           distance_matrix = distance_matrix,
+                           iterations      = iterations,
+                           batch_size      = 1,
+                           mapping_max_iter= mapping_max_iter,
+                           relative_epsilon= relative_epsilon,
+                           folds           = folds,
+                           num_cores       = 1,
+                           scenario_name   = scenario_name,
+                           output_dir      = output_dir,
+                           verbose         = FALSE)
+    }, mc.cores = min(num_parallel_jobs, max_cores))
+  }
+
+  # Gather local results
+  init <- read.csv(initial_samples_file, stringsAsFactors = FALSE)
+  n0   <- nrow(init)
+  new_list <- lapply(temps, function(f) {
+    df <- read.csv(f, stringsAsFactors = FALSE)
+    if (nrow(df) > n0) df[(n0+1):nrow(df), ] else NULL
+  })
+  all <- do.call(rbind, c(list(init), new_list))
+  write.csv(all, results_file, row.names = FALSE)
+  file.remove(temps)
+  if (verbose) cat("Local parallel jobs complete; results in", results_file, "\n")
+  invisible(NULL)
 }
 
 
@@ -1367,8 +1292,7 @@ weighted_kde <- function(x, weights, n = 512, from = min(x), to = max(x)) {
 #'   \item{y}{Vector of density estimates}
 #'   \item{bw}{Selected bandwidth}
 #' @export
-unweighted_kde <- function(x, n = 512, from = min(x), to = max(x), 
-                          bw = "nrd0") {
+unweighted_kde <- function(x, n = 512, from = min(x), to = max(x), bw = "nrd0") {
   # Determine bandwidth
   if (is.character(bw)) {
     bw <- switch(bw,
@@ -1596,210 +1520,170 @@ adaptive_MC_sampling <- function(samples_file,
                                  scenario_name, 
                                  output_dir = NULL,
                                  verbose = FALSE) {
-  
+  # Require filelock for safe concurrent writes
+  if (!requireNamespace("filelock", quietly = TRUE)) {
+    stop("Package 'filelock' is required for safe writes. Please install it.")
+  }
+
   # Handle parallel processing setup
   use_parallelism <- num_cores > 1
-  if(use_parallelism) {
-    if(verbose) cat("Setting up parallel processing\n")
-    
-    if(.Platform$OS.type == "windows") {
-      if(verbose) cat("Using parallel cluster for Windows\n")
+  if (use_parallelism) {
+    if (verbose) cat("Setting up parallel processing\n")
+    if (.Platform$OS.type == "windows") {
+      if (verbose) cat("Using parallel cluster for Windows\n")
       cl <- parallel::makeCluster(num_cores)
       on.exit(parallel::stopCluster(cl))
-      
-      # Export ALL necessary variables to cluster
       parallel::clusterExport(cl, c("distance_matrix", "mapping_max_iter", 
                                    "relative_epsilon", "folds"),
                              envir = environment())
-      
-      # Load required packages on each cluster node
-      parallel::clusterEvalQ(cl, {
-        library(topolow)
-      })
+      parallel::clusterEvalQ(cl, { library(topolow) })
     }
   }
   
   # Handle output directory
-  if (is.null(output_dir)) {
-    output_dir <- getwd()
-  }
-  
-  # Create results directory
+  if (is.null(output_dir)) output_dir <- getwd()
+
+  # Create results directory (not used for writes when using samples_file)
   param_dir <- file.path(output_dir, "model_parameters")
-  if (!dir.exists(param_dir)) {
-    dir.create(param_dir, recursive = TRUE, showWarnings = FALSE)
-  }
-  
+  if (!dir.exists(param_dir)) dir.create(param_dir, recursive = TRUE, showWarnings = FALSE)
+
   par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
+  key_cols <- c(par_names, "Holdout_MAE", "NLL")
   
-  for (iter in 1:iterations) {
-    if(verbose) cat(sprintf("\nStarting iteration %d of %d\n", iter, iterations))
-    
-    # Read & clean current samples
-    current_samples <- read.csv(samples_file)
+  for (iter in seq_len(iterations)) {
+    if (verbose) cat(sprintf("\nStarting iteration %d of %d\n", iter, iterations))
+
+    # Read current samples (always from samples_file)
+    current_samples <- read.csv(samples_file, stringsAsFactors = FALSE)
+    for (col in key_cols[key_cols %in% names(current_samples)]) {
+      current_samples[[col]] <- as.numeric(as.character(current_samples[[col]]))
+    }
     current_samples <- current_samples[apply(current_samples, 1, 
-                                             function(row) all(is.finite(row))), ]
+                                           function(row) all(is.finite(row))), ]
     current_samples <- na.omit(current_samples)
-    
-    if(nrow(current_samples) == 0) {
+
+    if (nrow(current_samples) == 0) {
       warning("No valid samples remaining after filtering")
       break
     }
 
-    # burn-in - only if we have many samples
-    if(nrow(current_samples) > 10) {
+    # Burn-in and convergence checks
+    if (nrow(current_samples) > 10) {
       burn_in <- min(round(nrow(current_samples) * 0.3), nrow(current_samples) - 5)
-      current_samples <- current_samples[-(1:burn_in), ]
+      current_samples <- current_samples[-seq_len(burn_in), ]
     }
-
-    # Check convergence
-    if(nrow(current_samples) > 500) {
-      conv_check <- check_gaussian_convergence(data=current_samples[,par_names], 
-                                               window_size = 500, 
-                                               tolerance = 0.002)
+    if (nrow(current_samples) > 500) {
+      conv_check <- check_gaussian_convergence(
+        data = current_samples[, par_names],
+        window_size = 500,
+        tolerance = 0.002
+      )
       if (conv_check$converged) {
-        if(verbose) cat("Convergence achieved at iteration", iter, "\n")
+        if (verbose) cat("Convergence achieved at iteration", iter, "\n")
         break
       }
     }
-    
-    # Generate new samples - always generate batch_size samples
-    # batch_size is fixed to 1 by design, but kept as parameter for backward compatibility
-    new_samples <- generate_kde_samples(
-      samples = current_samples,
-      n = batch_size
-    )
-    
+
+    # Generate new samples via KDE
+    new_samples <- generate_kde_samples(samples = current_samples, n = batch_size)
     # Ensure numeric columns
     for (col in par_names) {
       new_samples[[col]] <- as.numeric(new_samples[[col]])
     }
     
-    # Define the evaluate_sample function with explicit scoping
+    # Define likelihood evaluation
     evaluate_sample <- function(i) {
-      # Convert log parameters to regular parameters
       N <- round(exp(new_samples[i, "log_N"]))
       k0 <- exp(new_samples[i, "log_k0"])
       cooling_rate <- exp(new_samples[i, "log_cooling_rate"])
       c_repulsion <- exp(new_samples[i, "log_c_repulsion"])
-      
-      # Always use single-core for the inner function when in parallel mode
-      inner_cores <- if(use_parallelism) 1 else min(folds, num_cores)
-      
-      # OPTIMIZATION 12: Instead of Call safe_likelihood_function with appropriate parameters
-      # safe_likelihood_function(
-      #   distance_matrix = distance_matrix,
-      #   mapping_max_iter = mapping_max_iter,
-      #   relative_epsilon = relative_epsilon, 
-      #   N = N,
-      #   k0 = k0,
-      #   cooling_rate = cooling_rate,
-      #   c_repulsion = c_repulsion,
-      #   folds = folds,
-      #   num_cores = inner_cores
-      # )
-
-      # Call inline replacement:
+      inner_cores <- if (use_parallelism) 1 else min(folds, num_cores)
       tryCatch({
-        likelihood_function(distance_matrix = distance_matrix,
-         mapping_max_iter = mapping_max_iter,
-         relative_epsilon = relative_epsilon, 
-         N = N,
-         k0 = k0,
-         cooling_rate = cooling_rate,
-         c_repulsion = c_repulsion,
-         folds = folds,
-         num_cores = inner_cores)
+        likelihood_function(
+          distance_matrix = distance_matrix,
+          mapping_max_iter = mapping_max_iter,
+          relative_epsilon = relative_epsilon,
+          N = N,
+          k0 = k0,
+          cooling_rate = cooling_rate,
+          c_repulsion = c_repulsion,
+          folds = folds,
+          num_cores = inner_cores
+        )
       }, error = function(e) {
-        cat("Error in likelihood calculation:", e$message, "\n")
+        if (verbose) cat("Error in likelihood calculation:", e$message, "\n")
         NA
       })
-
     }
     
     # Evaluate samples with appropriate parallel method
-    if(use_parallelism) {
-      if(.Platform$OS.type == "windows") {
-        # Export the evaluate_sample function and new_samples to the cluster
-        parallel::clusterExport(cl, c("evaluate_sample", "new_samples", "use_parallelism"), 
-                               envir = environment())
-        
-        # Run in parallel using the cluster
-        new_likelihoods <- parallel::parLapply(cl, 1:nrow(new_samples), evaluate_sample)
+    if (use_parallelism) {
+      if (.Platform$OS.type == "windows") {
+        parallel::clusterExport(cl, c("evaluate_sample", "new_samples"), envir = environment())
+        new_likelihoods <- parallel::parLapply(cl, seq_len(nrow(new_samples)), evaluate_sample)
       } else {
-        # For non-Windows, use mclapply
-        new_likelihoods <- parallel::mclapply(1:nrow(new_samples), 
-                                            evaluate_sample,
-                                            mc.cores = num_cores)
+        new_likelihoods <- parallel::mclapply(seq_len(nrow(new_samples)), evaluate_sample, mc.cores = num_cores)
       }
     } else {
       # Sequential processing
-      new_likelihoods <- lapply(1:nrow(new_samples), evaluate_sample)
+      new_likelihoods <- lapply(seq_len(nrow(new_samples)), evaluate_sample)
     }
     
-    # Process results with robust error handling
-    valid_results <- !sapply(new_likelihoods, is.null) & 
-                    !sapply(new_likelihoods, function(x) all(is.na(unlist(x))))
-    
-    if(sum(valid_results) > 0) {
-      # Extract only valid results
-      valid_likelihoods <- new_likelihoods[valid_results]
-      
-      # Convert list to data frame
-      new_likelihoods_df <- as.data.frame(do.call(rbind, 
-                                                 lapply(valid_likelihoods, unlist)))
+    # Filter valid results
+    valid_results <- !sapply(new_likelihoods, is.null) &
+                     !sapply(new_likelihoods, function(x) all(is.na(unlist(x))))
+
+    if (any(valid_results)) {
+      likelihoods_mat <- do.call(rbind, lapply(new_likelihoods[valid_results], unlist))
+      new_likelihoods_df <- as.data.frame(likelihoods_mat)
       colnames(new_likelihoods_df) <- c("Holdout_MAE", "NLL")
-      
-      # Subset to only valid samples
-      valid_samples <- new_samples[valid_results, ]
-      
-      # Combine with likelihoods
+
+      valid_samples <- new_samples[valid_results, , drop = FALSE]
       valid_samples$Holdout_MAE <- as.numeric(new_likelihoods_df$Holdout_MAE)
       valid_samples$NLL <- as.numeric(new_likelihoods_df$NLL)
-      
-      # Match columns with current samples
-      valid_samples <- valid_samples[, names(current_samples)]
-      
-      # Remove invalid results
-      valid_samples <- valid_samples[complete.cases(valid_samples) & 
-                                     apply(valid_samples, 1, function(x) all(is.finite(x))), ]
-      
-      if (nrow(valid_samples) > 0) {
-        # Save results
-        result_file <- file.path(param_dir,
-                                 paste0(scenario_name, "_model_parameters.csv"))
-        
-        if (file.exists(result_file)) {
-          existing_data <- read.csv(result_file)
-          colnames(existing_data) <- colnames(valid_samples)
-          updated_data <- rbind(existing_data, valid_samples)
-          write.csv(updated_data, result_file, row.names = FALSE)
-        } else {
-          write.csv(valid_samples, result_file, row.names = FALSE)
-        }
-        
-        if(verbose) {
-          cat(sprintf("Added %d new valid samples\n", nrow(valid_samples)))
-        }
-      } else {
-        if(verbose) cat("No valid samples in this iteration\n")
+
+      for (col in key_cols[key_cols %in% names(valid_samples)]) {
+        valid_samples[[col]] <- as.numeric(as.character(valid_samples[[col]]))
       }
-    } else {
-      if(verbose) cat("All likelihood evaluations failed in this iteration\n")
+      valid_samples <- valid_samples[apply(valid_samples, 1, function(row) all(is.finite(row))), ]
+
+      if (nrow(valid_samples) > 0) {
+        result_file <- samples_file
+        lock_path <- paste0(result_file, ".lock")
+        lock <- filelock::lock(lock_path)
+
+        if (!file.exists(result_file)) {
+          write.table(valid_samples, result_file,
+                      sep = ",", row.names = FALSE, col.names = TRUE,
+                      append = FALSE, quote = TRUE)
+        } else {
+          write.table(valid_samples, result_file,
+                      sep = ",", row.names = FALSE, col.names = FALSE,
+                      append = TRUE, quote = TRUE)
+        }
+        filelock::unlock(lock)
+
+        if (verbose) cat(sprintf("Safely appended %d new valid samples to %s\n", 
+                                 nrow(valid_samples), result_file))
+      } else if (verbose) {
+        cat("No valid samples in this iteration\n")
+      }
+    } else if (verbose) {
+      cat("All likelihood evaluations failed in this iteration\n")
     }
   }
-  
-  # Return final samples if any
-  result_file <- file.path(param_dir,
-                           paste0(scenario_name, "_model_parameters.csv"))
-  if(file.exists(result_file)) {
-    final_samples <- read.csv(result_file)
+
+  # Return final samples
+  result_file <- samples_file
+  if (file.exists(result_file)) {
+    final_samples <- read.csv(result_file, stringsAsFactors = FALSE)
     return(final_samples)
   } else {
     warning("No results file created")
     return(NULL)
   }
 }
+
 
 
 #' Calculate Weighted Marginal Distributions
