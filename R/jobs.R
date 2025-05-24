@@ -30,11 +30,18 @@
 #' @param partition SLURM partition (default: "rohani_p")
 #' @return Path to created script file
 #' @export
-create_slurm_script <- function(job_name, script_path, args, num_cores,
-                                output_file, error_file,
-                                time = "8:00:00", memory = "4G",
-                                partition = "rohani_p", 
-                                r_module = "R/4.4.1-foss-2022b") {
+create_slurm_script <- function(job_name,
+                                script_path,
+                                args,
+                                num_cores,
+                                output_file,
+                                error_file,
+                                time = "8:00:00",
+                                memory = "4G",
+                                partition = "rohani_p",
+                                r_module = "R/4.4.1-foss-2022b",
+                                working_dir = NULL,
+                                extra_sbatch_args = NULL) {
   if (!has_slurm()) {
     warning("SLURM appears to not be available on this system")
   }
@@ -43,42 +50,67 @@ create_slurm_script <- function(job_name, script_path, args, num_cores,
     stop("script_path does not exist: ", script_path)
   }
 
-  # Make module loading configurable
-  module_cmd <- if (!is.null(r_module)) {
-    paste0("module load ", r_module, "\n")
-  } else {
-    ""  # No module loading if NULL
+  # Build SBATCH header
+  sbatch_header <- c(
+    "#!/bin/bash",
+    paste0("#SBATCH --partition=", partition),
+    paste0("#SBATCH --job-name=", job_name),
+    paste0("#SBATCH --output=", output_file),
+    paste0("#SBATCH --error=", error_file),
+    "#SBATCH --ntasks=1",
+    paste0("#SBATCH --cpus-per-task=", num_cores),
+    paste0("#SBATCH --time=", time),
+    paste0("#SBATCH --mem=", memory)
+  )
+
+  # Optionally change working directory
+  if (!is.null(working_dir)) {
+    sbatch_header <- c(sbatch_header,
+                       paste0("#SBATCH --chdir=", working_dir))
   }
-  
-  # Add package loading commands for required dependencies
+  # Any extra raw SBATCH args
+  if (!is.null(extra_sbatch_args)) {
+    sbatch_header <- c(sbatch_header, extra_sbatch_args)
+  }
+
+  # Module loading command
+  module_cmd <- if (!is.null(r_module)) {
+    paste0("module load ", r_module)
+  } else {
+    ""
+  }
+
+  # Package installation checks
   package_cmds <- paste(
     "# Load required packages",
     "Rscript -e \"if(!require(reshape2)) install.packages('reshape2', repos='https://cloud.r-project.org')\"",
     "Rscript -e \"if(!require(data.table)) install.packages('data.table', repos='https://cloud.r-project.org')\"",
     "Rscript -e \"if(!require(dplyr)) install.packages('dplyr', repos='https://cloud.r-project.org')\"",
-    sep = "\n"
+    sep = "
+"
   )
 
+  # Final script assembly
   slurm_script <- paste0(
-    "#!/bin/bash\n",
-    "#SBATCH --partition=", partition, "\n",
-    "#SBATCH --job-name=", job_name, "\n",
-    "#SBATCH --output=", output_file, "\n", 
-    "#SBATCH --error=", error_file, "\n",
-    "#SBATCH --ntasks=1\n",
-    "#SBATCH --cpus-per-task=", num_cores, "\n",
-    "#SBATCH --time=", time, "\n",
-    "#SBATCH --mem=", memory, "\n\n",
-     module_cmd,  # Use configured module
-     package_cmds, "\n",
-    "Rscript ", script_path, " ", paste(args, collapse = " "), "\n"
+    paste(sbatch_header, collapse = "
+"), "
+
+",
+    module_cmd, "
+",
+    package_cmds, "
+
+",
+    "Rscript ", script_path, " ", paste(shQuote(args), collapse = " "), "
+"
   )
 
   script_file <- tempfile(fileext = ".sh")
   writeLines(slurm_script, script_file)
-
+  Sys.chmod(script_file, "0755")
   return(script_file)
 }
+
 
 
 #' Submit Job to SLURM or Run Locally

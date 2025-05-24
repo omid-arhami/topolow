@@ -925,6 +925,7 @@ run_adaptive_sampling <- function(initial_samples_file,
   
   # Setup directories
   if (is.null(output_dir)) output_dir <- getwd()
+  output_dir <- normalizePath(output_dir, mustWork = TRUE)
   adaptive_dir <- file.path(output_dir, "adaptive_sampling_jobs")
   param_dir    <- file.path(output_dir, "model_parameters")
   for (dir in c(adaptive_dir, param_dir)) {
@@ -936,6 +937,8 @@ run_adaptive_sampling <- function(initial_samples_file,
   # Validate initial samples and prepare master file
   # Check initial samples
   if (!file.exists(initial_samples_file)) stop("initial_samples_file not found: ", initial_samples_file)
+  initial_samples_file <- normalizePath(initial_samples_file, mustWork = TRUE)
+  
   init <- read.csv(initial_samples_file, stringsAsFactors=FALSE)
   req <- c(par_names, "NLL")
   if (!all(req %in% names(init))) stop("Missing columns in initial samples: ", paste(setdiff(req, names(init)), collapse=","))
@@ -959,7 +962,6 @@ run_adaptive_sampling <- function(initial_samples_file,
     for (i in seq_len(num_parallel_jobs)) {
       temp_f <- make_temp(i)
       file.copy(initial_samples_file, temp_f, overwrite=TRUE)
-      cat("\n", file=temp_f, append=TRUE)     # ← ensure the file ends with a newline
       args <- c(
         temp_f,
         dist_file,
@@ -973,14 +975,15 @@ run_adaptive_sampling <- function(initial_samples_file,
         as.character(folds)
       )
       script <- create_slurm_script(
-        job_name = paste0("job", i, "_", scenario_name),
-        script_path = system.file("scripts/run_adaptive_sampling_jobs.R", package = "topolow"),
-        args = args,
-        num_cores = 1, # Each SLURM job uses 1 core
-        time = time,
-        memory = memory,
-        output_file = file.path(adaptive_dir, paste0(i, "_", scenario_name, ".out")),
-        error_file = file.path(adaptive_dir, paste0(i, "_", scenario_name, ".err"))
+        job_name      = paste0("job", i, "_", scenario_name),
+        script_path   = system.file(".../run_adaptive_sampling_jobs.R"),
+        args          = args,
+        num_cores     = 1,
+        output_file   = file.path(adaptive_dir, paste0(i,"_",scenario_name,".out")),
+        error_file    = file.path(adaptive_dir, paste0(i,"_",scenario_name,".err")),
+        time          = time,
+        memory        = memory,
+        working_dir   = adaptive_dir          # critical to see job_<i> files
       )
       job_ids[i] <- submit_job(script, use_slurm = TRUE, cider = cider)
       if (verbose) cat("Submitted SLURM job", job_ids[i], "->", temp_f, "\n")
