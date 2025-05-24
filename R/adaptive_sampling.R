@@ -536,19 +536,13 @@ initial_parameter_optimization <- function(# Mapping related arguments:
     
     # Remove NULL results
     res_list <- Filter(Negate(is.null), all_results)
-    
     # Check if we have any valid results
-    if(length(res_list) == 0) {
-      stop("No valid results obtained from parameter optimization")
-    }
-
+    if (length(res_list) == 0) stop("No valid results obtained")
     # Combine results
     res_list <- do.call(rbind, res_list)
-
     # Remove any remaining invalid values
     res_list <- res_list[complete.cases(res_list) & 
                         apply(res_list, 1, function(x) all(is.finite(x))), ]
-
     if(nrow(res_list) == 0) {
     stop("All results were invalid after filtering infinities and NAs")
     }
@@ -567,22 +561,30 @@ initial_parameter_optimization <- function(# Mapping related arguments:
     # Remove temporary columns for final output
     res_list_median <- pooled_results[, c("N", "k0", "cooling_rate", "c_repulsion", "Holdout_MAE", "NLL")]
 
+    # --- RENAME & REORDER FOR OUTPUT ---
+    final_df <- res_list_median
+    colnames(final_df) <- c(
+      "log_N",
+      "log_k0",
+      "log_cooling_rate",
+      "log_c_repulsion",
+      "Holdout_MAE",
+      "NLL"
+    )
+
     # Write aggregated results
-    if(write_files) {
-        file_name <- file.path(param_dir,
-                                paste0(scenario_name, "_model_parameters.csv"))
-        
-        if(file.exists(file_name)) {
-            existing_data <- read.csv(file_name)
-            colnames(existing_data) <- colnames(res_list_median)  
-            updated_data <- rbind(existing_data, res_list_median)
-            write.csv(updated_data, file_name, row.names = FALSE)
+    if (write_files) {
+        file_name <- file.path(param_dir, paste0(scenario_name, "_model_parameters.csv"))
+        if (file.exists(file_name)) {
+          existing_data <- read.csv(file_name, stringsAsFactors = FALSE)
+          combined      <- rbind(existing_data, final_df)
+          write.csv(combined, file_name, row.names = FALSE)
         } else {
-            write.csv(res_list_median, file_name, row.names = FALSE)
+          write.csv(final_df, file_name, row.names = FALSE)
         }
     }
     
-    return(res_list_median)
+    return(final_df)
   }
 }
 
@@ -958,10 +960,11 @@ run_adaptive_sampling <- function(initial_samples_file,
 
   # Create per-job temp files and gather strategy for both SLURM and local
   make_temp <- function(i) file.path(adaptive_dir, sprintf("job_%02d_%s.csv", i, scenario_name))
-  temps <- vapply(seq_len(num_parallel_jobs), make_temp, FUN.VALUE = "")
-  for (i in seq_along(temps)) file.copy(initial_samples_file, temps[i], overwrite = TRUE)
 
   if (!use_slurm) {
+    temps <- vapply(seq_len(num_parallel_jobs), make_temp, FUN.VALUE = "")
+    for (i in seq_along(temps)) file.copy(initial_samples_file, temps[i], overwrite = TRUE)
+
     # ---------------- Local parallel execution ----------------
     # Launch parallel runs
     if (.Platform$OS.type == "windows") {
