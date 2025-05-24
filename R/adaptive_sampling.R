@@ -956,103 +956,84 @@ run_adaptive_sampling <- function(initial_samples_file,
   make_temp <- function(i) file.path(adaptive_dir, sprintf("job_%02d_%s.csv", i, scenario_name))
 
   if (use_slurm) {
-    # Stage 1: dump distance matrix
+    # -- dump distance matrix once
     dist_file <- file.path(adaptive_dir, paste0(scenario_name, "_distance_matrix.rds"))
     saveRDS(distance_matrix, dist_file)
     
-    # Stage 2: submit sampler jobs
-    job_ids <- vector("character", num_parallel_jobs)
-    for (i in seq_len(num_parallel_jobs)) {
-      temp_f <- make_temp(i)
-      file.copy(initial_samples_file, temp_f, overwrite=TRUE)
-      args <- c(
-        temp_f,
-        dist_file,
-        as.character(mapping_max_iter),
-        as.character(relative_epsilon),
-        "1", # num_cores (each job uses 1 core)
-        scenario_name, #6
-        as.character(i),
-        as.character(iterations),
-        output_dir,
-        as.character(folds)
-      )
-      
-      script <- create_slurm_script(
-        job_name      = paste0("job", i, "_", scenario_name),
-        script_path   = system.file("scripts", "run_adaptive_sampling_jobs.R", package="topolow"),
-        args          = args,
-        num_cores     = 1,
-        time          = time,
-        memory        = memory,
-        partition     = "rohani_p",
-        r_module      = "R/4.4.1-foss-2022b",
-        working_dir   = adaptive_dir, 
-        output_file   = file.path(adaptive_dir, paste0(i, "_", scenario_name, ".out")),
-        error_file    = file.path(adaptive_dir, paste0(i, "_", scenario_name, ".err"))
-      )
-
-      job_ids[i] <- submit_job(script, use_slurm = TRUE, cider = cider)
-      if (verbose) cat("Submitted SLURM job", job_ids[i], "->", temp_f, "\n")
-    }
+    # -- array job: one sbatch call running run_adaptive_sampling_jobs.R for i=1..num_parallel_jobs
+    array_directive <- sprintf("#SBATCH --array=1-%d", num_parallel_jobs)
+    array_script <- create_slurm_script(
+      job_name        = paste0("adapt_", scenario_name),
+      script_path     = system.file("scripts", "run_adaptive_sampling_jobs.R", package="topolow"),
+      args            = c(
+                          initial_samples_file,
+                          dist_file,
+                          as.character(mapping_max_iter),
+                          as.character(relative_epsilon),
+                          "1",             # num_cores per job
+                          scenario_name,
+                          "$SLURM_ARRAY_TASK_ID",
+                          as.character(iterations),
+                          output_dir,
+                          as.character(folds)
+                        ),
+      num_cores       = 1,
+      output_file     = file.path(adaptive_dir, "%A_%a.out"),
+      error_file      = file.path(adaptive_dir, "%A_%a.err"),
+      time            = time,
+      memory          = memory,
+      partition       = "rohani_p",
+      r_module        = "R/4.4.1-foss-2022b",
+      working_dir     = adaptive_dir,
+      extra_sbatch_args = array_directive
+    )
+    array_id <- submit_job(array_script, use_slurm=TRUE, cider=cider)
+    if (verbose) cat("Submitted array job", array_id, "for sampling\n")
     
-    if(verbose) {
-      cat("Jobs submitted to SLURM. New samples will be written to:", results_file, "\n")
-      cat("The initial samples file will be updated with results when SLURM jobs complete.\n")
-    }
-    
-    # Stage 3: gather script with error-safe reading
-    dep <- paste(job_ids, collapse=":")
-    results_file <- file.path(param_dir, paste0(scenario_name, "_model_parameters.csv"))
-
-    # Gather script: drop initial rows, keep only new
+    # -- write the gather script that appends only new rows
     gather_R <- file.path(adaptive_dir, paste0("gather_", scenario_name, ".R"))
-    gather_code <- c(
+    writeLines(c(
       "#!/usr/bin/env Rscript",
-      paste0("#SBATCH --dependency=afterok:", dep),
       "args <- commandArgs(trailingOnly=TRUE)",
-      "results_file <- args[1]",
-      "adaptive_dir <- args[2]",
-      "scenario_name <- args[3]",
-      "output_dir <- args[4]",
-      "init <- read.csv(results_file, stringsAsFactors=FALSE)",
-      "n0 <- nrow(init)",
-      "# only non-empty job files",
-      "files <- list.files(adaptive_dir, pattern=paste0('job_.*_',scenario_name,'\\\\.csv'), full.names=TRUE)",
+      "adaptive_dir <- args[1]",
+      "master_csv    <- args[2]",
+      "master <- read.csv(master_csv, stringsAsFactors=FALSE)",
+      "n0 <- nrow(master)",
+      "files <- list.files(adaptive_dir, pattern='^job_.*\\\\.csv$', full.names=TRUE)",
       "files <- files[file.info(files)$size>0]",
       "new_list <- lapply(files, function(f) {",
       "  df <- tryCatch(read.csv(f, stringsAsFactors=FALSE), error=function(e) NULL)",
-      "  if(!is.null(df) && nrow(df)>n0) df[(n0+1):nrow(df), ] else NULL",
+      "  if (!is.null(df) && nrow(df)>n0) df[(n0+1):nrow(df), , drop=FALSE] else NULL",
       "})",
-      "all <- do.call(rbind, c(list(init), new_list))",
-      "all <- all[, names(init), drop=FALSE]",
-      "out_dir <- file.path(output_dir,'model_parameters')",
-      "if(!dir.exists(out_dir)) dir.create(out_dir, recursive=TRUE)",
-      "final <- file.path(out_dir, paste0(scenario_name,'_model_parameters.csv'))",
-      "write.csv(all, final, row.names=FALSE)"
-      # "file.remove(files)" Note: file removal of temp files has been removed
-    )
-    writeLines(gather_code, gather_R)
+      "new_rows <- do.call(rbind, new_list)",
+      "if (!is.null(new_rows) && nrow(new_rows)>0) {",
+      "  write.table(new_rows, master_csv, sep=',', row.names=FALSE, col.names=FALSE, append=TRUE)",
+      "}"
+    ), gather_R)
     Sys.chmod(gather_R, "0755")
-    # Stage 4: submit gather job (script carries SBATCH directive)
-    gather_job <- create_slurm_script(
-      job_name      = paste0("gather_", scenario_name),
-      script_path   = file.path(adaptive_dir, paste0("gather_", scenario_name, ".R")),
-      args          = c(results_file, adaptive_dir, scenario_name, output_dir),
-      num_cores     = 1,
-      time          = "00:10:00",
-      memory        = "1G",
-      partition     = "rohani_p",
-      r_module      = "R/4.4.1-foss-2022b",
-      working_dir   = adaptive_dir,
-      output_file   = file.path(adaptive_dir, "gather.out"),
-      error_file    = file.path(adaptive_dir, "gather.err")
+    
+    # -- submit the gather job once the array completes
+    dep_directive <- sprintf("#SBATCH --dependency=afterok:%s", array_id)
+    gather_script <- create_slurm_script(
+      job_name        = paste0("gather_", scenario_name),
+      script_path     = gather_R,
+      args            = c(adaptive_dir, results_file),
+      num_cores       = 1,
+      output_file     = file.path(adaptive_dir, "gather.out"),
+      error_file      = file.path(adaptive_dir, "gather.err"),
+      time            = "00:05:00",
+      memory          = "1G",
+      partition       = "rohani_p",
+      r_module        = "R/4.4.1-foss-2022b",
+      working_dir     = adaptive_dir,
+      extra_sbatch_args = dep_directive
     )
-
-    submit_job(gather_job, use_slurm=TRUE, cider=cider)
-    if (verbose) cat("Gather job scheduled with afterok:", dep, "\n")
+    submit_job(gather_script, use_slurm=TRUE, cider=cider)
+    if (verbose) cat("Gather job scheduled with dependency on array job", array_id, "\n")
+    
     return(invisible(NULL))
   }
+
 
   # ---------------- Local parallel execution ----------------
   # Create per-job temp copies
