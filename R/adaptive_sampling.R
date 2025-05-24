@@ -861,7 +861,7 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #'
 #' @return NULL. Results are  written to: model_parameters/\{scenario_name\}_model_parameters.csv
 #'
-#' @export
+#' @export```r
 run_adaptive_sampling <- function(initial_samples_file,
                                   scenario_name,
                                   distance_matrix,
@@ -1017,7 +1017,7 @@ run_adaptive_sampling <- function(initial_samples_file,
       "output_dir <- args[4]",
       "init <- read.csv(results_file, stringsAsFactors=FALSE)",
       "n0 <- nrow(init)",
-      # only non-empty job files
+      "# only non-empty job files",
       "files <- list.files(adaptive_dir, pattern=paste0('job_.*_',scenario_name,'\\\\.csv'), full.names=TRUE)",
       "files <- files[file.info(files)$size>0]",
       "new_list <- lapply(files, function(f) {",
@@ -1029,8 +1029,8 @@ run_adaptive_sampling <- function(initial_samples_file,
       "out_dir <- file.path(output_dir,'model_parameters')",
       "if(!dir.exists(out_dir)) dir.create(out_dir, recursive=TRUE)",
       "final <- file.path(out_dir, paste0(scenario_name,'_model_parameters.csv'))",
-      "write.csv(all, final, row.names=FALSE)",
-      "file.remove(files)"
+      "write.csv(all, final, row.names=FALSE)"
+      # "file.remove(files)" Note: file removal of temp files has been removed
     )
     writeLines(gather_code, gather_R)
     Sys.chmod(gather_R, "0755")
@@ -1048,7 +1048,6 @@ run_adaptive_sampling <- function(initial_samples_file,
       output_file   = file.path(adaptive_dir, "gather.out"),
       error_file    = file.path(adaptive_dir, "gather.err")
     )
-
 
     submit_job(gather_job, use_slurm=TRUE, cider=cider)
     if (verbose) cat("Gather job scheduled with afterok:", dep, "\n")
@@ -1110,7 +1109,8 @@ run_adaptive_sampling <- function(initial_samples_file,
   all <- do.call(rbind, c(list(init2), new_list))
   all <- all[, names(init2), drop=FALSE]
   write.csv(all, results_file, row.names=FALSE)
-  file.remove(temps)
+  # file.remove(temps)
+  # Note: file.remove(temps) has been removed—temporary files are retained
   if (verbose) cat("Local parallel jobs complete; results in", results_file, "\n")
   invisible(NULL)
 }
