@@ -454,13 +454,13 @@ only_virus_vs_as <- function(dist_matrix, selected_names) {
 #' @export
 log_transform_parameters <- function(samples_file, output_file = NULL) {
   # Validate input file
-  if(!file.exists(samples_file)) {
+  if (!file.exists(samples_file)) {
     stop("Input file not found: ", samples_file)
   }
   
   # Read samples 
   samples <- tryCatch({
-    utils::read.csv(samples_file)
+    utils::read.csv(samples_file, stringsAsFactors = FALSE)
   }, error = function(e) {
     stop("Error reading file: ", e$message)
   })
@@ -472,39 +472,52 @@ log_transform_parameters <- function(samples_file, output_file = NULL) {
   params_to_transform <- c("N", "k0", "cooling_rate", "c_repulsion")
   existing_params <- intersect(names(samples), params_to_transform)
   
-  if(length(existing_params) == 0) {
+  if (length(existing_params) == 0) {
     message("No parameters found to transform or all parameters are already transformed.")
     return(samples)
   }
   
   # Validate numeric columns
-  for(param in existing_params) {
-    if(!is.numeric(samples[[param]])) {
+  for (param in existing_params) {
+    if (!is.numeric(samples[[param]])) {
       samples[[param]] <- suppressWarnings(as.numeric(samples[[param]]))
-      if(any(is.na(samples[[param]]))) {
+      if (any(is.na(samples[[param]]))) {
         stop("Non-numeric values found in column: ", param)
       }
     }
-    
     # Check for non-positive values
-    if(any(samples[[param]] <= 0, na.rm = TRUE)) {
-      stop("Non-positive values found in column: ", param, 
+    if (any(samples[[param]] <= 0, na.rm = TRUE)) {
+      stop("Non-positive values found in column: ", param,
            ". Log transform requires positive values.")
     }
   }
   
   # Create log-transformed columns
-  for(param in existing_params) {
+  for (param in existing_params) {
     log_param <- paste0("log_", param)
     samples[[log_param]] <- log(samples[[param]])
   }
   
   # Remove original columns
-  samples <- samples[, !names(samples) %in% existing_params]
+  samples <- samples[, !names(samples) %in% existing_params, drop = FALSE]
+  
+  # Reorder to fixed column order
+  desired_order <- c(
+    "log_N",
+    "log_k0",
+    "log_cooling_rate",
+    "log_c_repulsion",
+    "Holdout_MAE",
+    "NLL"
+  )
+  missing_cols <- setdiff(desired_order, names(samples))
+  if (length(missing_cols) > 0) {
+    stop("Missing expected columns: ", paste(missing_cols, collapse = ", "))
+  }
+  samples <- samples[, desired_order, drop = FALSE]
   
   # Write output
-  output_file <- if(is.null(output_file)) samples_file else output_file
-  
+  output_file <- if (is.null(output_file)) samples_file else output_file
   tryCatch({
     utils::write.csv(samples, file = output_file, row.names = FALSE)
   }, error = function(e) {
@@ -512,7 +525,7 @@ log_transform_parameters <- function(samples_file, output_file = NULL) {
   })
   
   # Report transformations
-  message("Log transformed parameters: ", 
+  message("Log transformed parameters: ",
           paste(existing_params, collapse = ", "))
   message("Output saved to: ", output_file)
   
