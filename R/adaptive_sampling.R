@@ -879,12 +879,17 @@ run_adaptive_sampling <- function(initial_samples_file,
                                   verbose = FALSE) {
   # Parameter names
   par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
+  iterations <- ceiling(num_samples / num_parallel_jobs)
 
   # Validate num_samples
   if (!is.numeric(num_samples) || num_samples < 1 || num_samples != round(num_samples)) {
     stop("num_samples must be a positive integer")
   }
-  iterations <- ceiling(num_samples / num_parallel_jobs)
+  for (p in c("mapping_max_iter", "folds", "num_parallel_jobs", "iterations")) {
+    v <- get(p)
+    if (!is.numeric(v) || v < 1 || v != round(v)) stop(sprintf("%s must be a positive integer", p))
+  }
+  
   if (verbose) {
     cat(sprintf("Calculating iterations per job: %d samples / %d jobs = %d iterations per job\n", 
                 num_samples, num_parallel_jobs, iterations))
@@ -894,19 +899,6 @@ run_adaptive_sampling <- function(initial_samples_file,
   
   if(!is.matrix(distance_matrix)) {
     stop("distance_matrix must be a matrix")
-  }
-
-  # Validate numeric parameters
-  integer_params <- list(mapping_max_iter = mapping_max_iter,
-    folds = folds, 
-    num_parallel_jobs = num_parallel_jobs,
-    iterations = iterations)
-  
-  for (param in names(integer_params)) {
-    val <- integer_params[[param]]
-    if (!is.numeric(val) || val < 1 || val != round(val)) {
-      stop(sprintf("%s must be a positive integer", param))
-    }
   }
   if (!is.numeric(relative_epsilon) || relative_epsilon <= 0) stop("relative_epsilon must be positive")
   if (!is.character(scenario_name) || length(scenario_name) != 1) stop("scenario_name must be a single string")
@@ -941,15 +933,15 @@ run_adaptive_sampling <- function(initial_samples_file,
     }
   }
   
-  # Validate or repair existing result file
-  results_file <- file.path(param_dir, paste0(scenario_name, "_model_parameters.csv"))
+  # Validate initial samples and prepare master file
   # Check initial samples
   if (!file.exists(initial_samples_file)) stop("initial_samples_file not found: ", initial_samples_file)
-  init <- read.csv(initial_samples_file, stringsAsFactors = FALSE)
+  init <- read.csv(initial_samples_file, stringsAsFactors=FALSE)
   req <- c(par_names, "NLL")
-  if (!all(req %in% names(init))) stop("Missing columns in initial samples: ", paste(setdiff(req, names(init)), collapse = ", "))
+  if (!all(req %in% names(init))) stop("Missing columns in initial samples: ", paste(setdiff(req, names(init)), collapse=","))
   init <- init[complete.cases(init[, req]) & apply(init[, req], 1, function(x) all(is.finite(x))), ]
-  if (nrow(init) == 0) stop("No valid initial samples after filtering")
+  if (nrow(init)==0) stop("No valid initial samples after filtering")
+  results_file <- file.path(param_dir, paste0(scenario_name, "_model_parameters.csv"))
 
   # Prepare result for first run
   if (!file.exists(results_file)) file.copy(initial_samples_file, results_file)
@@ -958,12 +950,12 @@ run_adaptive_sampling <- function(initial_samples_file,
   make_temp <- function(i) file.path(adaptive_dir, sprintf("job_%02d_%s.csv", i, scenario_name))
 
   if (use_slurm) {
-    # SLURM handling - prepare the distance matrix file
+    # Stage 1: dump distance matrix
     dist_file <- file.path(adaptive_dir, paste0(scenario_name, "_distance_matrix.rds"))
     saveRDS(distance_matrix, dist_file)
     
-    # Submit jobs
-    job_ids <- character(num_parallel_jobs)
+    # Stage 2: submit sampler jobs
+    job_ids <- vector("character", num_parallel_jobs)
     for (i in seq_len(num_parallel_jobs)) {
       temp_f <- make_temp(i)
       file.copy(initial_samples_file, temp_f, overwrite=TRUE)
@@ -999,8 +991,8 @@ run_adaptive_sampling <- function(initial_samples_file,
       cat("The initial samples file will be updated with results when SLURM jobs complete.\n")
     }
     
-    # 3) build the gather script (with an SBATCH header!)
-    dep      <- paste(job_ids, collapse=":")
+    # Stage 3: gather script with error-safe reading
+    dep <- paste(job_ids, collapse=":")
     results_file <- file.path(param_dir, paste0(scenario_name, "_model_parameters.csv"))
 
     # Gather script: drop initial rows, keep only new
@@ -1008,33 +1000,31 @@ run_adaptive_sampling <- function(initial_samples_file,
     gather_code <- c(
       "#!/usr/bin/env Rscript",
       paste0("#SBATCH --dependency=afterok:", dep),
-      "",
       "args <- commandArgs(trailingOnly=TRUE)",
-      "# arg1 = results_file, arg2 = adaptive_dir, arg3 = scenario_name, arg4 = output_dir",
       "results_file <- args[1]",
       "adaptive_dir <- args[2]",
       "scenario_name <- args[3]",
       "output_dir <- args[4]",
-      "",
       "init <- read.csv(results_file, stringsAsFactors=FALSE)",
-      "n0   <- nrow(init)",
-      "files <- list.files(adaptive_dir, pattern=paste0(\"job_.*_\", scenario_name, \"\\\\.csv\"), full.names=TRUE)",
+      "n0 <- nrow(init)",
+      # only non-empty job files
+      "files <- list.files(adaptive_dir, pattern=paste0('job_.*_',scenario_name,'\\\\.csv'), full.names=TRUE)",
+      "files <- files[file.info(files)$size>0]",
       "new_list <- lapply(files, function(f) {",
-      "  df <- read.csv(f, stringsAsFactors=FALSE)",
-      "  if (nrow(df) > n0) df[(n0+1):nrow(df), ] else NULL",
+      "  df <- tryCatch(read.csv(f, stringsAsFactors=FALSE), error=function(e) NULL)",
+      "  if(!is.null(df) && nrow(df)>n0) df[(n0+1):nrow(df), ] else NULL",
       "})",
       "all <- do.call(rbind, c(list(init), new_list))",
       "all <- all[, names(init), drop=FALSE]",
-      "",
-      "out_dir <- file.path(output_dir, 'model_parameters')",
-      "if (!dir.exists(out_dir)) dir.create(out_dir, recursive=TRUE)",
-      "final <- file.path(out_dir, paste0(scenario_name, '_model_parameters.csv'))",
+      "out_dir <- file.path(output_dir,'model_parameters')",
+      "if(!dir.exists(out_dir)) dir.create(out_dir, recursive=TRUE)",
+      "final <- file.path(out_dir, paste0(scenario_name,'_model_parameters.csv'))",
       "write.csv(all, final, row.names=FALSE)",
       "file.remove(files)"
     )
-    writeLines(gather_code, con=gather_R)
+    writeLines(gather_code, gather_R)
     Sys.chmod(gather_R, "0755")
-    # 4) submit it (now the script itself carries the dependency)
+    # Stage 4: submit gather job (script carries SBATCH directive)
     gather_job <- create_slurm_script(
       job_name    = paste0("gather_", scenario_name),
       script_path = gather_R,
@@ -1046,11 +1036,11 @@ run_adaptive_sampling <- function(initial_samples_file,
       error_file  = file.path(adaptive_dir, "gather.err")
     )
     submit_job(gather_job, use_slurm=TRUE, cider=cider)
-    if (verbose) cat("Gather job submitted with afterok:", dep, "\n")
+    if (verbose) cat("Gather job scheduled with afterok:", dep, "\n")
     return(invisible(NULL))
   }
 
-    # -------- Local per-job & gather --------
+  # ---------------- Local parallel execution ----------------
   # Create per-job temp copies
   temps <- vapply(seq_len(num_parallel_jobs), make_temp, FUN.VALUE = "")
   for (i in seq_along(temps)) file.copy(initial_samples_file, temps[i], overwrite = TRUE)
@@ -1079,17 +1069,19 @@ run_adaptive_sampling <- function(initial_samples_file,
     parallel::stopCluster(cl)
   } else {
     parallel::mclapply(seq_along(temps), function(i) {
-      adaptive_MC_sampling(samples_file    = temps[i],
-                           distance_matrix = distance_matrix,
-                           iterations      = iterations,
-                           batch_size      = 1,
-                           mapping_max_iter= mapping_max_iter,
-                           relative_epsilon= relative_epsilon,
-                           folds           = folds,
-                           num_cores       = 1,
-                           scenario_name   = scenario_name,
-                           output_dir      = output_dir,
-                           verbose         = FALSE)
+      adaptive_MC_sampling(
+        samples_file    = temps[i],
+        distance_matrix = distance_matrix,
+        iterations      = iterations,
+        batch_size      = 1,
+        mapping_max_iter= mapping_max_iter,
+        relative_epsilon= relative_epsilon,
+        folds           = folds,
+        num_cores       = 1,
+        scenario_name   = scenario_name,
+        output_dir      = output_dir,
+        verbose         = FALSE
+        )
     }, mc.cores = min(num_parallel_jobs, max_cores))
   }
 
@@ -1097,14 +1089,14 @@ run_adaptive_sampling <- function(initial_samples_file,
   init2 <- read.csv(initial_samples_file, stringsAsFactors = FALSE)
   n0   <- nrow(init2)
   new_list <- lapply(temps, function(f) {
-    df <- read.csv(f, stringsAsFactors = FALSE)
-    if (nrow(df) > n0) df[(n0+1):nrow(df), ] else NULL
+    df <- tryCatch(read.csv(f, stringsAsFactors=FALSE), error=function(e) NULL)
+    if (!is.null(df) && nrow(df)>n0) df[(n0+1):nrow(df), ] else NULL
   })
   all <- do.call(rbind, c(list(init2), new_list))
   all <- all[, names(init2), drop=FALSE]
-  write.csv(all, results_file, row.names = FALSE)
+  write.csv(all, results_file, row.names=FALSE)
   file.remove(temps)
-  if (verbose) cat("Local jobs complete; results in", results_file, "\n")
+  if (verbose) cat("Local parallel jobs complete; results in", results_file, "\n")
   invisible(NULL)
 }
 
@@ -1653,11 +1645,13 @@ adaptive_MC_sampling <- function(samples_file,
         if (!file.exists(result_file)) {
           write.table(valid_samples, result_file,
                       sep = ",", row.names = FALSE, col.names = TRUE,
-                      append = FALSE, quote = TRUE)
+                      append = FALSE, quote = TRUE,
+                      eol = "\n")
         } else {
           write.table(valid_samples, result_file,
                       sep = ",", row.names = FALSE, col.names = FALSE,
-                      append = TRUE, quote = TRUE)
+                      append = TRUE, quote = TRUE,
+                      eol = "\n")
         }
         filelock::unlock(lock)
 
