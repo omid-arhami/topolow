@@ -1008,6 +1008,7 @@ run_adaptive_sampling <- function(initial_samples_file,
       "files <- list.files(args[2], pattern=paste0(\"job_.*_\", args[3], \"\\\\.csv\"), full.names=TRUE)",
       "new_list <- lapply(files, function(f) { df <- read.csv(f, stringsAsFactors=FALSE); if (nrow(df) > n0) df[(n0+1):nrow(df), ] else NULL })",
       "all <- do.call(rbind, c(list(init), new_list))",
+      "all <- all[, names(init), drop=FALSE]",
       "out_dir <- file.path(args[4], 'model_parameters')",
       "if (!dir.exists(out_dir)) dir.create(out_dir, recursive=TRUE)",
       "final <- file.path(out_dir, paste0(args[3], '_model_parameters.csv'))",
@@ -1084,9 +1085,10 @@ run_adaptive_sampling <- function(initial_samples_file,
     if (nrow(df) > n0) df[(n0+1):nrow(df), ] else NULL
   })
   all <- do.call(rbind, c(list(init2), new_list))
+  all <- all[, names(init2), drop=FALSE](rbind, c(list(init2), new_list))
   write.csv(all, results_file, row.names = FALSE)
   file.remove(temps)
-  if (verbose) cat("Local parallel jobs complete; results in", results_file, "\n")
+  if (verbose) cat("Local jobs complete; results in", results_file, "\n")
   invisible(NULL)
 }
 
@@ -1528,7 +1530,7 @@ adaptive_MC_sampling <- function(samples_file,
   if (!dir.exists(param_dir)) dir.create(param_dir, recursive = TRUE, showWarnings = FALSE)
 
   par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
-  key_cols <- c(par_names, "Holdout_MAE", "NLL")
+  key_cols <- c("Holdout_MAE", "NLL", par_names)
   
   for (iter in seq_len(iterations)) {
     if (verbose) cat(sprintf("\nStarting iteration %d of %d\n", iter, iterations))
