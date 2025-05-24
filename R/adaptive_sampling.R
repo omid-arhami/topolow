@@ -966,7 +966,8 @@ run_adaptive_sampling <- function(initial_samples_file,
     job_ids <- character(num_parallel_jobs)
     for (i in seq_len(num_parallel_jobs)) {
       temp_f <- make_temp(i)
-      file.copy(initial_samples_file, temp_f, overwrite = TRUE)
+      file.copy(initial_samples_file, temp_f, overwrite=TRUE)
+      cat("\n", file=temp_f, append=TRUE)     # ← ensure the file ends with a newline
       args <- c(
         temp_f,
         dist_file,
@@ -1085,7 +1086,7 @@ run_adaptive_sampling <- function(initial_samples_file,
     if (nrow(df) > n0) df[(n0+1):nrow(df), ] else NULL
   })
   all <- do.call(rbind, c(list(init2), new_list))
-  all <- all[, names(init2), drop=FALSE](rbind, c(list(init2), new_list))
+  all <- all[, names(init2), drop=FALSE]
   write.csv(all, results_file, row.names = FALSE)
   file.remove(temps)
   if (verbose) cat("Local jobs complete; results in", results_file, "\n")

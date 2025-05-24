@@ -202,13 +202,13 @@ Using the initial results as a starting point, we'll now perform adaptive sampli
 
 ```{r eval=FALSE}
 # Transform samples (with previous code's path)
-scenario_name = "denv_data_AMC14"
-samples_file = "model_parameters/denv_data_AMC14_model_parameters.csv"
+scenario_name = "denv_data_AMC15" #2149
+samples_file = "model_parameters/denv_data_AMC15_model_parameters.csv"
 samples <- log_transform_parameters(samples_file)
 
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_samples = 50, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
+  num_samples = 6, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
   num_parallel_jobs = 7,  # For local execution: Number of CPU cores available (Can try parallel::detectCores() ); For SLURM: Number of jobs to submit
   mapping_max_iter = 500, # Maximum iterations per map optimization
   relative_epsilon = 1e-4,
