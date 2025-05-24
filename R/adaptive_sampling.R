@@ -944,7 +944,7 @@ run_adaptive_sampling <- function(initial_samples_file,
   
   init <- read.csv(initial_samples_file, stringsAsFactors=FALSE)
   req <- c(par_names, "NLL")
-  if (!all(req %in% names(init))) stop("Missing columns in initial samples: ", paste(setdiff(req, names(init)), collapse=","))
+  if (!all(req %in% names(init))) stop("Missing columns in initial samples: ", paste(setdiff(req, names(init)), collapse=", "))
   init <- init[complete.cases(init[, req]) & apply(init[, req], 1, function(x) all(is.finite(x))), ]
   if (nrow(init)==0) stop("No valid initial samples after filtering")
   results_file <- file.path(param_dir, paste0(scenario_name, "_model_parameters.csv"))
