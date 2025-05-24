@@ -925,9 +925,12 @@ run_adaptive_sampling <- function(initial_samples_file,
   
   # Setup directories
   if (is.null(output_dir)) output_dir <- getwd()
-  output_dir <- normalizePath(output_dir, mustWork = TRUE)
-  adaptive_dir <- file.path(output_dir, "adaptive_sampling_jobs")
-  param_dir    <- file.path(output_dir, "model_parameters")
+  output_dir          <- normalizePath(output_dir,         mustWork = FALSE)
+  adaptive_dir        <- file.path(output_dir, "adaptive_sampling_jobs")
+  adaptive_dir        <- normalizePath(adaptive_dir,       mustWork = FALSE)
+  param_dir           <- file.path(output_dir, "model_parameters")
+  param_dir           <- normalizePath(param_dir,          mustWork = FALSE)
+
   for (dir in c(adaptive_dir, param_dir)) {
     if (!dir.exists(dir)) {
       dir.create(dir, recursive = TRUE, showWarnings = FALSE)
@@ -974,17 +977,21 @@ run_adaptive_sampling <- function(initial_samples_file,
         output_dir,
         as.character(folds)
       )
+      
       script <- create_slurm_script(
         job_name      = paste0("job", i, "_", scenario_name),
-        script_path   = system.file("scripts/run_adaptive_sampling_jobs.R", package = "topolow"),
+        script_path   = system.file("scripts", "run_adaptive_sampling_jobs.R", package="topolow"),
         args          = args,
         num_cores     = 1,
-        output_file   = file.path(adaptive_dir, paste0(i,"_",scenario_name,".out")),
-        error_file    = file.path(adaptive_dir, paste0(i,"_",scenario_name,".err")),
         time          = time,
         memory        = memory,
-        working_dir   = adaptive_dir          # critical to see job_<i> files
+        partition     = "rohani_p",
+        r_module      = "R/4.4.1-foss-2022b",
+        working_dir   = adaptive_dir, 
+        output_file   = file.path(adaptive_dir, paste0(i, "_", scenario_name, ".out")),
+        error_file    = file.path(adaptive_dir, paste0(i, "_", scenario_name, ".err"))
       )
+
       job_ids[i] <- submit_job(script, use_slurm = TRUE, cider = cider)
       if (verbose) cat("Submitted SLURM job", job_ids[i], "->", temp_f, "\n")
     }
@@ -1029,15 +1036,20 @@ run_adaptive_sampling <- function(initial_samples_file,
     Sys.chmod(gather_R, "0755")
     # Stage 4: submit gather job (script carries SBATCH directive)
     gather_job <- create_slurm_script(
-      job_name    = paste0("gather_", scenario_name),
-      script_path = gather_R,
-      args        = c(results_file, adaptive_dir, scenario_name, output_dir),
-      num_cores   = 1,
-      time        = "00:10:00",
-      memory      = "1G",
-      output_file = file.path(adaptive_dir, "gather.out"),
-      error_file  = file.path(adaptive_dir, "gather.err")
+      job_name      = paste0("gather_", scenario_name),
+      script_path   = file.path(adaptive_dir, paste0("gather_", scenario_name, ".R")),
+      args          = c(results_file, adaptive_dir, scenario_name, output_dir),
+      num_cores     = 1,
+      time          = "00:10:00",
+      memory        = "1G",
+      partition     = "rohani_p",
+      r_module      = "R/4.4.1-foss-2022b",
+      working_dir   = adaptive_dir,
+      output_file   = file.path(adaptive_dir, "gather.out"),
+      error_file    = file.path(adaptive_dir, "gather.err")
     )
+
+
     submit_job(gather_job, use_slurm=TRUE, cider=cider)
     if (verbose) cat("Gather job scheduled with afterok:", dep, "\n")
     return(invisible(NULL))

@@ -132,18 +132,25 @@ submit_job <- function(script_file, use_slurm = TRUE, cider = FALSE) {
   }
   
   if (use_slurm && has_slurm()) {
-    cmd <- if(cider) {
-      paste("sbatch -q cider_qos -p batch", script_file)
-    } else {
-      paste("sbatch", script_file)
+    # Build sbatch arguments
+    sbatch_args <- character()
+    if (cider) {
+      sbatch_args <- c(sbatch_args, "-q", "cider_qos", "-p", "batch")
     }
-    status <- system(cmd)
+    # Ask sbatch to echo back the job ID
+    sbatch_args <- c(sbatch_args, "--parsable", script_file)
+    
+    # system2 will return the stdout (the job ID) as a character vector
+    job_id <- system2("sbatch", sbatch_args, stdout = TRUE)
+    return(job_id)
+    
   } else {
-    status <- system(paste("Rscript", script_file))
+    # Fallback: run the script locally with Rscript
+    status <- system2("Rscript", script_file)
+    return(status)
   }
-  
-  return(invisible(status))
 }
+
 
 
 #' Check if SLURM is Available
