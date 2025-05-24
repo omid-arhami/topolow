@@ -999,39 +999,54 @@ run_adaptive_sampling <- function(initial_samples_file,
       cat("The initial samples file will be updated with results when SLURM jobs complete.\n")
     }
     
+    # 3) build the gather script (with an SBATCH header!)
+    dep      <- paste(job_ids, collapse=":")
+    results_file <- file.path(param_dir, paste0(scenario_name, "_model_parameters.csv"))
+
     # Gather script: drop initial rows, keep only new
     gather_R <- file.path(adaptive_dir, paste0("gather_", scenario_name, ".R"))
     gather_code <- c(
       "#!/usr/bin/env Rscript",
+      paste0("#SBATCH --dependency=afterok:", dep),
+      "",
       "args <- commandArgs(trailingOnly=TRUE)",
-      "init <- read.csv(args[1], stringsAsFactors=FALSE)",
-      "n0 <- nrow(init)",
-      "files <- list.files(args[2], pattern=paste0(\"job_.*_\", args[3], \"\\\\.csv\"), full.names=TRUE)",
-      "new_list <- lapply(files, function(f) { df <- read.csv(f, stringsAsFactors=FALSE); if (nrow(df) > n0) df[(n0+1):nrow(df), ] else NULL })",
+      "# arg1 = results_file, arg2 = adaptive_dir, arg3 = scenario_name, arg4 = output_dir",
+      "results_file <- args[1]",
+      "adaptive_dir <- args[2]",
+      "scenario_name <- args[3]",
+      "output_dir <- args[4]",
+      "",
+      "init <- read.csv(results_file, stringsAsFactors=FALSE)",
+      "n0   <- nrow(init)",
+      "files <- list.files(adaptive_dir, pattern=paste0(\"job_.*_\", scenario_name, \"\\\\.csv\"), full.names=TRUE)",
+      "new_list <- lapply(files, function(f) {",
+      "  df <- read.csv(f, stringsAsFactors=FALSE)",
+      "  if (nrow(df) > n0) df[(n0+1):nrow(df), ] else NULL",
+      "})",
       "all <- do.call(rbind, c(list(init), new_list))",
       "all <- all[, names(init), drop=FALSE]",
-      "out_dir <- file.path(args[4], 'model_parameters')",
+      "",
+      "out_dir <- file.path(output_dir, 'model_parameters')",
       "if (!dir.exists(out_dir)) dir.create(out_dir, recursive=TRUE)",
-      "final <- file.path(out_dir, paste0(args[3], '_model_parameters.csv'))",
+      "final <- file.path(out_dir, paste0(scenario_name, '_model_parameters.csv'))",
       "write.csv(all, final, row.names=FALSE)",
       "file.remove(files)"
     )
-    writeLines(gather_code, con = gather_R)
+    writeLines(gather_code, con=gather_R)
     Sys.chmod(gather_R, "0755")
-
-    # Submit gather with dependency
-    dep <- paste(job_ids, collapse = ":")
-    gather_script <- create_slurm_script(
-      job_name = paste0("gather_", scenario_name),
+    # 4) submit it (now the script itself carries the dependency)
+    gather_job <- create_slurm_script(
+      job_name    = paste0("gather_", scenario_name),
       script_path = gather_R,
-      args = c(initial_samples_file, adaptive_dir, scenario_name, output_dir),
-      sbatch_args = paste0("--dependency=afterok:", dep),
-      num_cores = 1, time = "00:10:00", memory = "1G",
+      args        = c(results_file, adaptive_dir, scenario_name, output_dir),
+      num_cores   = 1,
+      time        = "00:10:00",
+      memory      = "1G",
       output_file = file.path(adaptive_dir, "gather.out"),
       error_file  = file.path(adaptive_dir, "gather.err")
     )
-    submit_job(gather_script, use_slurm = TRUE, cider = cider)
-    if (verbose) cat("Gather job scheduled afterok:", dep, "\n")
+    submit_job(gather_job, use_slurm=TRUE, cider=cider)
+    if (verbose) cat("Gather job submitted with afterok:", dep, "\n")
     return(invisible(NULL))
   }
 
@@ -1531,7 +1546,7 @@ adaptive_MC_sampling <- function(samples_file,
   if (!dir.exists(param_dir)) dir.create(param_dir, recursive = TRUE, showWarnings = FALSE)
 
   par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
-  key_cols <- c("Holdout_MAE", "NLL", par_names)
+  key_cols <- c(par_names, "Holdout_MAE", "NLL")
   
   for (iter in seq_len(iterations)) {
     if (verbose) cat(sprintf("\nStarting iteration %d of %d\n", iter, iterations))

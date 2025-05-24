@@ -8,7 +8,7 @@
 required_packages <- c(
   "ggplot2", "dplyr", "data.table", "reshape2", "plotly", "Racmacs", 
   "parallel", "coda", "MASS", "vegan", "igraph", "lhs", "umap",
-  "gridExtra", "scales"
+  "gridExtra", "scales", "filelock"
 )
 
 # Check which packages are missing

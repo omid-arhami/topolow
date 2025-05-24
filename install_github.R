@@ -11,7 +11,7 @@ if (!require("devtools")) install.packages("devtools")
 required_packages <- c(
   "ggplot2", "dplyr", "data.table", "reshape2", "plotly", "rgl", 
   "Racmacs", "parallel", "coda", "MASS", "vegan", "igraph", 
-  "lhs", "umap", "gridExtra", "scales"
+  "lhs", "umap", "gridExtra", "scales", "filelock"
 )
 
 for(pkg in required_packages) {

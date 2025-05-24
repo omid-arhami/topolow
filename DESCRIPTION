@@ -32,6 +32,7 @@ Imports:
     coda (>= 0.19-4),
     MASS,
     vegan,
+    filelock,
     igraph,
     lhs,
     umap,
