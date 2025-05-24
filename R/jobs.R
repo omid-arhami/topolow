@@ -28,6 +28,8 @@
 #' @param time Time limit (default: "8:00:00")
 #' @param memory Memory request (default: "14G")
 #' @param partition SLURM partition (default: "rohani_p")
+#' @param working_dir Working directory (default: NULL)
+#' @param extra_sbatch_args Additional SBATCH arguments (default: NULL)
 #' @return Path to created script file
 #' @export
 create_slurm_script <- function(job_name,

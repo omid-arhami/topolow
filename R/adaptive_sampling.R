@@ -976,7 +976,7 @@ run_adaptive_sampling <- function(initial_samples_file,
       )
       script <- create_slurm_script(
         job_name      = paste0("job", i, "_", scenario_name),
-        script_path   = system.file(".../run_adaptive_sampling_jobs.R"),
+        script_path   = system.file("scripts/run_adaptive_sampling_jobs.R", package = "topolow"),
         args          = args,
         num_cores     = 1,
         output_file   = file.path(adaptive_dir, paste0(i,"_",scenario_name,".out")),
