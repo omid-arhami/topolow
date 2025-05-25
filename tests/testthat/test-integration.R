@@ -38,6 +38,7 @@ test_that("full workflow executes correctly", {
   
   # Create visualization
   positions <- as.data.frame(topo_result$positions)
+  positions$name <- rownames(positions)
   positions$antigen <- grepl("^V/", rownames(positions))
   positions$antiserum <- grepl("^S/", rownames(positions))
   

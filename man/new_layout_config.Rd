@@ -26,9 +26,7 @@ new_layout_config(
   reverse_y = 1,
   x_limits = NULL,
   y_limits = NULL,
-  sigma_x = 1,
-  sigma_t = 1,
-  top_velocity_p = 0.1
+  arrow_plot_threshold = 1
 )
 }
 \arguments{
@@ -74,11 +72,7 @@ new_layout_config(
 
 \item{y_limits}{Numeric vector of length 2 specifying c(min, max) for y-axis. If NULL, limits are set automatically.}
 
-\item{sigma_x}{Spatial bandwidth of the kernel function of velocity arrows in plot units}
-
-\item{sigma_t}{Temporal bandwidth of the kernel function of velocity arrows in years}
-
-\item{top_velocity_p}{Top percentile of velocity arrows to draw (between 0 and 1, default: 0.10)}
+\item{arrow_plot_threshold}{Threshold for velocity arrows to be drawn in the same antigenic distance unit (default: 0.10)}
 }
 \value{
 A layout_config object

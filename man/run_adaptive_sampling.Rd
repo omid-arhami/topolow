@@ -6,6 +6,7 @@
 \usage{
 run_adaptive_sampling(
   initial_samples_file,
+  scenario_name,
   distance_matrix,
   num_parallel_jobs = 5,
   max_cores = NULL,
@@ -15,7 +16,6 @@ run_adaptive_sampling(
   folds = 20,
   time = "8:00:00",
   memory = "10G",
-  scenario_name,
   output_dir = NULL,
   use_slurm = FALSE,
   cider = FALSE,
@@ -25,6 +25,8 @@ run_adaptive_sampling(
 \arguments{
 \item{initial_samples_file}{Character. Path to CSV file containing initial samples.
 Must contain columns: log_N, log_k0, log_cooling_rate, log_c_repulsion, NLL}
+
+\item{scenario_name}{Character. Name for output files.}
 
 \item{distance_matrix}{Matrix. Distance matrix of the input data.}
 
@@ -44,8 +46,6 @@ uses all available cores minus 1 (default: NULL).}
 \item{time}{Character. Walltime for SLURM jobs in HH:MM:SS format. Default: "8:00:00".}
 
 \item{memory}{Character. Memory allocation for SLURM jobs. Default: "10G".}
-
-\item{scenario_name}{Character. Name for output files.}
 
 \item{output_dir}{Character. Directory for output files. If NULL, uses current directory.}
 

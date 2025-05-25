@@ -14,7 +14,9 @@ create_slurm_script(
   time = "8:00:00",
   memory = "4G",
   partition = "rohani_p",
-  r_module = "R/4.4.1-foss-2022b"
+  r_module = "R/4.4.1-foss-2022b",
+  working_dir = NULL,
+  extra_sbatch_args = NULL
 )
 }
 \arguments{
@@ -37,6 +39,10 @@ create_slurm_script(
 \item{partition}{SLURM partition (default: "rohani_p")}
 
 \item{r_module}{Character. R module to load (default: "R/4.4.1-foss-2022b")}
+
+\item{working_dir}{Working directory (default: NULL)}
+
+\item{extra_sbatch_args}{Additional SBATCH arguments (default: NULL)}
 }
 \value{
 Path to created script file

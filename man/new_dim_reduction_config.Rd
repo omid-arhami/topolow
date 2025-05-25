@@ -7,7 +7,7 @@
 new_dim_reduction_config(
   method = "pca",
   n_components = 2,
-  scale = FALSE,
+  scale = TRUE,
   center = TRUE,
   pca_params = list(tol = sqrt(.Machine$double.eps), rank. = NULL),
   umap_params = list(n_neighbors = 15, min_dist = 0.1, metric = "euclidean", n_epochs =

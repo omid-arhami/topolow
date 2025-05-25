@@ -11,6 +11,8 @@ detect_outliers_mad(data, k = 3, take_log = FALSE)
 
 \item{k}{Numeric threshold for outlier detection (default: 3). Points more than
 k MADs from median are considered outliers.}
+
+\item{take_log}{Logical. Whether to log transform data before (and only for) outlier detection (default: FALSE)}
 }
 \value{
 A list containing:

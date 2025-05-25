@@ -5,22 +5,24 @@
 \title{Create Temporal Mapping Plot}
 \usage{
 plot_temporal_mapping(
-  df,
+  df_coords,
   ndim,
   dim_config = new_dim_reduction_config(),
   aesthetic_config = new_aesthetic_config(),
   layout_config = new_layout_config(),
+  annotation_config = new_annotation_config(),
   output_dir = NULL,
-  draw_arrows = FALSE
+  show_shape_legend = TRUE,
+  cluster_legend_title = "Cluster",
+  draw_arrows = FALSE,
+  annotate_arrows = TRUE,
+  phylo_tree = NULL,
+  sigma_t = NULL,
+  sigma_x = NULL,
+  clade_node_depth = NULL
 )
 }
 \arguments{
-\item{df}{Data frame containing:
-- V1, V2, ... Vn: Coordinate columns
-- antigen: Binary indicator for antigen points
-- antiserum: Binary indicator for antiserum points
-- year: Numeric year values for temporal coloring}
-
 \item{ndim}{Number of dimensions in input coordinates}
 
 \item{dim_config}{Dimension reduction configuration object specifying method and parameters}
@@ -30,17 +32,35 @@ plot_temporal_mapping(
 \item{layout_config}{Layout configuration object controlling plot dimensions and style.
 Use x_limits and y_limits in layout_config to set axis limits.}
 
+\item{annotation_config}{Annotation configuration object for labeling notable points}
+
 \item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
 
 \item{draw_arrows}{logical; if TRUE, compute and draw antigenic drift vectors}
+
+\item{annotate_arrows}{logical; if TRUE, show names of the points having arrows}
+
+\item{phylo_tree}{Optional; phylo object in Newick format. Does not need to be rooted. If provided, used to compute antigenic velocity arrows.}
+
+\item{sigma_t}{Optional; numeric; bandwidth for the Gaussian kernel discounting on time in years or the time unit of the data. If NULL, uses Silverman's rule of thumb.}
+
+\item{sigma_x}{Optional; numeric; bandwidth for the Gaussian kernel discounting on antigenic distancein antigenic units. If NULL, uses Silverman's rule of thumb.}
+
+\item{clade_node_depth}{Optional; integer; number of levels of parent nodes to define clades. Antigens from different clades will be excluded from the calculation antigenic velocity arrows. (Default: Automatically calculated mode of leaf-to-backbone distance of the tree)}
 }
 \value{
 ggplot object containing the temporal mapping visualization
 }
 \description{
-Creates a visualization of points colored by time (year) using dimension reduction, with optional drift arrows.
+Creates a visualization of points colored by time (year) using dimension reduction, with optional antigenic velocity arrows.
 Points are colored on a gradient scale based on their temporal values, with
 different shapes for antigens and antisera.
+
+#' @param df_coords Data frame containing:
+- V1, V2, ... Vn: Coordinate columns
+- antigen: Binary indicator for antigen points
+- antiserum: Binary indicator for antiserum points
+- year: Numeric year values for temporal coloring
 }
 \details{
 The function performs these steps:
@@ -82,7 +102,9 @@ p2 <- plot_temporal_mapping(data, ndim=3,
 \seealso{
 \code{\link{plot_cluster_mapping}} for cluster-based visualization
 \code{\link{plot_3d_mapping}} for 3D visualization
+\code{\link{plot_combined}} for creating multiple visualizations
 \code{\link{new_dim_reduction_config}} for dimension reduction options
 \code{\link{new_aesthetic_config}} for aesthetic options
 \code{\link{new_layout_config}} for layout options
+\code{\link{new_annotation_config}} for annotation options
 }

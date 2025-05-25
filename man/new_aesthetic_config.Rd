@@ -20,7 +20,9 @@ new_aesthetic_config(
   legend_text_size = 10,
   legend_title_size = 12,
   show_legend = TRUE,
-  legend_position = "right"
+  legend_position = "right",
+  arrow_head_size = 0.2,
+  arrow_alpha = 0.6
 )
 }
 \arguments{
@@ -55,6 +57,10 @@ new_aesthetic_config(
 \item{show_legend}{Whether to show the legend}
 
 \item{legend_position}{Legend position ("none", "right", "left", "top", "bottom")}
+
+\item{arrow_head_size}{Size of the arrow head for velocity arrows (in cm)}
+
+\item{arrow_alpha}{Transparency of arrows (0 = invisible, 1 = fully opaque)}
 }
 \value{
 An aesthetic_config object

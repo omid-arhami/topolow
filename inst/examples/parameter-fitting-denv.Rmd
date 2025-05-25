@@ -202,13 +202,13 @@ Using the initial results as a starting point, we'll now perform adaptive sampli
 
 ```{r eval=FALSE}
 # Transform samples (with previous code's path)
-scenario_name = "denv_data_AMC15" #2149
-samples_file = "model_parameters/denv_data_AMC15_model_parameters.csv"
+scenario_name = "denv_data_AMC12" #2149
+samples_file = "model_parameters/denv_data_AMC12_model_parameters.csv"
 samples <- log_transform_parameters(samples_file)
 
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_samples = 6, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
+  num_samples = 700, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
   num_parallel_jobs = 7,  # For local execution: Number of CPU cores available (Can try parallel::detectCores() ); For SLURM: Number of jobs to submit
   mapping_max_iter = 500, # Maximum iterations per map optimization
   relative_epsilon = 1e-4,
@@ -244,6 +244,51 @@ cat("\n AMC sampling completed in: ")
 time_diff
 ```
 
+
+
+```{r eval=FALSE}
+# Transform samples (with previous code's path)
+scenario_name = "denv_data_AMC15" #2149
+samples_file = "model_parameters/denv_data_AMC15_model_parameters.csv"
+samples <- log_transform_parameters(samples_file)
+
+# Setup adaptive sampling parameters
+amc_params <- list(
+  num_samples = 700, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
+  num_parallel_jobs = 7,  # For local execution: Number of CPU cores available (Can try parallel::detectCores() ); For SLURM: Number of jobs to submit
+  mapping_max_iter = 500, # Maximum iterations per map optimization
+  relative_epsilon = 1e-4,
+  folds = 20, # Number of CV folds
+  use_slurm = FALSE,
+  cider = FALSE
+)
+
+# Record start time for timing report
+start_time <- Sys.time()
+
+run_adaptive_sampling(
+  initial_samples_file = samples_file,
+  distance_matrix = denv_distance_matrix,
+  num_samples = amc_params$num_samples,
+  num_parallel_jobs = amc_params$num_parallel_jobs,
+  mapping_max_iter = amc_params$mapping_max_iter,
+  scenario_name = scenario_name,
+  relative_epsilon = amc_params$relative_epsilon,
+  folds = amc_params$folds,
+  time = "4:00:00",
+  memory = "2G",
+  use_slurm = amc_params$use_slurm,
+  cider = amc_params$cider,
+  verbose = TRUE
+)
+
+# Calculate and report total execution time
+end_time <- Sys.time()
+time_diff <- difftime(end_time, start_time, units = "auto")
+
+cat("\n AMC sampling completed in: ")
+time_diff
+```
 
 ## Convergence Diagnostics
 
