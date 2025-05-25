@@ -564,10 +564,10 @@ initial_parameter_optimization <- function(# Mapping related arguments:
     # --- RENAME & REORDER FOR OUTPUT ---
     final_df <- res_list_median
     colnames(final_df) <- c(
-      "log_N",
-      "log_k0",
-      "log_cooling_rate",
-      "log_c_repulsion",
+      "N",
+      "k0",
+      "cooling_rate",
+      "c_repulsion",
       "Holdout_MAE",
       "NLL"
     )
@@ -943,6 +943,19 @@ run_adaptive_sampling <- function(initial_samples_file,
     }
   }
   
+  # --- "COMPREHENSIVE CLEANUP"  ---
+  if (verbose) cat("Cleaning all files from the adaptive sampling jobs directory...\n")
+
+  # List ALL files in the directory
+  files_to_remove <- list.files(adaptive_dir, full.names = TRUE, recursive = TRUE)
+
+  if (length(files_to_remove) > 0) {
+      if (verbose) cat("Removing", length(files_to_remove), "old files.\n")
+      file.remove(files_to_remove)
+  } else {
+      if (verbose) cat("Directory is already clean.\n")
+  }
+
   # Validate initial samples and prepare master file
   # Check initial samples
   if (!file.exists(initial_samples_file)) stop("initial_samples_file not found: ", initial_samples_file)
