@@ -44,73 +44,70 @@ create_slurm_script <- function(job_name,
                                 r_module = "R/4.4.1-foss-2022b",
                                 working_dir = NULL,
                                 extra_sbatch_args = NULL) {
-  if (!has_slurm()) {
-    warning("SLURM appears to not be available on this system")
-  }
+    if (!has_slurm()) {
+        warning("SLURM appears to not be available on this system")
+    }
 
-  if (!file.exists(script_path)) {
-    stop("script_path does not exist: ", script_path)
-  }
+    if (!file.exists(script_path)) {
+        stop("script_path does not exist: ", script_path)
+    }
 
-  # Build SBATCH header
-  sbatch_header <- c(
-    "#!/bin/bash",
-    paste0("#SBATCH --partition=", partition),
-    paste0("#SBATCH --job-name=", job_name),
-    paste0("#SBATCH --output=", output_file),
-    paste0("#SBATCH --error=", error_file),
-    "#SBATCH --ntasks=1",
-    paste0("#SBATCH --cpus-per-task=", num_cores),
-    paste0("#SBATCH --time=", time),
-    paste0("#SBATCH --mem=", memory)
-  )
+    # Build SBATCH header
+    sbatch_header <- c(
+        "#!/bin/bash",
+        paste0("#SBATCH --partition=", partition),
+        paste0("#SBATCH --job-name=", job_name),
+        paste0("#SBATCH --output=", output_file),
+        paste0("#SBATCH --error=", error_file),
+        "#SBATCH --ntasks=1",
+        paste0("#SBATCH --cpus-per-task=", num_cores),
+        paste0("#SBATCH --time=", time),
+        paste0("#SBATCH --mem=", memory)
+    )
 
-  # Optionally change working directory
-  if (!is.null(working_dir)) {
-    sbatch_header <- c(sbatch_header,
-                       paste0("#SBATCH --chdir=", working_dir))
-  }
-  # Any extra raw SBATCH args
-  if (!is.null(extra_sbatch_args)) {
-    sbatch_header <- c(sbatch_header, extra_sbatch_args)
-  }
+    if (!is.null(working_dir)) {
+        sbatch_header <- c(sbatch_header,
+                           paste0("#SBATCH --chdir=", working_dir))
+    }
+    if (!is.null(extra_sbatch_args)) {
+        sbatch_header <- c(sbatch_header, extra_sbatch_args)
+    }
 
-  # Module loading command
-  module_cmd <- if (!is.null(r_module)) {
-    paste0("module load ", r_module)
-  } else {
-    ""
-  }
+    module_cmd <- if (!is.null(r_module)) paste0("module load ", r_module) else ""
+    # Package installation checks
+    package_cmds <- paste(
+        "# Load required packages",
+        "Rscript -e \"if(!require(reshape2)) install.packages('reshape2', repos='https://cloud.r-project.org')\"",
+        "Rscript -e \"if(!require(data.table)) install.packages('data.table', repos='https://cloud.r-project.org')\"",
+        "Rscript -e \"if(!require(dplyr)) install.packages('dplyr', repos='https://cloud.r-project.org')\"",
+        sep = "
+    "
+    )
+    # --- START OF FIX ---
+    # Process arguments: quote them unless they are shell variables (start with $)
+    processed_args <- vapply(args, function(arg) {
+        if (is.character(arg) && startsWith(arg, "$")) {
+            return(arg) # Don't quote shell variables
+        } else {
+            return(shQuote(arg)) # Quote all other arguments
+        }
+    }, FUN.VALUE = character(1))
 
-  # Package installation checks
-  package_cmds <- paste(
-    "# Load required packages",
-    "Rscript -e \"if(!require(reshape2)) install.packages('reshape2', repos='https://cloud.r-project.org')\"",
-    "Rscript -e \"if(!require(data.table)) install.packages('data.table', repos='https://cloud.r-project.org')\"",
-    "Rscript -e \"if(!require(dplyr)) install.packages('dplyr', repos='https://cloud.r-project.org')\"",
-    sep = "
-"
-  )
+    # Assemble the final command
+    r_command <- paste("Rscript", shQuote(script_path), paste(processed_args, collapse = " "))
+    # --- END OF FIX ---
 
-  # Final script assembly
-  slurm_script <- paste0(
-    paste(sbatch_header, collapse = "
-"), "
+    # Final script assembly
+    slurm_script <- paste0(
+        paste(sbatch_header, collapse = "\n"), "\n\n",
+        module_cmd, "\n\n",
+        r_command, "\n"
+    )
 
-",
-    module_cmd, "
-",
-    package_cmds, "
-
-",
-    "Rscript ", script_path, " ", paste(shQuote(args), collapse = " "), "
-"
-  )
-
-  script_file <- tempfile(fileext = ".sh")
-  writeLines(slurm_script, script_file)
-  Sys.chmod(script_file, "0755")
-  return(script_file)
+    script_file <- tempfile(fileext = ".sh")
+    writeLines(slurm_script, script_file)
+    Sys.chmod(script_file, "0755")
+    return(script_file)
 }
 
 

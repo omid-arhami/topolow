@@ -961,71 +961,10 @@ run_adaptive_sampling <- function(initial_samples_file,
   # Create per-job temp files and gather strategy for both SLURM and local
   make_temp <- function(i) file.path(adaptive_dir, sprintf("job_%02d_%s.csv", i, scenario_name))
 
-  if (!use_slurm) {
-    temps <- vapply(seq_len(num_parallel_jobs), make_temp, FUN.VALUE = "")
-    for (i in seq_along(temps)) file.copy(initial_samples_file, temps[i], overwrite = TRUE)
-
-    # ---------------- Local parallel execution ----------------
-    # Launch parallel runs
-    if (.Platform$OS.type == "windows") {
-      cl <- parallel::makeCluster(min(num_parallel_jobs, max_cores))
-      parallel::clusterExport(cl, c("adaptive_MC_sampling", "temps", "distance_matrix",
-                                  "mapping_max_iter", "relative_epsilon", "folds",
-                                  "output_dir", "scenario_name"), envir = environment())
-      parallel::clusterEvalQ(cl, library(topolow))
-      parallel::parLapply(cl, seq_along(temps), function(i) {
-        adaptive_MC_sampling(
-          samples_file    = temps[i],
-                            distance_matrix = distance_matrix,
-                            iterations      = iterations,
-                            batch_size      = 1,
-                            mapping_max_iter= mapping_max_iter,
-                            relative_epsilon= relative_epsilon,
-                            folds           = folds,
-                            num_cores       = 1,
-                            scenario_name   = scenario_name,
-                            output_dir      = output_dir,
-                            verbose         = TRUE)
-      })
-      parallel::stopCluster(cl)
-    } else {
-      parallel::mclapply(seq_along(temps), function(i) {
-        adaptive_MC_sampling(
-          samples_file    = temps[i],
-          distance_matrix = distance_matrix,
-          iterations      = iterations,
-          batch_size      = 1,
-          mapping_max_iter= mapping_max_iter,
-          relative_epsilon= relative_epsilon,
-          folds           = folds,
-          num_cores       = 1,
-          scenario_name   = scenario_name,
-          output_dir      = output_dir,
-          verbose         = TRUE
-          )
-      }, mc.cores = min(num_parallel_jobs, max_cores))
-    }
-
-    # Gather local results
-    init2 <- read.csv(initial_samples_file, stringsAsFactors = FALSE)
-    n0   <- nrow(init2)
-    new_list <- lapply(temps, function(f) {
-      df <- tryCatch(read.csv(f, stringsAsFactors=FALSE), error=function(e) NULL)
-      if (!is.null(df) && nrow(df)>n0) df[(n0+1):nrow(df), , drop=FALSE] else NULL
-    })
-    all <- do.call(rbind, c(list(init2), new_list))
-    # --- REORDER TO ORIGINAL INPUT HEADER ---
-    all <- all[, orig_cols, drop=FALSE]
-
-    write.csv(all, results_file, row.names=FALSE)
-    # file.remove(temps)
-    # Note: file.remove(temps) has been removed—temporary files are retained
-    if (verbose) cat("Local parallel jobs complete; results in", results_file, "\n")
-    invisible(NULL)
-  }
-
-
   if (use_slurm) {
+    # --- SLURM EXECUTION PATH ---
+    if (!has_slurm()) stop("SLURM requested but not available")
+
     # -- dump distance matrix once
     dist_file <- file.path(adaptive_dir, paste0(scenario_name, "_distance_matrix.rds"))
     saveRDS(distance_matrix, dist_file)
@@ -1104,6 +1043,67 @@ run_adaptive_sampling <- function(initial_samples_file,
     submit_job(gather_script, use_slurm=TRUE, cider=cider)
     if (verbose) cat("Gather job scheduled with dependency on array job", array_id, "\n")
     return(invisible(NULL))
+  } else {
+    # --- LOCAL EXECUTION PATH ---
+    temps <- vapply(seq_len(num_parallel_jobs), make_temp, FUN.VALUE = "")
+    for (i in seq_along(temps)) file.copy(initial_samples_file, temps[i], overwrite = TRUE)
+
+    # ---------------- Local parallel execution ----------------
+    # Launch parallel runs
+    if (.Platform$OS.type == "windows") {
+      cl <- parallel::makeCluster(min(num_parallel_jobs, max_cores))
+      parallel::clusterExport(cl, c("adaptive_MC_sampling", "temps", "distance_matrix",
+                                  "mapping_max_iter", "relative_epsilon", "folds",
+                                  "output_dir", "scenario_name"), envir = environment())
+      parallel::clusterEvalQ(cl, library(topolow))
+      parallel::parLapply(cl, seq_along(temps), function(i) {
+        adaptive_MC_sampling(
+          samples_file    = temps[i],
+                            distance_matrix = distance_matrix,
+                            iterations      = iterations,
+                            batch_size      = 1,
+                            mapping_max_iter= mapping_max_iter,
+                            relative_epsilon= relative_epsilon,
+                            folds           = folds,
+                            num_cores       = 1,
+                            scenario_name   = scenario_name,
+                            output_dir      = output_dir,
+                            verbose         = TRUE)
+      })
+      parallel::stopCluster(cl)
+    } else {
+      parallel::mclapply(seq_along(temps), function(i) {
+          adaptive_MC_sampling(
+              samples_file    = temps[i],
+              distance_matrix = distance_matrix,
+              iterations      = iterations,
+              batch_size      = 1,
+              mapping_max_iter= mapping_max_iter,
+              relative_epsilon= relative_epsilon,
+              folds           = folds,
+              num_cores       = 1,
+              scenario_name   = scenario_name,
+              output_dir      = output_dir,
+              verbose         = TRUE # Keep this TRUE for debugging
+          )
+      }, mc.cores = min(num_parallel_jobs, max_cores))
+    }
+
+    # Gather local results
+    init2 <- read.csv(initial_samples_file, stringsAsFactors = FALSE)
+    n0   <- nrow(init2)
+    new_list <- lapply(temps, function(f) {
+      df <- tryCatch(read.csv(f, stringsAsFactors=FALSE), error=function(e) NULL)
+      if (!is.null(df) && nrow(df)>n0) df[(n0+1):nrow(df), , drop=FALSE] else NULL
+    })
+    all <- do.call(rbind, c(list(init2), new_list))
+    # --- REORDER TO ORIGINAL INPUT HEADER ---
+    all <- all[, orig_cols, drop=FALSE]
+    write.csv(all, results_file, row.names=FALSE)
+    # file.remove(temps)
+    # Note: file.remove(temps) has been removed—temporary files are retained
+    if (verbose) cat("Local parallel jobs complete; results in", results_file, "\n")
+    return(invisible(NULL)) # Exit after local run is complete
   }
 }
 
