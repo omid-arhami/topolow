@@ -3,7 +3,6 @@
 
 # inst/scripts/run_adaptive_sampling_jobs.R
 # Script for running adaptive Monte Carlo sampling jobs submitted via SLURM
-
 # Check and install required packages if needed
 source(system.file("scripts", "check_dependencies.R", package = "topolow"))
 
@@ -16,55 +15,53 @@ library(parallel)
 # Get command line arguments
 args <- commandArgs(trailingOnly = TRUE)
 
-samples_file <- as.character(args[1])
+# --- START OF FIX ---
+initial_samples_file <- as.character(args[1]) # This is the MASTER file
 distance_matrix_file <- as.character(args[2])
 mapping_max_iter <- as.integer(args[3])
 relative_epsilon <- as.numeric(args[4])
-num_cores <- as.numeric(args[5]) # 1 but Still needed for internal implementation
+num_cores <- as.integer(args[5])
 scenario_name <- as.character(args[6])
-i <- as.numeric(args[7])
-iterations <- as.numeric(args[8]) # = num_samples , always = 1 in jobs submitted to slurm
-output_dir <- as.character(args[9])  
-folds <- as.integer(args[10]) 
+job_id <- as.integer(args[7]) # This is the SLURM_ARRAY_TASK_ID
+iterations <- as.integer(args[8])
+output_dir <- as.character(args[9])
+folds <- as.integer(args[10])
 
-# Add debug output
-cat("Loading samples from:", samples_file, "\n")
-cat("Loading distance matrix from:", distance_matrix_file, "\n")
-cat("Job index:", i, "\n")
+cat("Running job ID:", job_id, "for scenario:", scenario_name, "\n")
 
-# Load input files and check them
-if (!file.exists(distance_matrix_file)) {
-  stop("Distance matrix file not found: ", distance_matrix_file)
-}
-if (!file.exists(samples_file)) {
-  stop("Samples file not found: ", samples_file)
-}
-
+# Load the distance matrix
+if (!file.exists(distance_matrix_file)) stop("Distance matrix file not found: ", distance_matrix_file)
 distance_matrix <- readRDS(distance_matrix_file)
-current_samples <- read.csv(samples_file)
+if (!is.matrix(distance_matrix)) stop("Invalid distance matrix format")
 
-# Validate loaded data
-if (!is.matrix(distance_matrix)) {
-  stop("Invalid distance matrix format")
-}
+# --- THIS IS THE CRITICAL NEW LOGIC ---
+# Each job must create its OWN temporary file to work on.
+# This prevents race conditions and allows the 'gather' script to find the results.
+adaptive_dir <- file.path(output_dir, "adaptive_sampling_jobs")
 
-required_cols <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion", "NLL")
-if (!all(required_cols %in% names(current_samples))) {
-  stop("Missing required columns in samples file: ",
-       paste(setdiff(required_cols, names(current_samples)), collapse=", "))
-}
+# Construct the unique temporary file path for this specific job
+job_output_file <- file.path(adaptive_dir, sprintf("job_%02d_%s.csv", job_id, scenario_name))
 
-# Run adaptive sampling - using original function call with batch_size=1
+# Copy the initial samples from the master file to this job's unique file
+if (!file.exists(initial_samples_file)) stop("Initial samples file not found: ", initial_samples_file)
+file.copy(initial_samples_file, job_output_file, overwrite = TRUE)
+
+cat("Job", job_id, "will write results to:", job_output_file, "\n")
+# --- END OF FIX ---
+
+# Run adaptive sampling on the NEWLY CREATED job-specific file
 adaptive_MC_sampling(
-  samples_file = samples_file,
-  distance_matrix = distance_matrix,
-  iterations = iterations, # Always set to 1
-  batch_size = 1, # Always set to 1
-  mapping_max_iter = mapping_max_iter,
-  relative_epsilon = relative_epsilon,
-  folds = folds,
-  num_cores = num_cores, # Use 1 core per job (from script arg)
-  scenario_name = scenario_name,
-  output_dir = output_dir, 
-  verbose = FALSE
+  samples_file       = job_output_file, # Use the unique file for this job
+  distance_matrix    = distance_matrix,
+  iterations         = iterations,
+  batch_size         = 1,
+  mapping_max_iter   = mapping_max_iter,
+  relative_epsilon   = relative_epsilon,
+  folds              = folds,
+  num_cores          = num_cores,
+  scenario_name      = scenario_name,
+  output_dir         = output_dir,
+  verbose            = TRUE # Set to TRUE for better debugging on SLURM nodes
 )
+
+cat("Job", job_id, "has completed.\n")

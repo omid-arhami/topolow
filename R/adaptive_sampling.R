@@ -985,7 +985,7 @@ run_adaptive_sampling <- function(initial_samples_file,
                             num_cores       = 1,
                             scenario_name   = scenario_name,
                             output_dir      = output_dir,
-                            verbose         = FALSE)
+                            verbose         = TRUE)
       })
       parallel::stopCluster(cl)
     } else {
@@ -1001,7 +1001,7 @@ run_adaptive_sampling <- function(initial_samples_file,
           num_cores       = 1,
           scenario_name   = scenario_name,
           output_dir      = output_dir,
-          verbose         = FALSE
+          verbose         = TRUE
           )
       }, mc.cores = min(num_parallel_jobs, max_cores))
     }
