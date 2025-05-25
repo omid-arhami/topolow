@@ -924,11 +924,6 @@ run_adaptive_sampling <- function(initial_samples_file,
     max_cores <- min(max_cores, available_cores)
   }
   
-  if (verbose) {
-    cat(sprintf("Using %d parallel jobs with maximum %d cores\n", 
-               num_parallel_jobs, max_cores))
-  }
-  
   # Setup directories
   if (is.null(output_dir)) output_dir <- getwd()
   output_dir          <- normalizePath(output_dir,         mustWork = FALSE)
@@ -1058,6 +1053,10 @@ run_adaptive_sampling <- function(initial_samples_file,
     return(invisible(NULL))
   } else {
     # --- LOCAL EXECUTION PATH ---
+    if (verbose) {
+      cat(sprintf("Running %d parallel jobs with maximum %d cores\n", 
+                num_parallel_jobs, max_cores))
+    }
     temps <- vapply(seq_len(num_parallel_jobs), make_temp, FUN.VALUE = "")
     for (i in seq_along(temps)) file.copy(initial_samples_file, temps[i], overwrite = TRUE)
 
