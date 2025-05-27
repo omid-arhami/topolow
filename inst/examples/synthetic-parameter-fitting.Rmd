@@ -166,7 +166,9 @@ for(ndim in results$metadata$dimension) {
 
 ## Adaptive Monte Carlo Sampling
 
-Perform adaptive sampling for each case:
+Perform adaptive sampling for each case.
+Beware that each call to run_adaptive_sampling() deletes all the files in adaptive sampling directory and uses this directory for storing its temporary files. Therefore, do not run multiple samplings in one directory concurrently.
+You can check the console outputs, warnings, or errors in .out and .err files in /adaptive_sampling_jobs directory.
 
 ```{r eval=FALSE}
 # Setup adaptive sampling parameters

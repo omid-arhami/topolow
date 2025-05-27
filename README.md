@@ -151,7 +151,7 @@ This approach allows Topolow to effectively optimize antigenic positions through
 ## Features
 
 -   **Physics-inspired optimization**: Employs a spring-mass system for robust positioning in high-dimensional spaces
--   **Optimal dimensionality detection**: Automatically determines the best dimensionality through likelihood-based estimation
+-   **Optimal dimensionality detection**: Automatically determines the best dimensionality through likelihood-based estimation. This is particularly useful for datasets with high levels of missingness and complexity (e.g., due to various serotypes).
 -   **Complete antigenic positioning**: Maps all antigens
 -   **Noise reduction**: Decreases measurement errors through network-based dampening
 -   **Threshold handling**: Properly incorporates low and high reactor thresholds (e.g., \<40) as equality constraints
