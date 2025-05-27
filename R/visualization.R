@@ -258,7 +258,7 @@ new_layout_config <- function(
   reverse_y = 1,
   x_limits = NULL,
   y_limits = NULL,
-  arrow_plot_threshold   = 1  # velocity arrows larger than this are shown
+  arrow_plot_threshold   = 0.1  # velocity arrows larger than this are shown
 ) {
   config <- list(
     width = width,
