@@ -34,7 +34,6 @@ if (!file.exists(distance_matrix_file)) stop("Distance matrix file not found: ",
 distance_matrix <- readRDS(distance_matrix_file)
 if (!is.matrix(distance_matrix)) stop("Invalid distance matrix format")
 
-# --- THIS IS THE CRITICAL NEW LOGIC ---
 # Each job must create its OWN temporary file to work on.
 # This prevents race conditions and allows the 'gather' script to find the results.
 adaptive_dir <- file.path(output_dir, "adaptive_sampling_jobs")

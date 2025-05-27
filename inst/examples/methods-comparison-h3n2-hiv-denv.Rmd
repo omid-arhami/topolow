@@ -46,11 +46,12 @@ hiv_topolow_params <- list(
   )
   
 denv_topolow_params <- list(
-    N = 18,
-    k0 = 17.63264,
-    cooling_rate = 0.06207758,
-    c_repulsion = 0.01812777
+    N = 10,
+    k0 = 7.1,
+    cooling_rate = 0.01232407,
+    c_repulsion = 0.03830152
   )
+
 
 ## Setup
 

@@ -119,14 +119,14 @@ We'll first explore the parameter space using Latin Hypercube Sampling combined 
 ```{r}
 # Define parameter ranges
 param_ranges <- list(
-  N_min = 5,          # Minimum dimensions 
-  N_max = 23,         # Maximum dimensions
-  k0_min = 5,         # Minimum spring constant
+  N_min = 2,          # Minimum dimensions 
+  N_max = 13,         # Maximum dimensions
+  k0_min = 1,         # Minimum spring constant
   k0_max = 18,        # Maximum spring constant 
   cooling_rate_min = 1e-3, # Minimum decay rate
   cooling_rate_max = 0.1,  # Maximum decay rate
   c_repulsion_min = 1e-3,     # Minimum repulsion constant
-  c_repulsion_max = 0.07       # Maximum repulsion constant
+  c_repulsion_max = 0.1       # Maximum repulsion constant
 )
 
 # Setup optimization parameters
@@ -142,8 +142,8 @@ opt_params <- list(
 
 
 ```{r eval=FALSE}
-scenario_name = "denv_data_AMC04"
-samples_file = "model_parameters/denv_data_AMC04_model_parameters.csv"
+scenario_name = "denv_data_AMC101"
+samples_file = "model_parameters/denv_data_AMC101_model_parameters.csv"
 
 # Record start time for timing report
 start_time <- Sys.time()
@@ -202,13 +202,13 @@ Using the initial results as a starting point, we'll now perform adaptive sampli
 
 ```{r eval=FALSE}
 # Transform samples (with previous code's path)
-scenario_name = "denv_data_AMC12" #2149
-samples_file = "model_parameters/denv_data_AMC12_model_parameters.csv"
+scenario_name = "denv_data_AMC101"
+samples_file = "model_parameters/denv_data_AMC101_model_parameters.csv"
 samples <- log_transform_parameters(samples_file)
 
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_samples = 700, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
+  num_samples = 3000, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
   num_parallel_jobs = 7,  # For local execution: Number of CPU cores available (Can try parallel::detectCores() ); For SLURM: Number of jobs to submit
   mapping_max_iter = 500, # Maximum iterations per map optimization
   relative_epsilon = 1e-4,
@@ -300,9 +300,12 @@ Let's run the previous parts twice and check if our chains have converged:
 ```{r}
 # List chain files
 chain_files <- c(
-  "model_parameters/denv_data_AMC04_model_parameters.csv",
-  "model_parameters/denv_data_AMC05_model_parameters.csv",
-  "model_parameters/denv_data_AMC06_model_parameters.csv"
+  "model_parameters/denv_data_AMC101_model_parameters.csv",
+  "model_parameters/denv_data_AMC102_model_parameters.csv",
+  "model_parameters/denv_data_AMC103_model_parameters.csv",
+  "model_parameters/denv_data_AMC104_model_parameters.csv",
+  "model_parameters/denv_data_AMC105_model_parameters.csv"
+  #"model_parameters/denv_data_AMC22_model_parameters.csv"
 )
 
 # Function to read and clean one CSV
@@ -326,13 +329,7 @@ clean_and_overwrite <- function(file_path) {
 invisible(lapply(chain_files, clean_and_overwrite))
 
 
-mutual_size = 500  # Number of samples to use from end of chains
-
-# Calculate diagnostics
-diagnostics <- calculate_diagnostics(
-  chain_files = chain_files,
-  mutual_size = mutual_size
-)
+mutual_size = 1000  # Number of samples to use from end of chains
 
 # Print results
 print(diagnostics)
@@ -343,7 +340,13 @@ diag_plots <- create_diagnostic_plots(
   mutual_size = mutual_size,
   output_file = "denv_data_diagnostic_plots.png"
 )
-print(diag_plots)
+
+
+# Calculate diagnostics
+diagnostics <- calculate_diagnostics(
+                  chain_files = chain_files,
+                  mutual_size = mutual_size)
+
 ```
 
 ## Profile Likelihood Analysis
@@ -365,8 +368,8 @@ samples <- as.data.frame(lapply(samples, clean_data, k = 3))
 samples <- na.omit(samples)
 # Calculate maximum likelihood (average over top n to smooth out any peculiar situation)
 samples$LL <- -samples$NLL
-top_ll <- sort(samples$LL, decreasing = TRUE)[1:5]
-max_ll <- max(top_ll) + log(sum(exp(top_ll - max(top_ll)))/5)
+top_ll <- sort(samples$LL, decreasing = TRUE)[1:9]
+max_ll <- max(top_ll) + log(sum(exp(top_ll - max(top_ll)))/9)
 
 # Parameters to analyze
 params <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
@@ -462,6 +465,14 @@ cat("MAE:", round(result$mae, 4), "\n")
 ```
 
 ```{r}
+scatterplot_fitted_vs_true(denv_distance_matrix, result$est_distances, 
+                                       scenario_name = "denv", ndim = 10,
+                                       save_plot = TRUE,
+                                       output_dir = NULL,
+                                       confidence_level = 0.95)
+```
+
+```{r}
 # Convert positions matrix to data frame
 positions <- as.data.frame(result$positions)
 positions$name <- rownames(positions)
@@ -488,7 +499,7 @@ positions <- positions %>%
 # Remove any rows that didn't get metadata matched
 positions <- na.omit(positions)
 
-#write.csv(positions, "data_files/denv_Positions.csv", row.names=FALSE)
+write.csv(positions, "data_files/denv_Positions.csv", row.names=FALSE)
 ```
 
 ## The resulting map
@@ -535,14 +546,13 @@ library(ape)
 phylo_tree <- read.tree("data_files/DENV1234_timetree.nwk")
 positions$name <- toupper(positions$name)
 
-library(topolow)
 # Cluster mapping
 p2 <- plot_cluster_mapping(positions, ndim = optimal_params$N, 
                            aesthetic_config = aesthetic_config, 
                            layout_config = layout_config, 
                            annotation_config = annotation_config,
                            draw_arrows=TRUE,
-                           annotate_arrows = TRUE,
+                           annotate_arrows = FALSE,
                           phylo_tree = phylo_tree,
                           show_one_arrow_per_cluster = FALSE
                            )
