@@ -1283,9 +1283,16 @@ plot_cluster_mapping <- function(df_coords, ndim,
   # Process row names to get strain names
   reduced_df$clean_name <- sub("^(V/|S/)", "", reduced_df$name)
   
-  # Create base theme
-  base_theme <- create_base_theme(aesthetic_config, layout_config)
+  #NOTABLE‑POINT & ARROW FLAGS
+  reduced_df$is_notable <- FALSE
+  reduced_df$is_arrow   <- FALSE
   
+  if (!is.null(annotation_config$notable_points) &&
+      length(annotation_config$notable_points) > 0) {
+    reduced_df$is_notable <- reduced_df$clean_name %in% annotation_config$notable_points
+  }
+  
+  ## cluster legend housekeeping 
   # Apply custom cluster legend order if provided
   if (!is.null(cluster_legend_order)) {
     reduced_df$cluster <- factor(reduced_df$cluster, levels = cluster_legend_order)
@@ -1307,7 +1314,11 @@ plot_cluster_mapping <- function(df_coords, ndim,
   
   reduced_df$cluster <- factor(reduced_df$cluster, levels = cluster_levels)
   
-  
+  ## --------------------------
+  ##  BASE PLOT (without arrows / notable overlays yet)
+  ## --------------------------
+  # Create base theme
+  base_theme <- create_base_theme(aesthetic_config, layout_config)
   # Calculate optimal number of legend columns if legend is shown
   legend_theme <- if(aesthetic_config$show_legend) {
     n_legend_cols <- min(max(1, ceiling(n_clusters / 15)), 3)
@@ -1342,16 +1353,19 @@ plot_cluster_mapping <- function(df_coords, ndim,
                                   levels = names(aesthetic_config$point_shapes))
   
   # Create plot
-  p <- ggplot() +
-    # Plot regular points (using the original shapes)
+  p <- ggplot()
+  
+  ## Regular points   ——— EXCLUDING notable and arrow points ——— 
+  p <- p +
     geom_point(
-      data = reduced_df[!reduced_df$is_notable, ],
+      data = reduced_df[!reduced_df$is_notable & !reduced_df$is_arrow, ],
       aes(x = plot_x, y = plot_y, 
           color = cluster,
           shape = point_type),
       size = aesthetic_config$point_size,
       alpha = aesthetic_config$point_alpha
     ) +
+    
     # Plot notable points with filled shapes and outlines
     geom_point(
       data = reduced_df[reduced_df$is_notable & reduced_df$antigen, ],
@@ -1485,7 +1499,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
         )
       }
       
-      # phylogenetic clade depth cutoff via leaf-to-backbone (longest‐path in terms of nodes, aka tree spine)
+      # phylogenetic clade depth cutoff via leaf-to-backbone (longest‐path in terms of edges, aka tree spine)
       # 1) force every edge to length 1
       tree_unit <- phylo_tree
       tree_unit$edge.length <- rep(1, nrow(tree_unit$edge))
@@ -1613,17 +1627,21 @@ plot_cluster_mapping <- function(df_coords, ndim,
     top_vel$v1_unit <- top_vel$v1 / top_vel$mag
     top_vel$v2_unit <- top_vel$v2 / top_vel$mag
     
+    # mark `top_vel` rows in reduced_df as arrows
+    reduced_df$is_arrow[match(top_vel$name, reduced_df$name)] <- TRUE
+    
     # Calculate point radius in data units (approximation)
     # Convert point size to data units
     point_radius <- aesthetic_config$point_size * 1.7 / 72 * 2.54  # assuming point size is in points, convert to cm
+    
     
     # — overlay top-velocity points with filled shape + black outline —
     p <- p +
       geom_point(
         data        = top_vel,
         inherit.aes = FALSE,
-        aes(x   = V1, y   = V2),
-        shape       = 21,   # same filled‐circle shape you used for notable antigens
+        aes(x   = V1, y   = V2, fill = cluster),
+        shape       = 21,   # same filled‐circle shape used for notable antigens
         color       = "black",
         size        = aesthetic_config$point_size * 1.2,
         stroke      = annotation_config$outline_size,
@@ -1646,19 +1664,19 @@ plot_cluster_mapping <- function(df_coords, ndim,
     
     if (annotate_arrows) {
       # Add arrow labels (length in parentheses) at midpoint
-      p <- p + 
-        geom_text(
-          data = top_vel,
-          aes(
-            x = V1 - v1 / 2,
-            y = V2 - v2 / 2,
-            label = sprintf("(%.2f)", mag)
-          ),
-          size = 0.8*(annotation_config$size / ggplot2::.pt),  # Small font size
-          hjust = 0.5,
-          vjust = 0.5,
-          alpha = 0.8*annotation_config$alpha
-        )
+      # p <- p + 
+      # geom_text(
+      #   data = top_vel,
+      #   aes(
+      #     x = V1 - v1 / 2,
+      #     y = V2 - v2 / 2,
+      #     label = sprintf("(%.2f)", mag)
+      #   ),
+      #   size = 0.8*(annotation_config$size / ggplot2::.pt),  # Small font size
+      #   hjust = 0.5,
+      #   vjust = 0.5,
+      #   alpha = 0.8*annotation_config$alpha
+      # )
       # Annotate top‐velocity points exactly like notable‐point labels
       if (requireNamespace("ggrepel", quietly = TRUE)) {
         if (annotation_config$box) {
@@ -1765,6 +1783,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
   
   return(p)
 }
+
 
 
 

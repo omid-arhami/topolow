@@ -188,6 +188,20 @@ h3n2_results <- process_antigenic_data(
 h3n2_matrix <- h3n2_results$matrix
 ```
 
+```{r}
+# Load and process Denv data of Katzelnick et al 2015 (also in Bell et al 2019)
+denv_data_results <- process_antigenic_data(
+  file_path = "data_files/DENV_titers.csv",
+  antigen_col = "virus_strain",
+  serum_col = "serum_strain",
+  value_col = "titer", 
+  is_titer = TRUE,
+  metadata_cols = c("virusYear", "serumYear", "cluster", "color")
+)
+
+# Extract distance matrix
+denv_matrix <- denv_data_results$matrix
+```
 
 ## Run Multiple Optimizations
 
@@ -213,11 +227,11 @@ generate_topolow_maps <- function(distance_matrix, params, valid_points, n_maps 
     res <- create_topolow_map(
       distance_matrix = distance_matrix,
       ndim = params$N, 
-      mapping_max_iter = 1000,
+      mapping_max_iter = 100,
       k0 = params$k0,
       cooling_rate = params$cooling_rate,
       c_repulsion = params$c_repulsion,
-      relative_epsilon = 1e-9,
+      relative_epsilon = 1e-10,
       convergence_counter = 2,
       write_positions_to_csv = FALSE
     )
@@ -254,8 +268,8 @@ generate_racmacs_maps <- function(distance_matrix, dataset_name, n_maps = 15) {
   for(i in 1:n_maps) {
     map <- create_and_optimize_RACMACS_map(
       titer_table = titer_table,
-      optimization_number = 300,
-      num_cores = 59
+      optimization_number = 100,
+      num_cores = 6
     )
     # Save coordinates
     save.coords(map, filename = "Procrustes_RACMACS_coords.csv",
@@ -281,24 +295,51 @@ generate_racmacs_maps <- function(distance_matrix, dataset_name, n_maps = 15) {
 # Load optimal parameters for each dataset
 # HIV parameter chains
 hiv_chains <- c(
-  "model_parameters/HIV_BC_AMC1_model_parameters.csv",
-  "model_parameters/HIV_BC_AMC2_model_parameters.csv",
-  "model_parameters/HIV_BC_AMC3_model_parameters.csv",
-  "model_parameters/HIV_BC_MC5_model_parameters.csv",
-  "model_parameters/HIV_BC_MC6_model_parameters.csv",
-  "model_parameters/HIV_BC_MC7_model_parameters.csv",
-  "model_parameters/HIV_BC_MC8_model_parameters.csv",
-  "model_parameters/HIV_BC_MC9_model_parameters.csv",
-  "model_parameters/HIV_BC_MC80_model_parameters.csv"
+  "model_parameters/HIV_BC_AMC202_model_parameters.csv",
+  "model_parameters/HIV_BC_AMC203_model_parameters.csv",
+  "model_parameters/HIV_BC_AMC204_model_parameters.csv",
+  "model_parameters/HIV_BC_AMC205_model_parameters.csv",
+  "model_parameters/HIV_BC_AMC206_model_parameters.csv"
 )
 
 # H3N2 parameter chains  
 h3n2_chains <- c(
-  "model_parameters/H3N2_2003_data_AMC2_model_parameters.csv",
-  "model_parameters/H3N2_2003_data_AMC3_model_parameters.csv",
-  "model_parameters/H3N2_2003_data_MC7_model_parameters.csv",
-  "model_parameters/H3N2_2003_data_MC8_model_parameters.csv"
+  "model_parameters/H3N2_2003_data_AMC201_model_parameters.csv",
+  "model_parameters/H3N2_2003_data_AMC202_model_parameters.csv",
+  "model_parameters/H3N2_2003_data_AMC203_model_parameters.csv",
+  "model_parameters/H3N2_2003_data_AMC205_model_parameters.csv"
 )
+
+denv_chains <- c(
+  "model_parameters/denv_data_AMC101_model_parameters.csv",
+  "model_parameters/denv_data_AMC102_model_parameters.csv",
+  "model_parameters/denv_data_AMC103_model_parameters.csv",
+  "model_parameters/denv_data_AMC104_model_parameters.csv",
+  "model_parameters/denv_data_AMC105_model_parameters.csv"
+)
+
+# Function to read and clean one CSV
+clean_and_overwrite <- function(file_path) {
+  # 1. Read every column in as character
+  df <- read.csv(file_path, stringsAsFactors = FALSE, colClasses = "character")
+  
+  # 2. For each column: remove any literal double‐quotes and coerce to numeric
+  df[] <- lapply(df, function(col) {
+    # strip all " characters (in case they were embedded in the field)
+    col_stripped <- gsub('"', "", col, fixed = TRUE)
+    # convert the result to numeric
+    as.numeric(col_stripped)
+  })
+  
+  # 3. Write back to the same path, preserving only the data
+  write.csv(df, file = file_path, row.names = FALSE)
+}
+
+# 4. Apply to every file
+invisible(lapply(hiv_chains, clean_and_overwrite))
+invisible(lapply(h3n2_chains, clean_and_overwrite))
+invisible(lapply(denv_chains, clean_and_overwrite))
+
 
 # Function to get optimal parameters from chains
 get_optimal_params <- function(chain_files) {
@@ -311,19 +352,18 @@ get_optimal_params <- function(chain_files) {
              is.finite(NLL) & is.finite(Holdout_MAE)) %>%
     na.omit()
   
-  chains <- chains[chains$log_N >= log(2),]
-  
+  chains <- chains[chains$log_N >= log(2) & chains$log_N <= log(5),]
   # Apply clean_data to all columns of the dataframe
-  chains <- as.data.frame(lapply(chains, clean_data, k = 4))
+  chains <- as.data.frame(lapply(chains, clean_data, k = 3.5))
   chains <- na.omit(chains)
 
   # Get best parameters
   best_params <- chains[which.min(chains$Holdout_MAE),]
-  
+
   list(
     N = round(exp(as.numeric(best_params$log_N))),
     k0 = exp(as.numeric(best_params$log_k0)),
-    cooling_rate = exp(as.numeric(best_params$log_cooling_rate)), 
+    cooling_rate = exp(as.numeric(best_params$log_cooling_rate)),
     c_repulsion = exp(as.numeric(best_params$log_c_repulsion))
   )
 }
@@ -331,16 +371,25 @@ get_optimal_params <- function(chain_files) {
 # Get optimal parameters for each dataset
 hiv_params <- get_optimal_params(hiv_chains)
 h3n2_params <- get_optimal_params(h3n2_chains)
+denv_params <- get_optimal_params(denv_chains)
 
+print("HIV optimal parameters:")
+print(hiv_params)
+print("\nH3N2 optimal parameters:")
+print(h3n2_params)
+print("DENV optimal parameters:")
+print(denv_params)
 # Generate maps
 
 # 1. Generate initial RACMACS maps to remove the points it fails to locate for both methods
 h3n2_mds_maps_initial <- generate_racmacs_maps(h3n2_matrix, dataset_name = "H3N2", n_maps = 15)
 hiv_mds_maps_initial <- generate_racmacs_maps(hiv_matrix, dataset_name = "HIV", n_maps = 15)
+denv_mds_maps_initial <- generate_racmacs_maps(denv_matrix, dataset_name = "DENV", n_maps = 15)
 
 # 2. Find valid points
 h3n2_filtered_points <- get_valid_points(h3n2_mds_maps_initial)
 hiv_filtered_points <- get_valid_points(hiv_mds_maps_initial)
+denv_filtered_points <- get_valid_points(denv_mds_maps_initial)
 
 # 3. Generate filtered maps for both methods
 h3n2_mds_maps <- lapply(h3n2_mds_maps_initial, function(map) {
@@ -351,15 +400,21 @@ hiv_mds_maps <- lapply(hiv_mds_maps_initial, function(map) {
   map[hiv_filtered_points, ]
 })
 
-h3n2_topolow_maps <- generate_topolow_maps(h3n2_matrix, h3n2_params, h3n2_filtered_points, n_maps = 15)
+denv_mds_maps <- lapply(denv_mds_maps_initial, function(map) {
+  map[denv_filtered_points, ]
+})
 
+h3n2_topolow_maps <- generate_topolow_maps(h3n2_matrix, h3n2_params, h3n2_filtered_points, n_maps = 15)
 hiv_topolow_maps <- generate_topolow_maps(hiv_matrix, hiv_params, hiv_filtered_points, n_maps = 15) 
+denv_topolow_maps <- generate_topolow_maps(denv_matrix, denv_params, denv_filtered_points, n_maps = 15) 
 
 # Add check of point counts
 cat("H3N2 valid points:", length(h3n2_filtered_points), 
     "out of", nrow(h3n2_matrix), "\n")
 cat("HIV valid points:", length(hiv_filtered_points),
     "out of", nrow(hiv_matrix), "\n")
+cat("DENV valid points:", length(denv_filtered_points),
+    "out of", nrow(denv_matrix), "\n")
 ```
 
 ## Calculate Stability Metrics
@@ -387,23 +442,29 @@ h3n2_topo_dists <- calc_procrustes_dists(h3n2_topolow_maps)
 h3n2_mds_dists <- calc_procrustes_dists(h3n2_mds_maps)
 hiv_topo_dists <- calc_procrustes_dists(hiv_topolow_maps)
 hiv_mds_dists <- calc_procrustes_dists(hiv_mds_maps)
+denv_topo_dists <- calc_procrustes_dists(denv_topolow_maps)
+denv_mds_dists <- calc_procrustes_dists(denv_mds_maps)
 
 # Compile results
 results_df <- data.frame(
-  Dataset = rep(c("H3N2", "H3N2", "HIV", "HIV"), each = 1),
-  Method = rep(c("TopoLow", "MDS"), 2),
-  Dimension = c(2, 2, 2, 2),
+  Dataset = rep(c("H3N2", "H3N2", "HIV", "HIV", "DENV", "DENV"), each = 1),
+  Method = rep(c("TopoLow", "MDS"), 3),
+  Dimension = c(2, 2, 2, 2, 2, 2),
   Mean = c(
     mean(h3n2_topo_dists[upper.tri(h3n2_topo_dists)]),
     mean(h3n2_mds_dists[upper.tri(h3n2_mds_dists)]),
     mean(hiv_topo_dists[upper.tri(hiv_topo_dists)]),
-    mean(hiv_mds_dists[upper.tri(hiv_mds_dists)])
+    mean(hiv_mds_dists[upper.tri(hiv_mds_dists)]),
+    mean(denv_topo_dists[upper.tri(denv_topo_dists)]),
+    mean(denv_mds_dists[upper.tri(denv_mds_dists)])
   ),
   SD = c(
     sd(h3n2_topo_dists[upper.tri(h3n2_topo_dists)]),
     sd(h3n2_mds_dists[upper.tri(h3n2_mds_dists)]), 
     sd(hiv_topo_dists[upper.tri(hiv_topo_dists)]),
-    sd(hiv_mds_dists[upper.tri(hiv_mds_dists)])
+    sd(hiv_mds_dists[upper.tri(hiv_mds_dists)]),
+    sd(denv_topo_dists[upper.tri(denv_topo_dists)]),
+    sd(denv_mds_dists[upper.tri(denv_mds_dists)])
   )
 )
 
@@ -448,13 +509,14 @@ compare_stability <- function(dist_mat1, dist_mat2) {
 # Run tests
 h3n2_test <- compare_stability(h3n2_topo_dists, h3n2_mds_dists)
 hiv_test <- compare_stability(hiv_topo_dists, hiv_mds_dists)
+denv_test <- compare_stability(denv_topo_dists, denv_mds_dists)
 
 # Create results table  
 test_results <- data.frame(
-  Dataset = c("Smith 2004", "HIV"),
-  t_statistic = c(h3n2_test$t_stat, hiv_test$t_stat),
-  p_value = c(h3n2_test$p_value, hiv_test$p_value),
-  significance = c(h3n2_test$sig_level, hiv_test$sig_level)
+  Dataset = c("H3N2", "HIV", "DENV"),
+  t_statistic = c(h3n2_test$t_stat, hiv_test$t_stat, denv_test$t_stat),
+  p_value = c(h3n2_test$p_value, hiv_test$p_value, denv_test$p_value),
+  significance = c(h3n2_test$sig_level, hiv_test$sig_level, denv_test$sig_level)
 )
 
 knitr::kable(

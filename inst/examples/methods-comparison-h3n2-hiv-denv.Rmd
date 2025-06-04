@@ -242,7 +242,7 @@ DENV data originally published by https://doi.org/10.7554/eLife.42496 ,
 we use it, with no changes, in an example use case of Topolow.
 
 ```{r}
-# Load and process Denv data of Bell et al 2019
+# Load and process Denv data of Katzelnick et al 2015 (also in Bell et al 2019)
 denv_data <- read.csv("data_files/DENV_titers.csv")
 # Extract year from rownames - assuming format like "V/strain/year" or "S/strain/year"
 denv_data$virusYear <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", denv_data$virus_strain))
@@ -313,10 +313,11 @@ h3n2_chains <- c(
 )
 
 denv_chains <- c(
-  "model_parameters/denv_data_AMC03_model_parameters.csv",
-  "model_parameters/denv_data_AMC04_model_parameters.csv",
-  "model_parameters/denv_data_AMC05_model_parameters.csv",
-  "model_parameters/denv_data_AMC06_model_parameters.csv"
+  "model_parameters/denv_data_AMC101_model_parameters.csv",
+  "model_parameters/denv_data_AMC102_model_parameters.csv",
+  "model_parameters/denv_data_AMC103_model_parameters.csv",
+  "model_parameters/denv_data_AMC104_model_parameters.csv",
+  "model_parameters/denv_data_AMC105_model_parameters.csv"
 )
 
 # Function to read and clean one CSV
@@ -388,7 +389,7 @@ datasets <- list(
   H3N2 = list(
     matrix = h3n2_matrix,
     topolow_params = h3n2_topolow_params,
-    racmacs_dim = 4,
+    racmacs_dim = 4, # Read from plot racmacs_dimension_analysis.pdf generated below
     base = 2,        # For titer conversion
     tens = 10,       # For titer conversion
     has_clusters = TRUE
@@ -396,15 +397,15 @@ datasets <- list(
   HIV = list(
     matrix = hiv_matrix,
     topolow_params = hiv_topolow_params,
-    racmacs_dim = 2,
-    base = 2,   # For titer conversion
+    racmacs_dim = 2, # Read from plot racmacs_dimension_analysis.pdf generated below
+    base = 2,        # For titer conversion
     tens = 1,        # For titer conversion
     has_clusters = FALSE
   ),
   DENV = list(
     matrix = denv_distance_matrix,
     topolow_params = denv_topolow_params,
-    racmacs_dim = 5,
+    racmacs_dim = 3, # Read from plot racmacs_dimension_analysis.pdf generated below
     base = 2,        # For titer conversion
     tens = 10,       # For titer conversion
     has_clusters = TRUE
@@ -417,7 +418,7 @@ datasets <- list(
 ## Find optimal dimensionality for RACMACS
 ```{r}
 # Find optimal dimensionality for MDS/RACMACS
-dimensions_to_test <- 2:15  # Test dimensions from 1D to 10D
+dimensions_to_test <- 2:10  # Test dimensions from 1D to 10D
 
 # Create output directories if they don't exist
 coords_dir <- file.path(output_dir, "coordinates")  
@@ -437,7 +438,7 @@ dim_results <- data.table(
   stringsAsFactors = FALSE
 )
 
-for(dataset_name in names(datasets)) { #
+for(dataset_name in c("DENV")) { #names(datasets)
   # Get dataset
   distance_matrix <- datasets[[dataset_name]]$matrix
   
@@ -528,7 +529,7 @@ for(dataset_name in names(datasets)) { #
 }
 
 # Save dimension results
-write.csv(dim_results, file.path(output_dir, "racmacs_dimension_results.csv"))
+write.csv(dim_results, file.path(output_dir, "racmacs_dimension_results_denv.csv"))
 ```
 
 
@@ -552,7 +553,7 @@ plot_dimension_results <- function(results, dataset_name) {
     # Add horizontal line at 95% Completeness
     geom_hline(yintercept = scaled_95_percent, linetype = "dashed", color = "blue", alpha = 0.7) +
     # Add text label for 95% Completeness line
-    annotate("text", x = max(dataset_results$Dimension) * 0.7, 
+    annotate("text", x = max(dataset_results$Dimension) * 0.6, 
              y = scaled_95_percent * 1.04, 
              label = "Completeness = 95%", 
              color = "blue", hjust = 0, size = 2.4) +
@@ -595,13 +596,13 @@ combined_plot <- plot_grid(
 )
 
 # Save the combined plot
-save_plot(
+cowplot::save_plot(
   file.path(plots_dir, "racmacs_dimension_analysis.pdf"),
   combined_plot,
   ncol = 3,
   nrow = 1,
   base_width = 3.26772*0.9, 
-  base_height = 2.5
+  base_height = 3
 )
 ```
 
@@ -851,7 +852,7 @@ print(dim(positions_racmacs))
 
 
 library(ape)
-phylo_tree <- read.tree("data_files/phylo_groupings_rooted.nwk")
+phylo_tree <- read.tree("data_files/H3N2_phylo_groupings_rooted.nwk")
 positions_topolow$name <- toupper(positions_topolow$name)
 
 #### Create the individual plots
@@ -862,6 +863,7 @@ text_labels_topolow <- data.frame(
   y = c( 17, 13, 9, 7.7, 5.6, 1, -2.7, -5, -8, -11, -14.5), # Adjust y for label positioning
   label = c( "HK68", "EN72", "VI75", "TX77", "BK79", "SI87", "BE89", "BE92", "WU95", "SY97", "FU02")
 )
+
 layout_config$reverse_x <- 1
 topolow_plot <- plot_cluster_mapping(
   positions_topolow,
@@ -872,7 +874,8 @@ topolow_plot <- plot_cluster_mapping(
   layout_config = layout_config,
   draw_arrows=TRUE,
    annotate_arrows = FALSE,
-   phylo_tree = phylo_tree
+   phylo_tree = phylo_tree,
+  show_one_arrow_per_cluster = TRUE
 ) + 
   ggtitle("TopoLow") + 
   geom_text(data = text_labels_topolow, 
@@ -900,7 +903,7 @@ combined_plot <- plot_grid(
 )
 
 # Save combined plot
-save_plot(
+cowplot::save_plot(
   file.path(plots_dir, "combined_H3N2_clusters.pdf"),
   combined_plot,
   ncol = 2,
@@ -1101,7 +1104,30 @@ topolow_plot_hiv
 ```{r}
 topo_file <- file.path(coords_dir, "topolow_DENV_coords.csv")
 positions <- read.csv(topo_file)
+positions$name <- positions$X
+positions$X <- NULL
 
+# Add antigen/antiserum indicators based on rownames
+positions$antigen <- startsWith(positions$name, "V/")
+positions$antiserum <- startsWith(positions$name, "S/")
+
+# Extract year from rownames - assuming format like "V/strain/year" or "S/strain/year"
+positions$year <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", positions$name))
+
+# Clean names to match with metadata
+positions$name <- sub("^S/", "", positions$name)
+positions$name <- sub("^V/", "", positions$name)
+
+# Join with original data to get cluster and color information
+metadata <- denv_data_results$long %>%
+  select(virus_strain, cluster, color) %>%
+  distinct()
+
+positions <- positions %>%
+  left_join(metadata, by = c("name" = "virus_strain"))
+
+# Remove any rows that didn't get metadata matched
+positions <- na.omit(positions)
 
 dim_config <- new_dim_reduction_config(
   method = "pca",
@@ -1145,7 +1171,7 @@ layout_config <- new_layout_config(
   dpi = 300,
   #x_limits = c(-3.1, 3.1),
   #y_limits = c(-3, 4),
-  reverse_x = -1,
+  reverse_x = 1,
   reverse_y = 1,
   plot_margin = margin(0.05, 0.05, 0.05, 0.05, "cm"),
   save_format = "pdf",
@@ -1260,7 +1286,7 @@ avg_intercluster_distance(
 ```
 
 
-HIV + DENV for paper:
+### HIV + DENV for paper:
 ```{r}
 # Combine plots
 combined_plot <- plot_grid(

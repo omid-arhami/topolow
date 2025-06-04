@@ -947,7 +947,6 @@ citation_info <- c(
   )
 
 all_notable_strains <- unique(unlist(notable_hiv1_isolates))
-
 ```
 
 

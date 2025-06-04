@@ -30,11 +30,10 @@ The output of all processes are provided as csv files in model_parameters direct
 You can also use the optimal parameters:
 
 optimal_params <- list(
-    N = ?,
-    k0 = ?,
-    cooling_rate = ?, 
-    c_repulsion = ?
-  )
+    N = 10,
+    k0 = 7.1,
+    cooling_rate = 0.01232407, 
+    c_repulsion = 0.03830152)
 
 We'll cover:
 
@@ -70,7 +69,7 @@ library(doParallel)
 We'll demonstrate using the Smith et al. 2004 influenza dataset included in topolow:
 
 ```{r}
-# Load and process Denv data of Bell et al 2019
+# Load and process Denv data of Katzelnick et al 2015 (also in Bell et al 2019)
 denv_data <- read.csv("data_files/DENV_titers.csv")
 # Extract year from rownames - assuming format like "V/strain/year" or "S/strain/year"
 denv_data$virusYear <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", denv_data$virus_strain))
@@ -298,7 +297,6 @@ diag_plots <- create_diagnostic_plots(
   output_file = "denv_data_diagnostic_plots.png"
 )
 
-
 # Calculate diagnostics
 diagnostics <- calculate_diagnostics(
                   chain_files = chain_files,
@@ -463,7 +461,7 @@ write.csv(positions, "data_files/denv_Positions.csv", row.names=FALSE)
 
 
 ```{r}
-library(topolow)
+positions <- read.csv("data_files/denv_Positions.csv")
 
 annotation_config <- new_annotation_config(
   size = 4.9,                              # Text size
@@ -492,8 +490,9 @@ aesthetic_config <- new_aesthetic_config(
 
 # To mirror the maps to make them comparable with other maps set the reverse parameter to -1
 layout_config <- new_layout_config(
-  width = 4.5, 
-  height = 4.5,
+  #width = 4.5, 
+  #height = 4.5,
+  reverse_x = -1,
   reverse_y = -1,
   save_format = "pdf",
   arrow_plot_threshold = .3
@@ -509,7 +508,7 @@ p2 <- plot_cluster_mapping(positions, ndim = optimal_params$N,
                            layout_config = layout_config, 
                            annotation_config = annotation_config,
                            draw_arrows=TRUE,
-                           annotate_arrows = FALSE,
+                           annotate_arrows = TRUE,
                           phylo_tree = phylo_tree,
                           show_one_arrow_per_cluster = FALSE
                            )

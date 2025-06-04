@@ -413,7 +413,7 @@ positions <- positions %>%
 
 # Remove any rows that didn't get metadata matched
 positions <- na.omit(positions)
-write.csv(positions, "h3n2_68_03_good_positions.csv", row.names=FALSE)
+write.csv(positions, "h3n2_68_03_valid_positions.csv", row.names=FALSE)
 #write.csv(positions, "../data-raw/example_positions.csv", row.names=FALSE)
 ```
 
@@ -422,7 +422,7 @@ write.csv(positions, "h3n2_68_03_good_positions.csv", row.names=FALSE)
 
 ```{r}
 library(topolow)
-positions <- read.csv("h3n2_68_03_good_positions.csv")
+positions <- read.csv("h3n2_68_03_valid_positions.csv")
 
 annotation_config <- new_annotation_config(
   size = 4.9,                              # Text size
@@ -457,11 +457,11 @@ layout_config <- new_layout_config(
   arrow_plot_threshold = 2
 )
 
+
 library(ape)
-phylo_tree <- read.tree("data_files/phylo_groupings_rooted.nwk")
+phylo_tree <- read.tree("data_files/H3N2_phylo_groupings_rooted.nwk")
 positions$name <- toupper(positions$name)
 
-library(topolow)
 # Cluster mapping
 p2 <- plot_cluster_mapping(positions, 
              ndim = optimal_params$N, 
@@ -490,6 +490,50 @@ print(cart_plot)
 
 ```
 
+```{r}
+
+clade_node_depths      <- 2:6
+sigma_values           <- seq(0.5, 2, by = 0.5)
+arrow_plot_thresholds  <- seq(0.5, 3, by = 1)
+
+# Create output directory if not exists
+if (!dir.exists("cluster_mapping_phylo")) {
+  dir.create("cluster_mapping_phylo")
+}
+
+# Loop over all combinations
+for (clade_depth in clade_node_depths) {
+  for (arrow_thresh in arrow_plot_thresholds) {
+    for (sigma_t in sigma_values) {
+      for (sigma_x in sigma_values) {
+        
+        layout_config <- new_layout_config(
+          save_format = "png",
+          reverse_x = -1,
+          reverse_y = -1,
+          sigma_t = sigma_t,
+          sigma_x = sigma_x,
+          arrow_plot_threshold = arrow_thresh
+        )
+        
+        p <- plot_cluster_mapping(
+          df_coords = positions,
+          output_dir = "cluster_mapping_phylo",
+          ndim = optimal_params$N,
+          layout_config = layout_config,
+          annotation_config = annotation_config,
+          aesthetic_config = aesthetic_config,
+          draw_arrows = TRUE,
+          annotate_arrows = FALSE,
+          phylo_tree = phylo_tree,
+          clade_node_depth = clade_depth
+        )
+      }
+    }
+  }
+}
+
+```
 
 
 ## Session Info
