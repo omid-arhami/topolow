@@ -1306,6 +1306,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
   
   n_clusters <- length(cluster_levels)
   colors <- aesthetic_config$color_palette[1:min(n_clusters, length(aesthetic_config$color_palette))]
+  names(colors) <- cluster_levels
   
   if (n_clusters > length(aesthetic_config$color_palette)) {
     warning("More clusters than available colors. Colors will be recycled.")
@@ -1622,6 +1623,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
       top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
       cat(sprintf("Showing only arrows with magnitude ≥ %.3f (figure unit)\n", layout_config$arrow_plot_threshold))
     }
+    
+    top_vel$cluster <- factor(top_vel$cluster, levels = cluster_levels)
     
     # Calculate the unit vectors for direction
     top_vel$v1_unit <- top_vel$v1 / top_vel$mag

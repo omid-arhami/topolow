@@ -73,7 +73,7 @@ opt_setting <- list(
   n_folds = 20,
   max_topolow_iter = 500,
   topolow_opt_rounds = 1,
-  racmacs_opt_rounds = 100,
+  racmacs_opt_rounds = 500,
   num_cores = 7
 )
 
@@ -415,7 +415,7 @@ datasets <- list(
 ```
 
 
-## Find optimal dimensionality for RACMACS
+## Find optimal dimensions for RACMACS
 ```{r}
 # Find optimal dimensionality for MDS/RACMACS
 dimensions_to_test <- 2:10  # Test dimensions from 1D to 10D
@@ -438,7 +438,7 @@ dim_results <- data.table(
   stringsAsFactors = FALSE
 )
 
-for(dataset_name in c("DENV")) { #names(datasets)
+for(dataset_name in names(datasets)) { #
   # Get dataset
   distance_matrix <- datasets[[dataset_name]]$matrix
   
@@ -466,7 +466,7 @@ for(dataset_name in c("DENV")) { #names(datasets)
       if(dataset_name %in% c("H3N2", "DENV")) {
         titer_table <- dist_to_titer_table(input_matrix, base=2, tens=10)
       } else {
-        titer_table <- dist_to_titer_table(input_matrix, base=2, tens=1)
+        titer_table <- dist_to_titer_table(input_matrix, tens=1)
       }
       
       # Run RACMACS with this dimension
@@ -607,13 +607,12 @@ cowplot::save_plot(
 ```
 
 
-
 ## Finding coordinates
 ```{r eval=FALSE}
 ### Part 1: Find and save coordinates ###
 message("\nFinding coordinates for all datasets...")
 
-for (dataset_name in names(datasets)) {
+for (dataset_name in names(datasets) ) { #
   dataset <- datasets[[dataset_name]]
   distance_matrix <- dataset$matrix
   topolow_params <- dataset$topolow_params
@@ -669,57 +668,6 @@ for (dataset_name in names(datasets)) {
 }
 ```
 
-DENV:
-
-```{r}
-# Run topolow with optimal parameters
-result <- create_topolow_map(
-  distance_matrix = denv_distance_matrix,
-  ndim = denv_topolow_params$N,
-  mapping_max_iter = 200,
-  k0 = denv_topolow_params$k0,
-  cooling_rate = denv_topolow_params$cooling_rate,
-  c_repulsion = denv_topolow_params$c_repulsion,
-  relative_epsilon = 1e-10,
-  convergence_counter = 2,
-  write_positions_to_csv = FALSE,
-  verbose = TRUE
-)
-
-# Print performance metrics
-cat("MAE:", round(result$mae, 4), "\n")
-
-```
-
-```{r}
-# Convert positions matrix to data frame
-positions <- as.data.frame(result$positions)
-positions$name <- rownames(positions)
-
-# Add antigen/antiserum indicators based on rownames
-positions$antigen <- startsWith(positions$name, "V/")
-positions$antiserum <- startsWith(positions$name, "S/")
-
-# Extract year from rownames - assuming format like "V/strain/year" or "S/strain/year"
-positions$year <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", positions$name))
-
-# Clean names to match with metadata
-positions$name <- sub("^S/", "", positions$name)
-positions$name <- sub("^V/", "", positions$name)
-
-# Join with original data to get cluster and color information
-metadata <- denv_data_results$long %>%
-  select(virus_strain, cluster, color) %>%
-  distinct()
-
-positions <- positions %>%
-  left_join(metadata, by = c("name" = "virus_strain"))
-
-# Remove any rows that didn't get metadata matched
-positions <- na.omit(positions)
-
-write.csv(positions, file.path(coords_dir, "topolow_DENV_coords.csv"), row.names=FALSE)
-```
 
 
 ## Create antigenic maps
@@ -859,12 +807,12 @@ positions_topolow$name <- toupper(positions_topolow$name)
 
 # Add text labels to topolow
 text_labels_topolow <- data.frame(
-  x = c( 2.5, 3.6, -2.7, 2.9, -3.6, 5.3, -5, 5.3, -4, 2, -3),
+  x = c( 2.5, -4.5, -4, 2.9, -3.6, 5.3, -5, 5.3, -4, 2, -3),
   y = c( 17, 13, 9, 7.7, 5.6, 1, -2.7, -5, -8, -11, -14.5), # Adjust y for label positioning
   label = c( "HK68", "EN72", "VI75", "TX77", "BK79", "SI87", "BE89", "BE92", "WU95", "SY97", "FU02")
 )
 
-layout_config$reverse_x <- 1
+layout_config$reverse_x <- -1
 topolow_plot <- plot_cluster_mapping(
   positions_topolow,
   ndim = datasets$H3N2$topolow_params$N,
@@ -883,7 +831,7 @@ topolow_plot <- plot_cluster_mapping(
             size = annotation_config$size / ggplot2::.pt)
 
 
-layout_config$reverse_x <- -1
+layout_config$reverse_x <- 1
 racmacs_plot <- plot_cluster_mapping(
   positions_racmacs,
   ndim = datasets$H3N2$racmacs_dim,
@@ -910,6 +858,32 @@ cowplot::save_plot(
   nrow = 1,
   base_width = 3.26772*0.5,
   base_height = layout_config$height
+)
+```
+
+A larger map with all arrows and annotations
+```{r}
+layout_config$width = 3.26772*1.5
+layout_config$height = 6*1.5
+layout_config$arrow_plot_threshold = 0.0
+layout_config$reverse_x <- -1
+
+aesthetic_config$show_legend = TRUE
+aesthetic_config$legend_position = "right"
+
+
+topolow_plot <- plot_cluster_mapping(
+  positions_topolow,
+  ndim = datasets$H3N2$topolow_params$N,
+  dim_config = dim_config,
+  annotation_config = annotation_config,
+  aesthetic_config = aesthetic_config,
+  layout_config = layout_config,
+  draw_arrows=TRUE,
+   annotate_arrows = FALSE,
+   phylo_tree = phylo_tree,
+  show_one_arrow_per_cluster = FALSE,
+  cluster_legend_order = c( "HK68", "EN72", "VI75", "TX77", "BK79", "SI87", "BE89", "BE92", "WU95", "SY97", "FU02")
 )
 ```
 
@@ -1002,11 +976,11 @@ layout_config <- new_layout_config(
   width = 3.26772*0.47,
   height = 1.9,
   dpi = 300,
-  x_limits = c(-3.1, 3.1),
-  y_limits = c(-3, 4),
+  x_limits = c(-3.56, 2.8),
+  #y_limits = c(-3, 4),
   plot_margin = margin(0.05, 0.05, 0.05, 0.05, "cm"),
   save_format = "pdf",
-  arrow_plot_threshold = 1.1
+  arrow_plot_threshold = 1
 )
 
 aesthetic_config <- new_aesthetic_config(
@@ -1034,7 +1008,7 @@ annotation_config <- new_annotation_config(
 
 # Add text labels to topolow
 text_labels_topolow <- data.frame(
-  x = c( 2.2, -2.3),
+  x = c( -2.2, 2.3),
   y = c( -2.2, 1.1), # Adjust y for label positioning
   label = c( "C", "B")
 )
@@ -1099,35 +1073,103 @@ topolow_plot_hiv
 ```
 
 
+A larger map with all arrows and annotations
+```{r}
+layout_config$width = 3.26772*1.7
+layout_config$height = 3.9*1.7
+layout_config$arrow_plot_threshold = 0.0
+
+aesthetic_config$show_legend = TRUE
+aesthetic_config$legend_position = "right"
+
+topolow_plot_hiv <- plot_cluster_mapping(
+  positions_topolow,
+  ndim = datasets$HIV$topolow_params$N,
+  dim_config = dim_config,
+  aesthetic_config = aesthetic_config,
+  layout_config = layout_config,
+  show_shape_legend = TRUE,
+  draw_arrows=TRUE,
+  annotate_arrows = FALSE,
+  phylo_tree = phylo_tree_hiv,
+  show_one_arrow_per_cluster = FALSE,
+  cluster_legend_title = "Subtype"
+)
+
+```
+
+
 ### DENV
 
 ```{r}
 topo_file <- file.path(coords_dir, "topolow_DENV_coords.csv")
-positions <- read.csv(topo_file)
-positions$name <- positions$X
-positions$X <- NULL
+rac_file <- file.path(coords_dir, "racmacs_DENV_coords.csv")
+
+if (!file.exists(topo_file)) {
+  stop("TopoLow coordinates file not found at: ", topo_file)
+}
+if (!file.exists(rac_file)) {
+  stop("RACMACS coordinates file not found at: ", rac_file)
+}
+
+positions_topolow_denv <- read.csv(topo_file)
+positions_topolow_denv$name <- positions_topolow_denv$X
+positions_topolow_denv$X <- NULL
 
 # Add antigen/antiserum indicators based on rownames
-positions$antigen <- startsWith(positions$name, "V/")
-positions$antiserum <- startsWith(positions$name, "S/")
+positions_topolow_denv$antigen <- startsWith(positions_topolow_denv$name, "V/")
+positions_topolow_denv$antiserum <- startsWith(positions_topolow_denv$name, "S/")
 
 # Extract year from rownames - assuming format like "V/strain/year" or "S/strain/year"
-positions$year <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", positions$name))
+positions_topolow_denv$year <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", positions_topolow_denv$name))
 
 # Clean names to match with metadata
-positions$name <- sub("^S/", "", positions$name)
-positions$name <- sub("^V/", "", positions$name)
+positions_topolow_denv$name <- sub("^S/", "", positions_topolow_denv$name)
+positions_topolow_denv$name <- sub("^V/", "", positions_topolow_denv$name)
 
 # Join with original data to get cluster and color information
-metadata <- denv_data_results$long %>%
+denv_metadata <- denv_data_results$long %>%
   select(virus_strain, cluster, color) %>%
   distinct()
 
-positions <- positions %>%
-  left_join(metadata, by = c("name" = "virus_strain"))
+positions_topolow_denv <- positions_topolow_denv %>%
+  left_join(denv_metadata, by = c("name" = "virus_strain"))
 
 # Remove any rows that didn't get metadata matched
-positions <- na.omit(positions)
+positions_topolow_denv <- na.omit(positions_topolow_denv)
+
+# Read and process RACMACS coordinates
+positions_racmacs <- read.csv(rac_file)
+if (nrow(positions_racmacs) == 0) {
+  stop("RACMACS coordinates file is empty")
+}
+
+# Process RACMACS coordinates
+positions_racmacs$name <- ifelse(
+  positions_racmacs$type == "antigen",
+  paste0("V/", positions_racmacs$name),
+  paste0("S/", positions_racmacs$name)
+)
+positions_racmacs$antigen <- startsWith(positions_racmacs$name, "V/")
+positions_racmacs$antiserum <- startsWith(positions_racmacs$name, "S/")
+#positions_racmacs$year <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", positions_racmacs$name))
+positions_racmacs$name <- sub("^[VS]/", "", positions_racmacs$name)
+positions_racmacs$V1 <- positions_racmacs$X
+positions_racmacs$V2 <- positions_racmacs$X.1
+positions_racmacs$V3 <- positions_racmacs$X.2
+
+# Extract year from rownames - assuming format like "V/strain/year" or "S/strain/year"
+positions_racmacs$year <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", positions_racmacs$name))
+
+# Add cluster information
+positions_racmacs <- merge(positions_racmacs, denv_metadata,
+                         by.x = "name", by.y = "virus_strain", all.x = TRUE)
+
+positions_racmacs <- na.omit(positions_racmacs)
+
+# Print dimensions to verify data
+print(dim(positions_topolow_denv))
+print(dim(positions_racmacs))
 
 dim_config <- new_dim_reduction_config(
   method = "pca",
@@ -1187,10 +1229,10 @@ text_labels_topolow <- data.frame(
 
 library(ape)
 phylo_tree <- read.tree("data_files/DENV1234_timetree.nwk")
-positions$name <- toupper(positions$name)
+positions_topolow_denv$name <- toupper(positions_topolow_denv$name)
 
 # Cluster mapping
-topolow_plot_denv <- plot_cluster_mapping(positions, ndim = denv_topolow_params$N, 
+topolow_plot_denv <- plot_cluster_mapping(positions_topolow_denv, ndim = denv_topolow_params$N, 
                            aesthetic_config = aesthetic_config, 
                            layout_config = layout_config, 
                            annotation_config = annotation_config,
@@ -1205,8 +1247,62 @@ topolow_plot_denv <- plot_cluster_mapping(positions, ndim = denv_topolow_params$
             )
 
 print(topolow_plot_denv)
+
+
+#### RACMACS plot
+# Add text labels to topolow
+text_labels_topolow <- data.frame(
+  x = c( 1, -2, 0.4, 0),
+  y = c( 2.7, -1, -1.8, 0.2), # Adjust y for label positioning
+  label = c( "DENV1", "DENV2", "DENV3", "DENV4")
+)  
+layout_config$reverse_x <- -1
+layout_config$reverse_y <- -1
+racmacs_plot <- plot_cluster_mapping(
+  positions_racmacs,
+  ndim = datasets$DENV$racmacs_dim,
+  dim_config = dim_config,
+  aesthetic_config = aesthetic_config,
+  layout_config = layout_config
+) + geom_text(data = text_labels_topolow, 
+            aes(x = x, y = y, label = label, colour = label),
+            size = annotation_config$size / ggplot2::.pt,
+            fontface = annotation_config$fontface
+            )
+
+racmacs_plot
+cowplot::save_plot(
+  file.path(plots_dir, "racmacs_plot_DENV.pdf"),
+  racmacs_plot,
+  ncol = 1,
+  nrow = 1,
+  base_width = 3.26772,
+  base_height = layout_config$height*2
+)
 ```
 
+
+A larger map with all arrows and annotations
+```{r}
+layout_config$width = 3.26772*1.3
+layout_config$height = 3*1.3
+layout_config$arrow_plot_threshold = 0.1
+
+aesthetic_config$show_legend = TRUE
+aesthetic_config$legend_position = "right"
+
+topolow_plot_denv <- plot_cluster_mapping(positions_topolow_denv, ndim = denv_topolow_params$N, 
+                           aesthetic_config = aesthetic_config, 
+                           layout_config = layout_config, 
+                           annotation_config = annotation_config,
+                           show_shape_legend = TRUE,
+                           draw_arrows=TRUE,
+                           annotate_arrows = FALSE,
+                           phylo_tree = phylo_tree,
+                           cluster_legend_title = "Serotype"
+                           ) 
+
+```
 
 Below we calculate the average distances between viruses of different serotypes from the input data in function avg_prefix_distance
 and compare it with the distances from Topolow coordinates in function avg_intercluster_distanceto validate whether the visual distances on the map are to the scale or not. 
@@ -1252,9 +1348,7 @@ avg_prefix_distance <- function(data,
   mean(subset_dt[[distance_col]], na.rm = na.rm)
 }
 
-
-# assume your data.frame 'positions' is already in memory
-dt <- as.data.table(positions)
+dt <- as.data.table(positions_topolow_denv)
 
 # identify the coordinate columns
 coord_cols <- paste0("V", 1:18)
@@ -1299,7 +1393,7 @@ combined_plot <- plot_grid(
 )
 
 # Save combined plot
-save_plot(
+cowplot::save_plot(
   file.path(plots_dir, "combined_HIV_DENV.pdf"),
   combined_plot,
   ncol = 2,
@@ -1532,7 +1626,7 @@ for(dataset_name in names(datasets) ) {
       convergence_counter = 3,
       initial_positions = NULL,
       write_positions_to_csv = FALSE,
-      verbose = TRUE
+      verbose = FALSE
     )
 
     p_dist_mat <- res_train$est_distances
@@ -1573,7 +1667,7 @@ for(dataset_name in names(datasets) ) {
     if(dataset_name %in% c("H3N2", "DENV")) {
       titer_table <- dist_to_titer_table(input_matrix, base=2, tens=10)
     } else {
-      titer_table <- dist_to_titer_table(input_matrix, base=2, tens=1)
+      titer_table <- dist_to_titer_table(input_matrix, tens=1)
     }
     
     map <- create_and_optimize_RACMACS_map(
@@ -1685,46 +1779,54 @@ knitr::kable(stat_tests)
 ```
 
 ## Results Visualization
-
 ```{r}
+## ---- Results Visualization --------------------------------------------------
 # font sizes
-base_size <- 7          # Base font size
-axis_title_size <- 7    # Size for axis titles
-axis_text_size <- 7     # Size for axis text
-plot_title_size <- 7    # Size for plot title
-legend_title_size <- 7   # Size for legend title
-legend_text_size <- 6    # Size for legend text
-stat_text_size <- 2.2      # Size for MAE/SD statistics
+base_size <- 8          # Base font size
+axis_title_size <- 9    # Size for axis titles
+axis_text_size <- 8     # Size for axis text
+plot_title_size <- 9    # Size for plot title
+legend_title_size <- 8   # Size for legend title
+legend_text_size <- 8    # Size for legend text
+stat_text_size <- 2.6      # Size for MAE/SD statistics
 
 # Calculate summary statistics
 error_summary <- errors_df %>%
   # Remove possible errors in the data using clean_data function with k=3.5 to remove points 3.5 SD away.
   group_by(Dataset, Algorithm) %>%
   mutate(
-    OutSampleError = clean_data(OutSampleError, k=3.5)
+    OutSampleError = clean_data(OutSampleError, k = 3.5)
   ) %>%
   # Calculate summary statistics
   summarise(
-    MAE = round(mean(abs(OutSampleError), na.rm=TRUE), 3),
-    SD = round(sd(abs(OutSampleError), na.rm=TRUE), 3),
-    .groups='drop'
+    MAE = round(mean(abs(OutSampleError), na.rm = TRUE), 3),
+    SD  = round(sd(abs(OutSampleError),  na.rm = TRUE), 3),
+    .groups = 'drop'
   ) %>%
   mutate(
     label = sprintf("%.3f\n%.3f", MAE, SD)
   )
 
-# Calculate the y-axis range needed
-y_range <- range(clean_data(errors_df$OutSampleError, k=3.05), na.rm = TRUE)
-y_padding <- abs(diff(y_range)) * 0.22  # 20% padding
+# ---------------------------------------------------------------------------
+#  NEW: separate top- and bottom-padding so we have an “annotation band”
+#       equal to 35 % of the core y-range
+# ---------------------------------------------------------------------------
+core_vals   <- clean_data(errors_df$OutSampleError, k = 3.05)
+core_min    <- min(core_vals, na.rm = TRUE)
+core_max    <- max(core_vals, na.rm = TRUE)
+core_range  <- abs(core_max - core_min)
 
-# Calculate the y-position for the labels (same as existing labels)
-label_y_pos <- y_range[1] - y_padding/2 - 0.1
+pad_top     <- core_range * 0.05          # keeps your original 22 % head-room
+pad_bottom  <- core_range * 0.36          # NEW: reserve 35 % for MAE / SD
+
+# Calculate the y-position for the labels (center of the annotation band)
+label_y_pos <- core_min - pad_bottom / 2 - 0.45
 
 p1 <- ggplot() +
   # Add box plots with outliers removed
   geom_boxplot(
     data = errors_df,
-    aes(x = Dataset, y = OutSampleError, 
+    aes(x = Dataset, y = OutSampleError,
         fill = Algorithm),
     position = position_dodge(width = 0.8),
     outlier.shape = NA,  # Remove outliers
@@ -1733,11 +1835,11 @@ p1 <- ggplot() +
   # Add text labels for MAE and SD
   geom_text(
     data = error_summary,
-    aes(x = Dataset, y = label_y_pos, 
+    aes(x = Dataset, y = label_y_pos,
         label = label, group = Algorithm),
     position = position_dodge(width = 0.8),
     vjust = 1,
-    size = stat_text_size,
+    size  = stat_text_size,
     color = "black"
   ) +
   # Add MAE/SD label on the left side
@@ -1746,43 +1848,36 @@ p1 <- ggplot() +
     x = 0.56,  # Left edge of the plot area
     y = label_y_pos,
     label = "MAE=\nSD=",
-    size = stat_text_size,
-    #hjust = -0.2,  # Position it outside the plot area
+    size  = stat_text_size,
     vjust = 1,
     color = "black"
   ) +
   # Customize appearance
   scale_fill_manual(values = c("Topolow" = "#4dbedf", "MDS" = "#e59572")) +
   scale_y_continuous(
-    limits = c(y_range[1] - y_padding, y_range[2] + y_padding/20),
+    limits = c(core_min - pad_bottom, core_max + pad_top / 20),
     expand = c(0, 0)
   ) +
   # Allow drawing outside the plot area
   #coord_cartesian(clip = "off") +
-  theme_minimal(base_size = base_size) +  
+  theme_minimal(base_size = base_size) +
   theme(
     # Increase left margin to make room for the label
     #plot.margin = margin(5, 5, 5, 40, "pt"),
-    
-    # Rest of your theme settings
     axis.title = element_text(size = axis_title_size),
-    axis.text = element_text(size = axis_text_size),
+    axis.text  = element_text(size = axis_text_size),
     axis.text.x = element_text(hjust = 1),
-    
     panel.grid.major = element_line(color = "gray90"),
     panel.grid.minor = element_blank(),
-    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5),
-    
-    #plot.title = element_text(size = plot_title_size, hjust = 0.5),
-    
-    legend.position = c(0.5, 0.95),
+    panel.border     = element_rect(color = "black", fill = NA, linewidth = 0.5),
+    legend.position  = c(0.5, 0.95),
     legend.direction = "horizontal",
     legend.background = element_rect(fill = "white", color = NA),
     legend.box.background = element_rect(fill = "white", color = NA),
-    legend.margin = margin(0.05, 0.7, 0.0, 0.7),
-    legend.key.size = unit(0.8, "lines"),
-    legend.title = element_text(size = legend_title_size),
-    legend.text = element_text(size = legend_text_size),
+    legend.margin     = margin(0.05, 0.7, 0.0, 0.7),
+    legend.key.size   = unit(0.8, "lines"),
+    legend.title      = element_text(size = legend_title_size),
+    legend.text       = element_text(size = legend_text_size),
     legend.box.margin = margin(0, 0, 0, 0)
   ) +
   labs(
@@ -1791,95 +1886,18 @@ p1 <- ggplot() +
     fill = "Algorithm"
   )
 
-ggsave(file.path(plots_dir,"comparison_real_data1.pdf"),
-       p1, width = 83, height = 80, units = "mm")
+ggsave(
+  file.path(plots_dir, "comparison_real_data.pdf"),
+  p1,
+  width  = 100,
+  height = 80,          # keep your original height
+  units  = "mm"
+)
+
+```
 
 
-
-# # Calculate the y-axis range limits
-# y_range <- range(clean_data(errors_df$OutSampleError, k=3.5), na.rm = TRUE)  # Even stricter outlier removal
-# y_padding <- abs(diff(y_range)) * 0.22
-# 
-# # Calculate the y-position for the labels (adjusted for tighter spacing)
-# label_y_pos <- y_range[1] - y_padding/2 - 0.1
-# 
-# p2 <- ggplot() +
-#   # Add box plots with reduced width and height
-#   geom_boxplot(
-#     data = errors_df,
-#     aes(x = Dataset, y = OutSampleError, 
-#         fill = Algorithm),
-#     position = position_dodge(width = 0.7),  # Narrower dodge width (from 0.8)
-#     outlier.shape = NA,
-#     alpha = 0.8,
-#     width = 0.5,  # Even smaller width (from 0.6)
-#     fatten = 0.7  # Thinner median line (from 0.8)
-#   ) +
-#   # Add text labels for MAE and SD
-#   geom_text(
-#     data = error_summary,
-#     aes(x = Dataset, y = label_y_pos, 
-#         label = label, group = Algorithm),
-#     position = position_dodge(width = 0.7),  # Match the boxplot dodge width
-#     vjust = 1,
-#     size = stat_text_size,
-#     color = "black"
-#   ) +
-#   # Add MAE/SD label on the left side
-#   annotate(
-#     "text",
-#     x = 0.5,
-#     y = label_y_pos,
-#     label = "MAE=\nSD=",
-#     size = stat_text_size,
-#     vjust = 1,
-#     color = "black"
-#   ) +
-#   # Customize appearance
-#   scale_fill_manual(values = c("Topolow" = "#4dbedf", "MDS" = "#e59572")) +
-#   # Very tight y-axis limits
-#   scale_y_continuous(
-#     limits = c(y_range[1] - y_padding, y_range[2] + y_padding/10),  # Extremely tight upper limit
-#     expand = c(0, 0)
-#   ) +
-#   # Don't use coord_fixed - it was causing the opposite effect
-#   theme_minimal(base_size = base_size) +  
-#   theme(
-#     axis.title = element_text(size = axis_title_size),
-#     axis.text = element_text(size = axis_text_size),
-#     axis.text.x = element_text(hjust = 1),
-#     
-#     # Reduce the plot margins
-#     #plot.margin = margin(2, 5, 2, 5),  # Smaller margins (top, right, bottom, left)
-#     
-#     panel.grid.major = element_line(color = "gray90"),
-#     panel.grid.minor = element_blank(),
-#     panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5),
-#     
-#     plot.title = element_text(size = plot_title_size, hjust = 0.5),
-#     
-#     # Keep legend adjustments from previous update
-#     legend.position = c(0.5, 0.98),  # Move legend even higher (from 0.97)
-#     legend.direction = "horizontal",
-#     legend.background = element_rect(fill = "white", color = NA),
-#     legend.box.background = element_rect(fill = "white", color = NA),
-#     legend.margin = margin(0.1, 0.5, 0.1, 0.5),  # Tighter margins (from 0.3, 0.7)
-#     legend.key.size = unit(0.7, "lines"),  # Smaller key size (from 0.8)
-#     legend.title = element_text(size = legend_title_size),
-#     legend.text = element_text(size = legend_text_size),
-#     legend.box.margin = margin(0, 0, 0, 0),
-#     
-#     # Reduce space between legend and plot
-#     legend.box.spacing = unit(0.1, "lines")
-#   ) +
-#   labs(
-#     x = NULL,
-#     y = "Error (validation data)",
-#     fill = "Algorithm"
-#   )
-# 
-# ggsave(file.path(plots_dir,"comparison_real_data2.pdf"),
-#        p2, width = 83, height = 73, units = "mm")
+```{r}
 
 # Print summary table
 knitr::kable(

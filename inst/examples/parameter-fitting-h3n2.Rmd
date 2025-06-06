@@ -422,7 +422,7 @@ write.csv(positions, "h3n2_68_03_valid_positions.csv", row.names=FALSE)
 
 ```{r}
 library(topolow)
-positions <- read.csv("h3n2_68_03_valid_positions.csv")
+positions <- read.csv("comparison_results/coordinates/topolow_H3N2_coords.csv")
 
 annotation_config <- new_annotation_config(
   size = 4.9,                              # Text size

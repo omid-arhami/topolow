@@ -419,13 +419,6 @@ cat("MAE:", round(result$mae, 4), "\n")
 
 ```
 
-```{r}
-scatterplot_fitted_vs_true(denv_distance_matrix, result$est_distances, 
-                                       scenario_name = "denv", ndim = 10,
-                                       save_plot = TRUE,
-                                       output_dir = NULL,
-                                       confidence_level = 0.95)
-```
 
 ```{r}
 # Convert positions matrix to data frame

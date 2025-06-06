@@ -262,13 +262,13 @@ generate_racmacs_maps <- function(distance_matrix, dataset_name, n_maps = 15) {
   if(dataset_name == "H3N2") {
     titer_table <- dist_to_titer_table(distance_matrix, base=2, tens=10)
   } else {
-    titer_table <- dist_to_titer_table(distance_matrix, base=exp(1), tens=1)
+    titer_table <- dist_to_titer_table(distance_matrix, tens=1)
   }
 
   for(i in 1:n_maps) {
     map <- create_and_optimize_RACMACS_map(
       titer_table = titer_table,
-      optimization_number = 100,
+      optimization_number = 500,
       num_cores = 6
     )
     # Save coordinates

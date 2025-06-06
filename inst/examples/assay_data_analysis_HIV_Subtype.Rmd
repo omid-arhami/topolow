@@ -37,22 +37,10 @@ To find the optimal parameters of Topolow, you can either run sufficient number 
 
 optimal_params <- list(
     N = 2,
-    k0 = 3.550036,
-    cooling_rate = 0.04130713, 
-    c_repulsion = 0.0007038619
+    k0 = 8.20368,
+    cooling_rate = 0.03099211, 
+    c_repulsion = 0.01944336
   )
-
-$N
-[1] 2
-
-$k0
-[1] 8.358897
-
-$cooling_rate
-[1] 0.03522593
-
-$c_repulsion
-[1] 0.02885818
 
 ## Required Packages
 
@@ -770,7 +758,7 @@ Finally, let's validate our optimal parameters:
 result <- create_topolow_map(
   distance_matrix = hiv_distance_matrix,
   ndim = optimal_params$N,
-  mapping_max_iter = 1000,
+  mapping_max_iter = 200,
   k0 = optimal_params$k0,
   cooling_rate = optimal_params$cooling_rate,
   c_repulsion = optimal_params$c_repulsion,
