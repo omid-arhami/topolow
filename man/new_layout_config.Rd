@@ -26,7 +26,7 @@ new_layout_config(
   reverse_y = 1,
   x_limits = NULL,
   y_limits = NULL,
-  arrow_plot_threshold = 1
+  arrow_plot_threshold = 0.1
 )
 }
 \arguments{

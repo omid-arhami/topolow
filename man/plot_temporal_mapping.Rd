@@ -23,6 +23,12 @@ plot_temporal_mapping(
 )
 }
 \arguments{
+\item{df_coords}{Data frame containing:
+- V1, V2, ... Vn: Coordinate columns
+- antigen: Binary indicator for antigen points
+- antiserum: Binary indicator for antiserum points
+- year: Numeric year values for temporal coloring}
+
 \item{ndim}{Number of dimensions in input coordinates}
 
 \item{dim_config}{Dimension reduction configuration object specifying method and parameters}
@@ -35,6 +41,10 @@ Use x_limits and y_limits in layout_config to set axis limits.}
 \item{annotation_config}{Annotation configuration object for labeling notable points}
 
 \item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+
+\item{show_shape_legend}{Logical. Whether to show the shape legend (default: TRUE)}
+
+\item{cluster_legend_title}{Character. Title for the cluster legend (default: "Cluster")}
 
 \item{draw_arrows}{logical; if TRUE, compute and draw antigenic drift vectors}
 
@@ -55,12 +65,6 @@ ggplot object containing the temporal mapping visualization
 Creates a visualization of points colored by time (year) using dimension reduction, with optional antigenic velocity arrows.
 Points are colored on a gradient scale based on their temporal values, with
 different shapes for antigens and antisera.
-
-#' @param df_coords Data frame containing:
-- V1, V2, ... Vn: Coordinate columns
-- antigen: Binary indicator for antigen points
-- antiserum: Binary indicator for antiserum points
-- year: Numeric year values for temporal coloring
 }
 \details{
 The function performs these steps:

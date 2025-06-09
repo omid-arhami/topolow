@@ -107,7 +107,7 @@ new_annotation_config <- function(
 #' @param color_palette Color palette name or custom palette
 #' @param gradient_colors List with low and high colors for gradients
 #' @param show_labels Whether to show point labels
-#' @param show_title Whether to show plot title (default: TRUE)
+#' @param show_title Whether to show plot title (default: FALSE)
 #' @param label_size Label text size 
 #' @param title_size Title text size
 #' @param subtitle_size Subtitle text size
@@ -128,7 +128,7 @@ new_aesthetic_config <- function(
     color_palette = c25,
     gradient_colors = list(low = "blue", high = "red"),
     show_labels = FALSE,
-    show_title = TRUE,
+    show_title = FALSE,
     label_size = 3,
     title_size = 14,
     subtitle_size = 12,
@@ -622,7 +622,7 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #' Points are colored on a gradient scale based on their temporal values, with
 #' different shapes for antigens and antisera.
 #'
-#' #' @param df_coords Data frame containing:
+#' @param df_coords Data frame containing:
 #'        - V1, V2, ... Vn: Coordinate columns
 #'        - antigen: Binary indicator for antigen points 
 #'        - antiserum: Binary indicator for antiserum points
@@ -637,6 +637,8 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #' @param layout_config Layout configuration object controlling plot dimensions and style.
 #'        Use x_limits and y_limits in layout_config to set axis limits.
 #' @param output_dir Character. Directory for output files. If NULL, uses current directory
+#' @param show_shape_legend Logical. Whether to show the shape legend (default: TRUE)
+#' @param cluster_legend_title Character. Title for the cluster legend (default: "Cluster")
 #' @param annotation_config Annotation configuration object for labeling notable points
 #' @param sigma_t Optional; numeric; bandwidth for the Gaussian kernel discounting on time in years or the time unit of the data. If NULL, uses Silverman's rule of thumb.
 #' @param sigma_x Optional; numeric; bandwidth for the Gaussian kernel discounting on antigenic distancein antigenic units. If NULL, uses Silverman's rule of thumb.

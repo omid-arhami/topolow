@@ -821,8 +821,8 @@ topolow_plot <- plot_cluster_mapping(
   aesthetic_config = aesthetic_config,
   layout_config = layout_config,
   draw_arrows=TRUE,
-   annotate_arrows = FALSE,
-   phylo_tree = phylo_tree,
+  annotate_arrows = FALSE,
+  phylo_tree = phylo_tree,
   show_one_arrow_per_cluster = TRUE
 ) + 
   ggtitle("TopoLow") + 
@@ -1217,7 +1217,7 @@ layout_config <- new_layout_config(
   reverse_y = 1,
   plot_margin = margin(0.05, 0.05, 0.05, 0.05, "cm"),
   save_format = "pdf",
-  arrow_plot_threshold = .12
+  arrow_plot_threshold = .2
 )
 
 # Add text labels to topolow
@@ -1245,7 +1245,6 @@ topolow_plot_denv <- plot_cluster_mapping(positions_topolow_denv, ndim = denv_to
             size = annotation_config$size / ggplot2::.pt,
             fontface = annotation_config$fontface
             )
-
 print(topolow_plot_denv)
 
 
@@ -1286,7 +1285,9 @@ A larger map with all arrows and annotations
 ```{r}
 layout_config$width = 3.26772*1.3
 layout_config$height = 3*1.3
-layout_config$arrow_plot_threshold = 0.1
+layout_config$arrow_plot_threshold = 0.03
+layout_config$reverse_x <- 1
+layout_config$reverse_y <- 1
 
 aesthetic_config$show_legend = TRUE
 aesthetic_config$legend_position = "right"

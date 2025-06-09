@@ -420,10 +420,14 @@ cat("MAE:", round(result$mae, 4), "\n")
 ```
 
 
+## The resulting map
+
 ```{r}
 # Convert positions matrix to data frame
-positions <- as.data.frame(result$positions)
-positions$name <- rownames(positions)
+# positions <- as.data.frame(result$positions)
+# positions$name <- rownames(positions)
+positions <- read.csv("comparison_results/coordinates/topolow_DENV_coords.csv")
+positions$name <- positions$X
 
 # Add antigen/antiserum indicators based on rownames
 positions$antigen <- startsWith(positions$name, "V/")
@@ -447,15 +451,11 @@ positions <- positions %>%
 # Remove any rows that didn't get metadata matched
 positions <- na.omit(positions)
 
-write.csv(positions, "data_files/denv_Positions.csv", row.names=FALSE)
+#write.csv(positions, "data_files/denv_Positions.csv", row.names=FALSE)
 ```
-
-## The resulting map
 
 
 ```{r}
-positions <- read.csv("data_files/denv_Positions.csv")
-
 annotation_config <- new_annotation_config(
   size = 4.9,                              # Text size
   color = "black",                         # Text color
@@ -485,8 +485,8 @@ aesthetic_config <- new_aesthetic_config(
 layout_config <- new_layout_config(
   #width = 4.5, 
   #height = 4.5,
-  reverse_x = -1,
-  reverse_y = -1,
+  reverse_x = 1,
+  reverse_y = 1,
   save_format = "pdf",
   arrow_plot_threshold = .3
 )
@@ -522,6 +522,159 @@ print(cart_plot)
 ```
 
 
+Plotting with various velocity thresholds:
+```{r}
+# Load the required libraries
+library(cowplot)
+library(gridExtra)
+
+# clade_node_depths      <- c(2 , 3, 7)
+# sigma_t_values        <- c(0.5*4.118, 4.118, 4.118*2)
+# sigma_x_values        <- c(0.5*0.551, 0.551, 0.551*2)
+clade_node_depths      <- c(1 , 3, 10)
+sigma_t_values        <- c( 4.118)
+sigma_x_values        <- c( 0.551)
+
+layout_config <- new_layout_config(
+  save_format = "pdf",
+  reverse_x = 1,
+  reverse_y = 1,
+  arrow_plot_threshold = 0.1
+)
+
+# Create output directory if not exists
+if (!dir.exists("cluster_mapping_phylo")) {
+  dir.create("cluster_mapping_phylo")
+}
+
+# A list to store the generated plots
+plots <- list()
+
+# Loop over all combinations to generate plots
+# All plots are created with their legends initially
+for (clade_depth in clade_node_depths) {
+  for (sigma_t in sigma_t_values) {
+    for (sigma_x in sigma_x_values) {
+      p <- plot_cluster_mapping(
+        df_coords = positions,
+        output_dir = "cluster_mapping_phylo",
+        ndim = optimal_params$N,
+        layout_config = layout_config,
+        annotation_config = annotation_config,
+        aesthetic_config = aesthetic_config,
+        draw_arrows = TRUE,
+        annotate_arrows = FALSE,
+        phylo_tree = phylo_tree,
+        clade_node_depth = clade_depth,
+        sigma_t = sigma_t,
+        sigma_x = sigma_x
+      )
+      plots[[length(plots) + 1]] <- p
+    }
+  }
+}
+
+# Extract the legend from the last plot
+legend <- get_legend(plots[[length(plots)]])
+
+# Create a new list to store plots without legends but with subtitles
+plots_no_legend <- list()
+
+# Loop through the generated plots to add subtitles and remove individual legends
+for (i in 1:length(plots)) {
+    clade_depth <- clade_node_depths[i]
+    p <- plots[[i]] +
+         theme(legend.position = "none") +
+         labs(subtitle = paste("Clade Depth:", clade_depth))
+    plots_no_legend[[i]] <- p
+}
+
+# Arrange the plots (without legends) into a grid
+p_grid <- plot_grid(plotlist = plots_no_legend, ncol = 3, align = 'h')
+
+# Combine the plot grid and the single, shared legend
+# The rel_widths argument controls the relative horizontal space for the plots vs. the legend
+final_plot <- plot_grid(p_grid, legend, ncol = 2, rel_widths = c(3, 0.4))
+
+# Save the final combined plot to a single PDF file
+ggsave("clade_depth_plots_denv.pdf", final_plot, width = 12, height = 8)
+```
+
+```{r}
+
+# clade_node_depths      <- c(2 , 3, 7)
+# sigma_t_values        <- c(0.5*4.118, 4.118, 4.118*2)
+# sigma_x_values        <- c(0.5*0.551, 0.551, 0.551*2)
+clade_node_depths      <- c(2 , 3, 7)
+sigma_t_values        <- c( 4.118)
+sigma_x_values        <- c( 0.551)
+
+layout_config <- new_layout_config(
+  save_format = "pdf",
+  reverse_x = 1,
+  reverse_y = 1,
+  arrow_plot_threshold = 0.3
+)
+        
+# Create output directory if not exists
+if (!dir.exists("cluster_mapping_phylo")) {
+  dir.create("cluster_mapping_phylo")
+}
+
+
+# A list to store the generated plots
+plots <- list()
+
+# Loop over all combinations to generate plots
+# All plots are created with their legends initially
+# Loop over all combinations
+for (clade_depth in clade_node_depths) {
+    for (sigma_t in sigma_t_values) {
+      for (sigma_x in sigma_x_values) {
+        p <- plot_cluster_mapping(
+          df_coords = positions,
+          output_dir = "cluster_mapping_phylo",
+          ndim = optimal_params$N,
+          layout_config = layout_config,
+          annotation_config = annotation_config,
+          aesthetic_config = aesthetic_config,
+          draw_arrows = TRUE,
+          annotate_arrows = FALSE,
+          phylo_tree = phylo_tree,
+          clade_node_depth = clade_depth,
+          sigma_t = sigma_t,
+          sigma_x = sigma_x
+        )
+        plots[[length(plots) + 1]] <- p
+    }
+  }
+}
+
+# Extract the legend from the last plot
+legend <- get_legend(plots[[length(plots)]])
+
+# Create a new list to store plots without legends but with subtitles
+plots_no_legend <- list()
+
+# Loop through the generated plots to add subtitles and remove individual legends
+for (i in 1:length(plots)) {
+    clade_depth <- clade_node_depths[i]
+    p <- plots[[i]] +
+         theme(legend.position = "none") +
+         labs(subtitle = paste("Clade Depth:", clade_depth))
+    plots_no_legend[[i]] <- p
+}
+
+# Arrange the plots (without legends) into a grid
+p_grid <- plot_grid(plotlist = plots_no_legend, ncol = 3, align = 'h')
+
+# Combine the plot grid and the single, shared legend
+# The rel_widths argument controls the relative horizontal space for the plots vs. the legend
+final_plot <- plot_grid(p_grid, legend, ncol = 2, rel_widths = c(3, 0.4))
+
+# Save the final combined plot to a single PDF file
+ggsave("clade_depth_plots_denv.pdf", final_plot, width = 12, height = 8)
+```
 
 ## Session Info
 

@@ -387,10 +387,16 @@ cat("MAE:", round(result$mae, 4), "\n")
 
 ```
 
+
+## The resulting map
+
 ```{r}
 # Convert positions matrix to data frame
-positions <- as.data.frame(result$positions)
-positions$name <- rownames(positions)
+# positions <- as.data.frame(result$positions)
+# positions$name <- rownames(positions)
+
+positions <- read.csv("comparison_results/coordinates/topolow_H3N2_coords.csv")
+positions$name <- positions$X
 
 # Add antigen/antiserum indicators based on rownames
 positions$antigen <- startsWith(positions$name, "V/")
@@ -413,17 +419,13 @@ positions <- positions %>%
 
 # Remove any rows that didn't get metadata matched
 positions <- na.omit(positions)
-write.csv(positions, "h3n2_68_03_valid_positions.csv", row.names=FALSE)
+#write.csv(positions, "h3n2_68_03_valid_positions.csv", row.names=FALSE)
 #write.csv(positions, "../data-raw/example_positions.csv", row.names=FALSE)
 ```
 
 
-## The resulting map
 
 ```{r}
-library(topolow)
-positions <- read.csv("comparison_results/coordinates/topolow_H3N2_coords.csv")
-
 annotation_config <- new_annotation_config(
   size = 4.9,                              # Text size
   color = "black",                         # Text color
@@ -442,6 +444,7 @@ aesthetic_config <- new_aesthetic_config(
     high = "red"
   ),
   show_labels = FALSE,
+   show_title = FALSE,
   title_size = 12,
   axis_text_size = 10,
   show_legend = TRUE,
@@ -452,7 +455,7 @@ aesthetic_config <- new_aesthetic_config(
 # To mirror the maps to make them comparable with other maps set the reverse parameter to -1
 layout_config <- new_layout_config(
   save_format = "png",
-  reverse_x = -1,  # Reverse x-axis
+  reverse_x = 1,  # Reverse x-axis
   reverse_y = -1,   # Reverse y-axis
   arrow_plot_threshold = 2
 )
@@ -472,7 +475,8 @@ p2 <- plot_cluster_mapping(positions,
              annotate_arrows = FALSE,
             phylo_tree = phylo_tree,
             show_one_arrow_per_cluster = FALSE,
-            cluster_legend_order = c( "HK68", "EN72", "VI75", "TX77", "BK79", "SI87", "BE89", "BE92", "WU95", "SY97", "FU02")
+            cluster_legend_order = c( "HK68", "EN72", "VI75", "TX77", "BK79", 
+                              "SI87", "BE89", "BE92", "WU95", "SY97", "FU02")
                            )
 
 print(p2)
@@ -490,49 +494,104 @@ print(cart_plot)
 
 ```
 
-```{r}
 
-clade_node_depths      <- 2:6
-sigma_values           <- seq(0.5, 2, by = 0.5)
-arrow_plot_thresholds  <- seq(0.5, 3, by = 1)
+Plotting with various velocity thresholds:
+```{r}
+# Load the required libraries
+library(cowplot)
+library(gridExtra)
+
+# clade_node_depths      <- c(2, 5, 10)
+# sigma_t_values        <- c(0.5*1.133, 1.133, 1.133*2)
+# sigma_x_values        <- c(0.5*1.823, 1.823, 1.823*2)
+
+clade_node_depths <- c(5)
+sigma_t_values <- c(0.5*1.133, 1.133, 1.133*2)
+sigma_x_values <- c(1.823)
+
+
+aesthetic_config <- new_aesthetic_config(
+  point_size = 2.5,
+  point_alpha = 0.6,
+  point_shapes = c(antigen = 16, antiserum = 5),
+  color_palette = "c25",
+  gradient_colors = list(
+    low = "blue",
+    high = "red"
+  ),
+  show_labels = FALSE,
+  show_title = FALSE,
+  title_size = 12,
+  axis_text_size = 10,
+  show_legend = TRUE,
+  legend_position = "right",
+  arrow_alpha = 0.5
+)
+
+layout_config <- new_layout_config(
+  save_format = "pdf",
+  reverse_x = 1,
+  reverse_y = -1,
+  arrow_plot_threshold = 2
+)
 
 # Create output directory if not exists
 if (!dir.exists("cluster_mapping_phylo")) {
   dir.create("cluster_mapping_phylo")
 }
 
-# Loop over all combinations
+# A list to store the generated plots
+plots <- list()
+
+# Loop over all combinations to generate plots
+# All plots are created with their legends initially
 for (clade_depth in clade_node_depths) {
-  for (arrow_thresh in arrow_plot_thresholds) {
-    for (sigma_t in sigma_values) {
-      for (sigma_x in sigma_values) {
-        
-        layout_config <- new_layout_config(
-          save_format = "png",
-          reverse_x = -1,
-          reverse_y = -1,
-          sigma_t = sigma_t,
-          sigma_x = sigma_x,
-          arrow_plot_threshold = arrow_thresh
-        )
-        
-        p <- plot_cluster_mapping(
-          df_coords = positions,
-          output_dir = "cluster_mapping_phylo",
-          ndim = optimal_params$N,
-          layout_config = layout_config,
-          annotation_config = annotation_config,
-          aesthetic_config = aesthetic_config,
-          draw_arrows = TRUE,
-          annotate_arrows = FALSE,
-          phylo_tree = phylo_tree,
-          clade_node_depth = clade_depth
-        )
-      }
+  for (sigma_t in sigma_t_values) {
+    for (sigma_x in sigma_x_values) {
+      p <- plot_cluster_mapping(
+        df_coords = positions,
+        output_dir = "cluster_mapping_phylo",
+        ndim = optimal_params$N,
+        layout_config = layout_config,
+        annotation_config = annotation_config,
+        aesthetic_config = aesthetic_config,
+        draw_arrows = TRUE,
+        annotate_arrows = FALSE,
+        phylo_tree = phylo_tree,
+        clade_node_depth = clade_depth,
+        sigma_t = sigma_t,
+        sigma_x = sigma_x,
+        cluster_legend_order = c("HK68", "EN72", "VI75", "TX77", "BK79", "SI87", "BE89", "BE92", "WU95", "SY97", "FU02")
+      )
+      plots[[length(plots) + 1]] <- p
     }
   }
 }
 
+# Extract the legend from the last plot
+legend <- get_legend(plots[[length(plots)]])
+
+# Create a new list to store plots without legends but with subtitles
+plots_no_legend <- list()
+
+# Loop through the generated plots to add subtitles and remove individual legends
+for (i in 1:length(plots)) {
+    sigma_t <- sigma_t_values[i]
+    p <- plots[[i]] +
+         theme(legend.position = "none") +
+         labs(subtitle = paste("Temporal Bandwidth:", sigma_t))
+    plots_no_legend[[i]] <- p
+}
+
+# Arrange the plots (without legends) into a grid
+p_grid <- plot_grid(plotlist = plots_no_legend, ncol = 3, align = 'h')
+
+# Combine the plot grid and the single, shared legend
+# The rel_widths argument controls the relative horizontal space for the plots vs. the legend
+final_plot <- plot_grid(p_grid, legend, ncol = 2, rel_widths = c(3, 0.4))
+
+# Save the final combined plot to a single PDF file
+ggsave("Temporal_Bandwidth_plots_h3n2.pdf", final_plot, width = 12, height = 8)
 ```
 
 

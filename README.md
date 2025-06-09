@@ -148,6 +148,19 @@ Topolow employs a novel physical model where:
 
 This approach allows Topolow to effectively optimize antigenic positions through a series of one-dimensional calculations, eliminating the need for complex gradient computations required by traditional MDS methods.
 
+## Antigenic Velocity
+
+- **What it is**  
+  Computes for each antigen a **velocity vector**  showing the rate and direction of each antigen’s drift. 
+  \[
+    v_i = \frac{\sum_{j:\,t_j<t_i} K_{ij}\,\frac{x_i - x_j}{t_i - t_j}}
+               {\sum_{j:\,t_j<t_i} K_{ij}}
+  \]
+
+- **Key parameters**  
+  - `sigma_x` (antigenic bandwidth) and `sigma_t` (temporal bandwidth) — default: auto-estimated via Silverman’s rule  
+  - `clade_depth` — depth (in tree edges) for phylo-aware clade filtering (Average Leaf-to-Backbone Distance)
+
 ## Features
 
 -   **Physics-inspired optimization**: Employs a spring-mass system for robust positioning in high-dimensional spaces
@@ -158,6 +171,7 @@ This approach allows Topolow to effectively optimize antigenic positions through
 -   **Cross-validation**: Built-in validation framework for performance assessment
 -   **Parallel processing**: Support for multi-core and HPC environments
 -   **Visualization tools**: Interactive and publication-ready map generation
+-   **Phylogenetically-Aware Clade Detection**: Dynamic depth-based clades (no rooting or branch lengths required) are defined based on Average Leaf-to-Backbone Distance (ALBD) in the tree
 
 ## Input Data Format
 
@@ -256,7 +270,7 @@ If you use this package, please cite the article:
 
 Arhami and Rohani, 2025 <doi:10.1101/2025.02.09.637307>
 
-Software doi: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15231882.svg)](https://doi.org/10.5281/zenodo.15231882)
+Software doi: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15620983.svg)](https://doi.org/10.5281/zenodo.15620983)
 
 ## Contact
 

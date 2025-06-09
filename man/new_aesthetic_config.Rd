@@ -11,7 +11,7 @@ new_aesthetic_config(
   color_palette = c25,
   gradient_colors = list(low = "blue", high = "red"),
   show_labels = FALSE,
-  show_title = TRUE,
+  show_title = FALSE,
   label_size = 3,
   title_size = 14,
   subtitle_size = 12,
@@ -38,7 +38,7 @@ new_aesthetic_config(
 
 \item{show_labels}{Whether to show point labels}
 
-\item{show_title}{Whether to show plot title (default: TRUE)}
+\item{show_title}{Whether to show plot title (default: FALSE)}
 
 \item{label_size}{Label text size}
 
