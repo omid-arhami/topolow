@@ -91,6 +91,7 @@ Higher values do not necessarily lead to a better convergence
 }
 }
 \examples{
+\dontrun{
 # Create a simple distance matrix
 dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
 
@@ -100,5 +101,5 @@ result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=1000,
                       
 # Plot results
 plot(result$positions)
-
+}
 }

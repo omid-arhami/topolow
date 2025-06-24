@@ -55,5 +55,4 @@ p2_interactive <- make_interactive(p2,
   tooltip_vars = c("cluster", "year", "antigen")
 )
 }
-
 }

@@ -74,7 +74,10 @@
 #'   is_titer = FALSE
 #' )
 #' }
-#'
+#' @importFrom utils read.csv
+#' @importFrom dplyr %>% group_by mutate ungroup summarise select distinct left_join
+#' @importFrom rlang sym
+#' @importFrom stats na.omit
 #' @export
 process_antigenic_data <- function(file_path, antigen_col, serum_col, 
                                    value_col,
@@ -348,7 +351,10 @@ process_antigenic_data <- function(file_path, antigen_col, serum_col,
 #'   is_titer = FALSE
 #' )
 #' }
-#'
+#' @importFrom utils read.csv
+#' @importFrom dplyr %>% group_by mutate ungroup summarise select distinct left_join
+#' @importFrom rlang sym
+#' @importFrom stats na.omit
 #' @export
 process_antigenic_data_notransform <- function(file_path, antigen_col, serum_col, 
                                    value_col,
@@ -660,6 +666,9 @@ validate_antigenic_data <- function(data, antigen_col, serum_col, value_col,
 #' # Check pruning statistics
 #' print(pruned$stats)
 #' }
+#' @importFrom dplyr %>% filter
+#' @importFrom rlang sym
+#' @importFrom igraph graph_from_data_frame is_connected components
 #' @export
 prune_distance_network <- function(data, virus_col, antibody_col,
                                    min_connections, iterations = 100) {
@@ -762,363 +771,6 @@ prune_distance_network <- function(data, virus_col, antibody_col,
 }
 
 
-#' Prune Distance Data for Network Quality with Temporal Coverage
-#'
-#' @description
-#' Prunes network data while maintaining temporal coverage by keeping the most well-connected
-#' points in each year. For each year, retains points with at least min_connections, but if
-#' this leaves too few points, keeps the top min_per_year most-connected points regardless
-#' of their connection count.
-#'
-#' @param data Data frame in long format containing:
-#'        - Column for viruses/antigens
-#'        - Column for antibodies/antisera
-#'        - Distance measurements (can contain NAs)
-#'        - Column for years
-#' @param virus_col Character name of virus/antigen column
-#' @param antibody_col Character name of antibody/antiserum column 
-#' @param year_col Character name of year column
-#' @param min_connections Target minimum connections (soft threshold)
-#' @param min_per_year Integer minimum points to keep per year (default: 1)
-#' @param iterations Integer maximum pruning iterations (default 100)
-#' @return List containing:
-#'   \item{pruned_data}{Data frame of pruned measurements}
-#'   \item{stats}{List of pruning statistics including:
-#'     \itemize{
-#'       \item original_points: Number of points before pruning
-#'       \item remaining_points: Number of points after pruning
-#'       \item min_connections: Target connection threshold used
-#'       \item years_coverage: Points per year in final set
-#'     }
-#'   }
-#' @examples
-#' \dontrun{
-#' pruned <- prune_distance_network_temporal(
-#'   data = hiv_results$long,
-#'   virus_col = "Virus",
-#'   antibody_col = "Antibody",
-#'   year_col = "virusYear",
-#'   min_connections = 10,
-#'   min_per_year = 1
-#' )
-#' }
-#' @export
-prune_distance_network_temporal <- function(data, virus_col, antibody_col, year_col,
-                                            min_connections, min_per_year = 1,
-                                            iterations = 100) {
-  # Input validation [same as before]
-  
-  # Process each year separately to maintain coverage
-  years <- sort(unique(data[[year_col]]))
-  pruned_data <- data.frame() # Initialize empty
-  
-  for(year in years) {
-    # Get data for this year
-    year_data <- data[data[[year_col]] == year,]
-    
-    # Count connections for viruses and antibodies in this year
-    virus_counts <- table(year_data[[virus_col]])
-    antibody_counts <- table(year_data[[antibody_col]])
-    
-    # Function to select top N points by connections
-    select_top_points <- function(counts, n) {
-      if(length(counts) <= n) return(names(counts))
-      names(sort(counts, decreasing = TRUE)[1:n])
-    }
-    
-    # Get well-connected points and top points if needed
-    keep_virus <- names(virus_counts[virus_counts >= min_connections])
-    keep_antibody <- names(antibody_counts[antibody_counts >= min_connections])
-    
-    # If we don't have enough points, add more based on connection counts
-    if(length(keep_virus) + length(keep_antibody) < min_per_year) {
-      # Calculate how many more points needed
-      n_needed <- min_per_year - length(keep_virus) - length(keep_antibody)
-      
-      # Split needed points between viruses and antibodies
-      n_virus <- ceiling(n_needed/2)
-      n_antibody <- floor(n_needed/2)
-      
-      # Add top viruses not already included
-      remaining_virus <- setdiff(names(virus_counts), keep_virus)
-      if(length(remaining_virus) > 0) {
-        remaining_counts <- virus_counts[remaining_virus]
-        top_virus <- select_top_points(remaining_counts, n_virus)
-        keep_virus <- c(keep_virus, top_virus)
-      }
-      
-      # Add top antibodies not already included
-      remaining_antibody <- setdiff(names(antibody_counts), keep_antibody)
-      if(length(remaining_antibody) > 0) {
-        remaining_counts <- antibody_counts[remaining_antibody]
-        top_antibody <- select_top_points(remaining_counts, n_antibody)
-        keep_antibody <- c(keep_antibody, top_antibody)
-      }
-    }
-    
-    # Keep measurements involving selected points
-    year_pruned <- year_data %>%
-      filter(!!sym(virus_col) %in% keep_virus |
-               !!sym(antibody_col) %in% keep_antibody)
-    
-    # Add to overall pruned data
-    pruned_data <- rbind(pruned_data, year_pruned)
-  }
-  
-  # Calculate statistics
-  n_original <- length(unique(c(data[[virus_col]], data[[antibody_col]])))
-  n_remaining <- length(unique(c(pruned_data[[virus_col]], 
-                                 pruned_data[[antibody_col]])))
-  
-  # Get final year coverage
-  virus_counts <- pruned_data %>%
-    select(point = !!sym(virus_col), !!sym(year_col)) %>%
-    unique() %>%
-    group_by(!!sym(year_col)) %>%
-    summarise(n_virus = n(), .groups = 'drop')
-  
-  antibody_counts <- pruned_data %>%
-    select(point = !!sym(antibody_col), !!sym(year_col)) %>%
-    unique() %>%
-    group_by(!!sym(year_col)) %>%
-    summarise(n_antibody = n(), .groups = 'drop')
-  
-  year_coverage <- full_join(
-    virus_counts,
-    antibody_counts,
-    by = year_col
-  ) %>%
-    mutate(
-      n_virus = ifelse(is.na(n_virus), 0, n_virus),
-      n_antibody = ifelse(is.na(n_antibody), 0, n_antibody),
-      total_points = n_virus + n_antibody
-    ) %>%
-    arrange(!!sym(year_col))
-  
-  final_stats <- list(
-    original_points = n_original,
-    remaining_points = n_remaining,
-    min_connections = min_connections,
-    years_coverage = year_coverage
-  )
-  
-  # Check connectivity
-  check_connectivity <- function(data, virus_col, antibody_col) {
-    edges <- data.frame(
-      from = data[[virus_col]],
-      to = data[[antibody_col]]
-    )
-    g <- igraph::graph_from_data_frame(edges, directed = FALSE)
-    is_connected <- igraph::is_connected(g)
-    
-    if(!is_connected) {
-      components <- igraph::components(g)
-      warning(sprintf(
-        "Network has %d disconnected components. Consider reducing min_connections.",
-        components$no
-      ))
-    }
-    
-    return(is_connected)
-  }
-  
-  final_stats$is_connected <- check_connectivity(pruned_data, virus_col, antibody_col)
-  
-  return(list(
-    pruned_data = pruned_data,
-    stats = final_stats
-  ))
-}
-
-
-#' Prune Distance Network by Keeping Top N Points Per Year
-#'
-#' @description
-#' Prunes network data by keeping the top N most-connected viruses and antibodies 
-#' for each year. If a year has fewer than min_per_year points, keeps all points
-#' for that year sorted by their connection counts.
-#'
-#' @param data Data frame in long format containing:
-#'        - Column for viruses/antigens
-#'        - Column for antibodies/antisera
-#'        - Distance measurements (can contain NAs)
-#'        - Column for years
-#' @param virus_col Character name of virus/antigen column
-#' @param antibody_col Character name of antibody/antiserum column 
-#' @param year_col Character name of year column
-#' @param top_n Integer number of top viruses and antibodies to keep per year
-#' @param min_per_year Integer minimum total points to keep per year (default: 1)
-#' @return List containing:
-#'   \item{pruned_data}{Data frame of pruned measurements}
-#'   \item{stats}{List of pruning statistics including:
-#'     \itemize{
-#'       \item original_points: Number of points before pruning
-#'       \item remaining_points: Number of points after pruning
-#'       \item top_n: Number of top points requested per category
-#'       \item years_coverage: Points per year in final set
-#'     }
-#'   }
-#' @examples
-#' \dontrun{
-#' pruned <- prune_distance_network_topn(
-#'   data = hiv_results$long,
-#'   virus_col = "Virus",
-#'   antibody_col = "Antibody",
-#'   year_col = "virusYear",
-#'   top_n = 5,
-#'   min_per_year = 1
-#' )
-#' }
-#' @export
-prune_distance_network_topn <- function(data, virus_col, antibody_col, year_col,
-                                        top_n, min_per_year = 1) {
-  # Input validation
-  if (!is.data.frame(data)) {
-    stop("data must be a data frame")
-  }
-  
-  if (!all(c(virus_col, antibody_col, year_col) %in% names(data))) {
-    stop("Specified virus, antibody, and year columns must exist in data")
-  }
-  
-  if (!is.numeric(top_n) || top_n < 1) {
-    stop("top_n must be a positive integer")
-  }
-  
-  if (!is.numeric(min_per_year) || min_per_year < 1) {
-    stop("min_per_year must be a positive integer")
-  }
-  
-  # Process each year separately to maintain coverage
-  years <- sort(unique(data[[year_col]]))
-  pruned_data <- data.frame() # Initialize empty
-  
-  # Function to select top N points by connections
-  select_top_points <- function(counts, n) {
-    if(length(counts) <= n) return(names(counts))
-    names(sort(counts, decreasing = TRUE)[1:n])
-  }
-  
-  for(year in years) {
-    # Get data for this year
-    year_data <- data[data[[year_col]] == year,]
-    
-    # Count connections for viruses and antibodies in this year
-    virus_counts <- table(year_data[[virus_col]])
-    antibody_counts <- table(year_data[[antibody_col]])
-    
-    # Select top points for this year
-    if(length(virus_counts) + length(antibody_counts) < min_per_year) {
-      # If total points less than minimum, keep all
-      keep_virus <- names(virus_counts)
-      keep_antibody <- names(antibody_counts)
-    } else {
-      # Get top N for each category
-      keep_virus <- select_top_points(virus_counts, top_n)
-      keep_antibody <- select_top_points(antibody_counts, top_n)
-      
-      # If combination falls below minimum, adjust
-      if(length(keep_virus) + length(keep_antibody) < min_per_year) {
-        # Calculate how many more points needed
-        n_needed <- min_per_year - length(keep_virus) - length(keep_antibody)
-        
-        # Split needed points between viruses and antibodies
-        n_virus <- ceiling(n_needed/2)
-        n_antibody <- floor(n_needed/2)
-        
-        # Add additional top viruses if available
-        remaining_virus <- setdiff(names(virus_counts), keep_virus)
-        if(length(remaining_virus) > 0) {
-          remaining_counts <- virus_counts[remaining_virus]
-          extra_virus <- select_top_points(remaining_counts, n_virus)
-          keep_virus <- c(keep_virus, extra_virus)
-        }
-        
-        # Add additional top antibodies if available
-        remaining_antibody <- setdiff(names(antibody_counts), keep_antibody)
-        if(length(remaining_antibody) > 0) {
-          remaining_counts <- antibody_counts[remaining_antibody]
-          extra_antibody <- select_top_points(remaining_counts, n_antibody)
-          keep_antibody <- c(keep_antibody, extra_antibody)
-        }
-      }
-    }
-    
-    # Keep measurements involving selected points
-    year_pruned <- year_data %>%
-      filter(!!sym(virus_col) %in% keep_virus |
-               !!sym(antibody_col) %in% keep_antibody)
-    
-    # Add to overall pruned data
-    pruned_data <- rbind(pruned_data, year_pruned)
-  }
-  
-  # Calculate statistics
-  n_original <- length(unique(c(data[[virus_col]], data[[antibody_col]])))
-  n_remaining <- length(unique(c(pruned_data[[virus_col]], 
-                                 pruned_data[[antibody_col]])))
-  
-  # Get final year coverage
-  virus_counts <- pruned_data %>%
-    select(point = !!sym(virus_col), !!sym(year_col)) %>%
-    unique() %>%
-    group_by(!!sym(year_col)) %>%
-    summarise(n_virus = n(), .groups = 'drop')
-  
-  antibody_counts <- pruned_data %>%
-    select(point = !!sym(antibody_col), !!sym(year_col)) %>%
-    unique() %>%
-    group_by(!!sym(year_col)) %>%
-    summarise(n_antibody = n(), .groups = 'drop')
-  
-  year_coverage <- full_join(
-    virus_counts,
-    antibody_counts,
-    by = year_col
-  ) %>%
-    mutate(
-      n_virus = ifelse(is.na(n_virus), 0, n_virus),
-      n_antibody = ifelse(is.na(n_antibody), 0, n_antibody),
-      total_points = n_virus + n_antibody
-    ) %>%
-    arrange(!!sym(year_col))
-  
-  final_stats <- list(
-    original_points = n_original,
-    remaining_points = n_remaining,
-    top_n = top_n,
-    years_coverage = year_coverage
-  )
-  
-  # Check connectivity
-  check_connectivity <- function(data, virus_col, antibody_col) {
-    edges <- data.frame(
-      from = data[[virus_col]],
-      to = data[[antibody_col]]
-    )
-    g <- igraph::graph_from_data_frame(edges, directed = FALSE)
-    is_connected <- igraph::is_connected(g)
-    
-    if(!is_connected) {
-      components <- igraph::components(g)
-      warning(sprintf(
-        "Network has %d disconnected components. Consider adjusting top_n.",
-        components$no
-      ))
-    }
-    
-    return(is_connected)
-  }
-  
-  final_stats$is_connected <- check_connectivity(pruned_data, virus_col, antibody_col)
-  
-  return(list(
-    pruned_data = pruned_data,
-    stats = final_stats
-  ))
-}
-
-
 #' Detect Outliers Using Median Absolute Deviation
 #'
 #' @description
@@ -1158,6 +810,7 @@ prune_distance_network_topn <- function(data, virus_col, antibody_col, year_col,
 #' print(outliers$stats$n_outliers) # Number of outliers
 #' clean_params <- params[!outliers$outlier_mask] # Remove outliers
 #' }
+#' @importFrom stats median mad
 #' @keywords internal
 detect_outliers_mad <- function(data, k = 3, take_log=FALSE) {
   # Extract numeric values and handle thresholds

@@ -33,7 +33,7 @@ test_that("plot_cluster_mapping creates valid plot", {
     name = paste0(ifelse(rep(c(TRUE, FALSE), 5), "V/", "S/"), "strain", 1:10)
   )
   
-  plot <- plot_cluster_mapping(test_df, ndim=2)
+  plot <- plot_cluster_mapping(test_df, ndim=2, )
   expect_s3_class(plot, "ggplot")
 })
 

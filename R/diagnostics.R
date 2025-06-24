@@ -48,6 +48,8 @@
 #' print(conv_results)  # Shows summary
 #' plot(conv_results)   # Creates convergence plots
 #' }
+#' @importFrom stats na.omit cov
+#' @importFrom utils tail
 #' @export
 check_gaussian_convergence <- function(data, window_size = 300, tolerance = 1e-2) {
   if (!is.data.frame(data) && !is.matrix(data)) {
@@ -147,6 +149,9 @@ check_gaussian_convergence <- function(data, window_size = 300, tolerance = 1e-2
 #' print(diag$rhat) # Should be close to 1
 #' print(diag$ess)  # Should be large enough (>400) for reliable inference
 #' }
+#' @importFrom utils read.csv
+#' @importFrom stats complete.cases var
+#' @importFrom coda mcmc.list mcmc gelman.diag effectiveSize
 #' @export
 calculate_diagnostics <- function(chain_files, mutual_size=500) {
   # Validate inputs
@@ -316,6 +321,9 @@ calculate_diagnostics <- function(chain_files, mutual_size=500) {
 #' # Calculate all pairwise distances
 #' all_distances <- calculate_cumulative_distances(coords, ndim=2, reference_row=FALSE)
 #' }
+#' @importFrom stats na.omit
+#' @importFrom dplyr %>% filter mutate group_by summarize
+#' @importFrom grDevices colors
 #' @export
 calculate_cumulative_distances <- function(df_coords, ndim, 
                                         reference_row=FALSE,
@@ -421,6 +429,8 @@ calculate_cumulative_distances <- function(df_coords, ndim,
 #' annual_stats <- calculate_annual_distances(coords, ndim=2)
 #' print(annual_stats$summary$overall_mean)
 #' }
+#' @importFrom stats na.omit sd
+#' @importFrom dplyr %>% mutate left_join group_by summarise across all_of select
 #' @export
 calculate_annual_distances <- function(df_coords, ndim, na.rm=TRUE) {
   # Add name column if missing
@@ -483,7 +493,7 @@ calculate_annual_distances <- function(df_coords, ndim, na.rm=TRUE) {
 #' metrics <- analyze_network_structure(dist_mat)
 #' print(metrics$summary$completeness)
 #' }
-#' @importFrom igraph graph_from_adjacency_matrix degree
+#' @importFrom igraph graph_from_adjacency_matrix
 #' @export
 analyze_network_structure <- function(distance_matrix) {
   if (!is.matrix(distance_matrix)) {
@@ -558,7 +568,7 @@ analyze_network_structure <- function(distance_matrix) {
 #' heatmap_data <- prepare_heatmap_data(dist_mat)
 #' print(heatmap_data$stats$completeness)
 #' }
-#' @importFrom stats hclust dist
+#' @importFrom stats sd hclust dist
 #' @export
 prepare_heatmap_data <- function(distance_matrix, 
                                 cluster_rows = FALSE,

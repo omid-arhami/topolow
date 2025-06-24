@@ -72,7 +72,8 @@
 #'                             values_column = "distance",
 #'                             sort = TRUE)
 #' }
-#'
+#' @importFrom data.table setDT
+#' @importFrom stats na.omit
 #' @export
 long_to_matrix <- function(data, chnames, chorder = NULL, 
                           rnames, rorder = NULL, values_column, 
@@ -389,6 +390,7 @@ symmetric_to_nonsymmetric_matrix <- function(dist_matrix, selected_names) {
 #' 
 #' @param positions Matrix of coordinates where rows are points and columns are dimensions
 #' @return Matrix of pairwise distances between points
+#' @importFrom stats dist
 #' @export
 coordinates_to_matrix <- function(positions) {
   if (!is.matrix(positions)) {
@@ -451,6 +453,8 @@ only_virus_vs_as <- function(dist_matrix, selected_names) {
 #' # Transform and overwrite original
 #' log_transform_parameters("samples.csv")
 #' }
+#' @importFrom utils read.csv write.csv
+#' @importFrom stats na.omit
 #' @export
 log_transform_parameters <- function(samples_file, output_file = NULL) {
   # Validate input file

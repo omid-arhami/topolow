@@ -79,5 +79,4 @@ mat_sorted <- long_to_matrix(data,
                             values_column = "distance",
                             sort = TRUE)
 }
-
 }

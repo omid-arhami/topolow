@@ -1043,7 +1043,7 @@ hiv_positions <- read_csv("hiv_positions.csv",
                           stringsAsFactors = FALSE,
                           header           = TRUE,
                           check.names      = FALSE)
-HIV_viruses <- read.csv("HIV_viruses.csv",
+HIV_viruses <- read.csv("hiv_viruses.csv",
                      stringsAsFactors = FALSE,
                      header           = TRUE,
                      check.names      = FALSE)

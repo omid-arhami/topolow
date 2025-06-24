@@ -1,1 +1,13 @@
 ^data-raw$
+^inst/examples$
+^LICENSE\.txt$
+^README\.html$
+^build_package\.R$
+^check-coverage\.R$
+^citation\.cff$
+^cran-comments\.md$
+^github$
+^install_github\.R$
+^paper\.md$
+^set_up_testing\.R$
+^\.github$

@@ -235,6 +235,7 @@ new_aesthetic_config <- function(
 #' @param y_limits Numeric vector of length 2 specifying c(min, max) for y-axis. If NULL, limits are set automatically.
 #' @param arrow_plot_threshold Threshold for velocity arrows to be drawn in the same antigenic distance unit (default: 0.10)
 #' @return A layout_config object
+#' @importFrom ggplot2 margin
 #' @export
 new_layout_config <- function(
   width = 8,
@@ -404,6 +405,7 @@ new_dim_reduction_config <- function(
 #' @param require_clusters Whether cluster column is required
 #' @param require_temporal Whether year column is required
 #' @return Validated data frame or throws error if invalid
+#' @importFrom stats na.omit
 #' @keywords internal
 validate_topolow_df <- function(df, ndim, require_clusters = FALSE, require_temporal = FALSE) {
   # Check if df is a data frame
@@ -459,6 +461,9 @@ validate_topolow_df <- function(df, ndim, require_clusters = FALSE, require_temp
 #' @param df Data frame containing coordinate data
 #' @param config Dimension reduction configuration object
 #' @return Data frame with reduced dimensions
+#' @importFrom stats prcomp dist
+#' @importFrom umap umap
+#' @importFrom Rtsne Rtsne
 #' @keywords internal
 reduce_dimensions <- function(df, config) {
   if (!inherits(config, "dim_reduction_config")) {
@@ -535,6 +540,7 @@ reduce_dimensions <- function(df, config) {
 #' @param reduced_coords Matrix of reduced coordinates
 #' @param orig_dist Original distance matrix
 #' @return Scaled coordinate matrix
+#' @importFrom stats dist optimize
 #' @keywords internal
 scale_to_original_distances <- function(reduced_coords, orig_dist) {
   # Calculate reduced distance matrix
@@ -563,6 +569,7 @@ scale_to_original_distances <- function(reduced_coords, orig_dist) {
 #' @param aesthetic_config Aesthetic configuration object
 #' @param layout_config Layout configuration object
 #' @return ggplot2 theme object
+#' @importFrom ggplot2 theme_minimal theme element_text element_blank element_line element_rect
 #' @keywords internal
 create_base_theme <- function(aesthetic_config, layout_config) {
   theme_minimal() +
@@ -638,7 +645,6 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #'        Use x_limits and y_limits in layout_config to set axis limits.
 #' @param output_dir Character. Directory for output files. If NULL, uses current directory
 #' @param show_shape_legend Logical. Whether to show the shape legend (default: TRUE)
-#' @param cluster_legend_title Character. Title for the cluster legend (default: "Cluster")
 #' @param annotation_config Annotation configuration object for labeling notable points
 #' @param sigma_t Optional; numeric; bandwidth for the Gaussian kernel discounting on time in years or the time unit of the data. If NULL, uses Silverman's rule of thumb.
 #' @param sigma_x Optional; numeric; bandwidth for the Gaussian kernel discounting on antigenic distancein antigenic units. If NULL, uses Silverman's rule of thumb.
@@ -687,7 +693,11 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #' \code{\link{new_aesthetic_config}} for aesthetic options
 #' \code{\link{new_layout_config}} for layout options
 #' \code{\link{new_annotation_config}} for annotation options
-#'
+#' @importFrom ggrepel geom_label_repel geom_text_repel
+#' @importFrom ggplot2 ggplot aes geom_point geom_text geom_segment scale_colour_gradient scale_shape_manual scale_x_continuous scale_y_continuous labs
+#' @importFrom grid unit arrow
+#' @importFrom ape is.rooted unroot dist.nodes nodepath extract.clade
+#' @importFrom stats dist bw.nrd median
 #' @export
 plot_temporal_mapping <- function(df_coords, ndim, 
                                   dim_config = new_dim_reduction_config(),
@@ -696,7 +706,6 @@ plot_temporal_mapping <- function(df_coords, ndim,
                                   annotation_config = new_annotation_config(),
                                   output_dir = NULL,
                                   show_shape_legend = TRUE,
-                                  cluster_legend_title = "Cluster",
                                   draw_arrows = FALSE,
                                   annotate_arrows = TRUE,
                                   phylo_tree = NULL,
@@ -748,16 +757,15 @@ plot_temporal_mapping <- function(df_coords, ndim,
   # Create plot
   p <- ggplot(
     data = reduced_df[!reduced_df$is_notable, ],
-    aes(x = plot_x, y = plot_y, 
-        colour = year,
-        shape = point_type)) +
+    aes(x = .data$plot_x, y = .data$plot_y, color = .data$year,
+        shape = .data$point_type)) +
     geom_point(size = aesthetic_config$point_size,
                alpha = aesthetic_config$point_alpha) +
     # Plot notable points with filled shapes and outlines
     geom_point(
       data = reduced_df[reduced_df$is_notable & reduced_df$antigen, ],
-      aes(x = plot_x, y = plot_y, 
-          fill = year),
+      aes(x = .data$plot_x, y = .data$plot_y, 
+          fill = .data$year),
       shape = 21,  # Filled circle with outline
       color = "black",  # Outline color
       size = aesthetic_config$point_size * 1.2,
@@ -767,8 +775,8 @@ plot_temporal_mapping <- function(df_coords, ndim,
     # Notable antisera with different filled shape
     geom_point(
       data = reduced_df[reduced_df$is_notable & reduced_df$antiserum, ],
-      aes(x = plot_x, y = plot_y, 
-          fill = year),
+      aes(x = .data$plot_x, y = .data$plot_y, 
+          fill = .data$year),
       shape = 22,  # Filled square with outline
       color = "black",  # Outline color
       size = aesthetic_config$point_size * 1.2,
@@ -795,7 +803,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
         # Use label boxes with background
         p <- p + ggrepel::geom_label_repel(
           data = annotation_df,
-          aes(x = plot_x, y = plot_y, label = clean_name),
+          aes(x = .data$plot_x, y = .data$plot_y, label = .data$clean_name),
           size = annotation_config$size / ggplot2::.pt,
           color = annotation_config$color,
           alpha = annotation_config$alpha,
@@ -813,7 +821,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
         # Use simple text without background
         p <- p + ggrepel::geom_text_repel(
           data = annotation_df,
-          aes(x = plot_x, y = plot_y, label = clean_name),
+          aes(x = .data$plot_x, y = .data$plot_y, label = .data$clean_name),
           size = annotation_config$size / ggplot2::.pt,
           color = annotation_config$color,
           alpha = annotation_config$alpha,
@@ -833,7 +841,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
       warning("ggrepel package not available - using basic text labels without repulsion")
       p <- p + geom_text(
         data = annotation_df,
-        aes(x = plot_x, y = plot_y, label = clean_name),
+        aes(x = .data$plot_x, y = .data$plot_y, label = .data$clean_name),
         size = annotation_config$size / ggplot2::.pt,
         color = annotation_config$color,
         alpha = annotation_config$alpha,
@@ -855,11 +863,11 @@ plot_temporal_mapping <- function(df_coords, ndim,
     positions$V2 <- positions$plot_y
     
     if (!is.null(phylo_tree)) {
-      library(ape)
-      if (is.rooted(phylo_tree)) {
-        phylo_tree <- unroot(phylo_tree)
+      #library(ape)
+      if (ape::is.rooted(phylo_tree)) {
+        phylo_tree <- ape::unroot(phylo_tree)
       }
-      #— identify which tip names actually exist in the tree
+      #-- identify which tip names actually exist in the tree
       positions$name <- toupper(positions$name)
       all_points      <- positions$name
       tree_tips_up  <- toupper(phylo_tree$tip.label)
@@ -962,7 +970,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
     
     for (i in seq_len(n)) {
       this_pt <- positions$name[i]
-      # determine past indices, excluding only known “non‐clade” tips
+      # determine past indices, excluding only known "non‐clade" tips
       if (!is.null(phylo_tree) && this_pt %in% names(clade_members)) {
         # those present but *not* in the same clade
         bad <- setdiff(tree_present_points, clade_members[[this_pt]])
@@ -971,12 +979,12 @@ plot_temporal_mapping <- function(df_coords, ndim,
             !(positions$name %in% bad)
         )
       } else {
-        # either no tree or tip absent from tree → include *all* past points
+        # either no tree or tip absent from tree -> include *all* past points
         past_idx <- which(positions$year < positions$year[i])
       }
       
       if (length(past_idx)) {
-        #  positive dt = current − past
+        #  positive dt = current - past
         dt <- positions$year[i] - positions$year[past_idx]
         dx <- positions$V1[i] - positions$V1[past_idx]
         dy <- positions$V2[i] - positions$V2[past_idx]
@@ -994,7 +1002,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
     positions$mag <- sqrt(v1^2 + v2^2)
     
     top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
-    cat(sprintf("Showing only arrows with magnitude ≥ %.3f (figure unit)\n", layout_config$arrow_plot_threshold))
+    cat(sprintf("Showing only arrows with magnitude >= %.3f (figure unit)\n", layout_config$arrow_plot_threshold))
     
     # Calculate the unit vectors for direction
     top_vel$v1_unit <- top_vel$v1 / top_vel$mag
@@ -1004,12 +1012,12 @@ plot_temporal_mapping <- function(df_coords, ndim,
     # Convert point size to data units
     point_radius <- aesthetic_config$point_size * 1.7 / 72 * 2.54  # assuming point size is in points, convert to cm
     
-    # — overlay top-velocity points with filled shape + black outline —
+    # -- overlay top-velocity points with filled shape + black outline --
     p <- p +
       geom_point(
         data        = top_vel,
         inherit.aes = FALSE,
-        aes(x   = V1, y   = V2),
+        aes(x = .data$V1, y = .data$V2),
         shape       = 21,   # same filled‐circle shape you used for notable antigens
         color       = "black",
         size        = aesthetic_config$point_size * 1.2,
@@ -1022,11 +1030,11 @@ plot_temporal_mapping <- function(df_coords, ndim,
       geom_segment(
         data      = top_vel,
         inherit.aes = FALSE,
-        aes(x    = V1 - v1,
-            y    = V2 - v2,
+        aes(x    = .data$V1 - .data$v1,
+            y    = .data$V2 - .data$v2,
             # Adjust endpoints to stop at point border
-            xend = V1 - v1_unit * point_radius,
-            yend = V2 - v2_unit * point_radius),
+            xend = .data$V1 - .data$v1_unit * point_radius,
+            yend = .data$V2 - .data$v2_unit * point_radius),
         arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm")),
         alpha = aesthetic_config$arrow_alpha
       )
@@ -1038,9 +1046,9 @@ plot_temporal_mapping <- function(df_coords, ndim,
         geom_text(
           data = top_vel,
           aes(
-            x = V1 - v1 / 2,
-            y = V2 - v2 / 2,
-            label = sprintf("(%.2f)", mag)
+            x = .data$V1 - .data$v1 / 2,
+            y = .data$V2 - .data$v2 / 2,
+            label = sprintf("(%.2f)", .data$mag)
           ),
           size = 0.8*(annotation_config$size / ggplot2::.pt),  # Small font size
           hjust = 0.5,
@@ -1054,7 +1062,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
             ggrepel::geom_label_repel(
               data        = top_vel,
               inherit.aes = FALSE,
-              aes(x = V1, y = V2, label = name),
+              aes(x = .data$V1, y = .data$V2, label = .data$name),
               size              = annotation_config$size / ggplot2::.pt,
               color             = annotation_config$color,
               alpha             = annotation_config$alpha,
@@ -1073,7 +1081,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
             ggrepel::geom_text_repel(
               data        = top_vel,
               inherit.aes = FALSE,
-              aes(x = V1, y = V2, label = name),
+              aes(x = .data$V1, y = .data$V2, label = .data$name),
               size              = annotation_config$size / ggplot2::.pt,
               color             = annotation_config$color,
               alpha             = annotation_config$alpha,
@@ -1092,7 +1100,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
         warning("ggrepel package not available - using basic text labels without repulsion")
         p <- p + geom_text(
           data = top_vel,
-          aes(x = V1, y = V2, label = name),
+          aes(x = .data$V1, y = .data$V2, label = .data$name),
           size           = annotation_config$size / ggplot2::.pt,
           color          = annotation_config$color,
           alpha          = annotation_config$alpha,
@@ -1248,7 +1256,12 @@ plot_temporal_mapping <- function(df_coords, ndim,
 #' \code{\link{new_aesthetic_config}} for aesthetic options
 #' \code{\link{new_layout_config}} for layout options
 #' \code{\link{new_annotation_config}} for annotation options
-#'
+#' @importFrom ggrepel geom_label_repel geom_text_repel
+#' @importFrom ggplot2 ggplot aes geom_point geom_text geom_segment scale_colour_manual scale_fill_manual scale_shape_manual guides guide_legend labs scale_x_continuous scale_y_continuous
+#' @importFrom grid unit arrow
+#' @importFrom dplyr group_by filter ungroup
+#' @importFrom ape is.rooted unroot dist.nodes nodepath extract.clade
+#' @importFrom stats dist bw.nrd median
 #' @export
 plot_cluster_mapping <- function(df_coords, ndim,
                                  dim_config = new_dim_reduction_config(),
@@ -1358,13 +1371,13 @@ plot_cluster_mapping <- function(df_coords, ndim,
   # Create plot
   p <- ggplot()
   
-  ## Regular points   ——— EXCLUDING notable and arrow points ——— 
+  ## Regular points   ------ EXCLUDING notable and arrow points ------ 
   p <- p +
     geom_point(
       data = reduced_df[!reduced_df$is_notable & !reduced_df$is_arrow, ],
-      aes(x = plot_x, y = plot_y, 
-          color = cluster,
-          shape = point_type),
+      aes(x = .data$plot_x, y = .data$plot_y, 
+          color = .data$cluster,
+          shape = .data$point_type),
       size = aesthetic_config$point_size,
       alpha = aesthetic_config$point_alpha
     ) +
@@ -1372,8 +1385,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
     # Plot notable points with filled shapes and outlines
     geom_point(
       data = reduced_df[reduced_df$is_notable & reduced_df$antigen, ],
-      aes(x = plot_x, y = plot_y, 
-          fill = cluster),
+      aes(x = .data$plot_x, y = .data$plot_y, 
+          fill = .data$cluster),
       shape = 21,  # Filled circle with outline
       color = "black",  # Outline color
       size = aesthetic_config$point_size * 1.2,
@@ -1383,8 +1396,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
     # Notable antisera with different filled shape
     geom_point(
       data = reduced_df[reduced_df$is_notable & reduced_df$antiserum, ],
-      aes(x = plot_x, y = plot_y, 
-          fill = cluster),
+      aes(x = .data$plot_x, y = .data$plot_y, 
+          fill = .data$cluster),
       shape = 22,  # Filled square with outline
       color = "black",  # Outline color
       size = aesthetic_config$point_size * 1.2,
@@ -1417,7 +1430,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
         # Use label boxes with background
         p <- p + ggrepel::geom_label_repel(
           data = annotation_df,
-          aes(x = plot_x, y = plot_y, label = clean_name),
+          aes(x = .data$plot_x, y = .data$plot_y, label = .data$clean_name),
           size = annotation_config$size / ggplot2::.pt,
           color = annotation_config$color,
           alpha = annotation_config$alpha,
@@ -1435,7 +1448,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
         # Use simple text without background
         p <- p + ggrepel::geom_text_repel(
           data = annotation_df,
-          aes(x = plot_x, y = plot_y, label = clean_name),
+          aes(x = .data$plot_x, y = .data$plot_y, label = .data$clean_name),
           size = annotation_config$size / ggplot2::.pt,
           color = annotation_config$color,
           alpha = annotation_config$alpha,
@@ -1455,7 +1468,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
       warning("ggrepel package not available - using basic text labels without repulsion")
       p <- p + geom_text(
         data = annotation_df,
-        aes(x = plot_x, y = plot_y, label = clean_name),
+        aes(x = .data$plot_x, y = .data$plot_y, label = .data$clean_name),
         size = annotation_config$size / ggplot2::.pt,
         color = annotation_config$color,
         alpha = annotation_config$alpha,
@@ -1477,11 +1490,11 @@ plot_cluster_mapping <- function(df_coords, ndim,
     positions$V2 <- positions$plot_y
     
     if (!is.null(phylo_tree)) {
-      library(ape)
-      if (is.rooted(phylo_tree)) {
-        phylo_tree <- unroot(phylo_tree)
+      #library(ape)
+      if (ape::is.rooted(phylo_tree)) {
+        phylo_tree <- ape::unroot(phylo_tree)
       }
-      #— identify which tip names actually exist in the tree
+      #-- identify which tip names actually exist in the tree
       positions$name <- toupper(positions$name)
       all_points      <- positions$name
       tree_tips_up  <- toupper(phylo_tree$tip.label)
@@ -1584,7 +1597,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
     
     for (i in seq_len(n)) {
       this_pt <- positions$name[i]
-      # determine past indices, excluding only known “non‐clade” tips
+      # determine past indices, excluding only known "non‐clade" tips
       if (!is.null(phylo_tree) && this_pt %in% names(clade_members)) {
         # those present but *not* in the same clade
         bad <- setdiff(tree_present_points, clade_members[[this_pt]])
@@ -1593,12 +1606,12 @@ plot_cluster_mapping <- function(df_coords, ndim,
             !(positions$name %in% bad)
         )
       } else {
-        # either no tree or tip absent from tree → include *all* past points
+        # either no tree or tip absent from tree -> include *all* past points
         past_idx <- which(positions$year < positions$year[i])
       }
       
       if (length(past_idx)) {
-        #  positive dt = current − past
+        #  positive dt = current - past
         dt <- positions$year[i] - positions$year[past_idx]
         dx <- positions$V1[i] - positions$V1[past_idx]
         dy <- positions$V2[i] - positions$V2[past_idx]
@@ -1623,7 +1636,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
       cat("Showing one longest arrow per cluster\n")
     } else {
       top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
-      cat(sprintf("Showing only arrows with magnitude ≥ %.3f (figure unit)\n", layout_config$arrow_plot_threshold))
+      cat(sprintf("Showing only arrows with magnitude >= %.3f (figure unit)\n", layout_config$arrow_plot_threshold))
     }
     
     top_vel$cluster <- factor(top_vel$cluster, levels = cluster_levels)
@@ -1640,12 +1653,12 @@ plot_cluster_mapping <- function(df_coords, ndim,
     point_radius <- aesthetic_config$point_size * 1.7 / 72 * 2.54  # assuming point size is in points, convert to cm
     
     
-    # — overlay top-velocity points with filled shape + black outline —
+    # -- overlay top-velocity points with filled shape + black outline --
     p <- p +
       geom_point(
         data        = top_vel,
         inherit.aes = FALSE,
-        aes(x   = V1, y   = V2, fill = cluster),
+        aes(x = .data$V1, y = .data$V2, fill = .data$cluster),
         shape       = 21,   # same filled‐circle shape used for notable antigens
         color       = "black",
         size        = aesthetic_config$point_size * 1.2,
@@ -1658,11 +1671,11 @@ plot_cluster_mapping <- function(df_coords, ndim,
       geom_segment(
         data      = top_vel,
         inherit.aes = FALSE,
-        aes(x    = V1 - v1,
-            y    = V2 - v2,
+        aes(x = .data$V1 - .data$v1,
+            y = .data$V2 - .data$v2,
             # Adjust endpoints to stop at point border
-            xend = V1 - v1_unit * point_radius,
-            yend = V2 - v2_unit * point_radius),
+            xend = .data$V1 - .data$v1_unit * point_radius,
+            yend = .data$V2 - .data$v2_unit * point_radius),
         arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm")),
         alpha = aesthetic_config$arrow_alpha
       )
@@ -1689,7 +1702,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
             ggrepel::geom_label_repel(
               data        = top_vel,
               inherit.aes = FALSE,
-              aes(x = V1, y = V2, label = name),
+              aes(x = .data$V1, y = .data$V2, label = .data$name),
               size              = annotation_config$size / ggplot2::.pt,
               color             = annotation_config$color,
               alpha             = annotation_config$alpha,
@@ -1708,7 +1721,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
             ggrepel::geom_text_repel(
               data        = top_vel,
               inherit.aes = FALSE,
-              aes(x = V1, y = V2, label = name),
+              aes(x = .data$V1, y = .data$V2, label = .data$name),
               size              = annotation_config$size / ggplot2::.pt,
               color             = annotation_config$color,
               alpha             = annotation_config$alpha,
@@ -1727,7 +1740,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
         warning("ggrepel package not available - using basic text labels without repulsion")
         p <- p + geom_text(
           data = top_vel,
-          aes(x = V1, y = V2, label = name),
+          aes(x = .data$V1, y = .data$V2, label = .data$name),
           size           = annotation_config$size / ggplot2::.pt,
           color          = annotation_config$color,
           alpha          = annotation_config$alpha,
@@ -1893,7 +1906,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
 #' \code{\link{plot_temporal_mapping}} for 2D temporal visualization
 #' \code{\link{plot_cluster_mapping}} for 2D cluster visualization
 #' \code{\link{make_interactive}} for converting 2D plots to interactive versions
-#'
+#' @importFrom rgl open3d plot3d axes3d rgl.snapshot rgl.close rgl.cur
+#' @importFrom grDevices colorRampPalette
 #' @export
 plot_3d_mapping <- function(df, ndim, 
                             dim_config = new_dim_reduction_config(),
@@ -2049,7 +2063,8 @@ plot_3d_mapping <- function(df, ndim,
 #' p3d <- plot_3d_mapping(data, ndim=3, interactive=FALSE)
 #' save_plot(p3d, "3d_plot.png", layout_config)
 #' }
-#'
+#' @importFrom tools file_ext
+#' @importFrom ggplot2 ggsave
 #' @export
 save_plot <- function(plot, filename, layout_config = new_layout_config(),
                       output_dir = NULL) {
@@ -2148,7 +2163,7 @@ save_plot <- function(plot, filename, layout_config = new_layout_config(),
 #'   tooltip_vars = c("cluster", "year", "antigen")
 #' )
 #' }
-#'
+#' @importFrom plotly ggplotly layout
 #' @export
 make_interactive <- function(plot, tooltip_vars = NULL) {
   if(!requireNamespace("plotly", quietly = TRUE)) {
@@ -2350,7 +2365,7 @@ make_interactive <- function(plot, tooltip_vars = NULL) {
 #' \code{\link{plot_3d_mapping}} for individual 3D plots
 #' \code{\link{make_interactive}} for creating interactive versions
 #' \code{\link{save_plot}} for saving plots to files
-#'
+#' @importFrom gridExtra grid.arrange
 #' @export
 plot_combined <- function(df_coords, ndim,
                           plot_types = c("temporal", "cluster"),
@@ -2463,6 +2478,9 @@ plot_combined <- function(df_coords, ndim,
 #' create_diagnostic_plots(chain_files, mutual_size = 2000,
 #'   output_file = "chain_diagnostics.png")
 #' }
+#' @importFrom utils read.csv
+#' @importFrom ggplot2 ggplot aes geom_line geom_density labs theme_minimal theme element_blank element_rect ggsave
+#' @importFrom gridExtra grid.arrange
 #' @export
 create_diagnostic_plots <- function(chain_files, 
                                   mutual_size = 2000,
@@ -2499,7 +2517,7 @@ create_diagnostic_plots <- function(chain_files,
     
     # Trace plot
     plot_list[[i*2-1]] <- ggplot(trace_data, 
-      aes(x = Iteration, y = Value, color = factor(Chain))) +
+      aes(x = .data$Iteration, y = .data$Value, color = .data$factor(Chain))) +
       geom_line(size = 0.5) +
       labs(title = paste("Trace Plot:", par_names[i]),
            x = "Iteration", y = "Value") +
@@ -2512,7 +2530,7 @@ create_diagnostic_plots <- function(chain_files,
     
     # Density plot  
     plot_list[[i*2]] <- ggplot(trace_data,
-      aes(x = Value, color = factor(Chain))) +
+      aes(x = .data$Value, color = factor(.data$Chain))) +
       geom_density(alpha = 0.3) +
       labs(title = paste("Density:", par_names[i]),
            x = "Value", y = "Density") +
@@ -2588,6 +2606,8 @@ create_diagnostic_plots <- function(chain_files,
 #' }
 #' @seealso \code{\link{check_gaussian_convergence}} for generating the convergence object
 #' @method plot topolow_convergence
+#' @importFrom ggplot2 ggplot aes geom_line labs theme_minimal theme element_blank element_rect
+#' @importFrom gridExtra grid.arrange
 #' @export
 plot.topolow_convergence <- function(x, param_names = NULL, ...) {
   # Use param_names from object if not provided
@@ -2602,7 +2622,7 @@ plot.topolow_convergence <- function(x, param_names = NULL, ...) {
       Value = x$mean_history[,i]
     )
     
-    ggplot(plot_data, aes(x = Iteration, y = Value)) +
+    ggplot(plot_data, aes(x = .data$Iteration, y = .data$Value)) +
       geom_line(color = "steelblue") +
       labs(title = paste("Parameter Mean:", param_names[i]),
            x = "Iteration", y = "Value") +
@@ -2620,7 +2640,7 @@ plot.topolow_convergence <- function(x, param_names = NULL, ...) {
       Change = x$cov_changes
     )
     
-    ggplot(plot_data, aes(x = Iteration, y = Change)) +
+    ggplot(plot_data, aes(x = .data$Iteration, y = .data$Change)) +
       geom_line(color = "steelblue") +
       labs(title = "Covariance Changes",
            x = "Iteration", y = "Relative Change") +
@@ -2709,8 +2729,7 @@ print.topolow_amcs_diagnostics <- function(x, ...) {
 #' p <- plot_network_structure(net_analysis, "scenario1")
 #' }
 #' @importFrom igraph graph_from_adjacency_matrix layout_with_fr get.edgelist
-#' @importFrom ggplot2 coord_fixed geom_segment
-
+#' @importFrom ggplot2 ggplot geom_segment geom_point coord_fixed theme_void theme element_text labs ggsave
 #' @export
 plot_network_structure <- function(network_results, scenario_name,
                                  aesthetic_config = new_aesthetic_config(),
@@ -2749,17 +2768,17 @@ plot_network_structure <- function(network_results, scenario_name,
     geom_segment(
       data = edges,
       aes(
-        x = x.from,
-        y = y.from,
-        xend = x.to,
-        yend = y.to
+        x = .data$x.from,
+        y = .data$y.from,
+        xend = .data$x.to,
+        yend =.data$y.to
       ),
       alpha = 0.3,
       color = "grey50"
     ) +
     geom_point(
       data = layout_df,
-      aes(x = x, y = y),
+      aes(x = .data$x, y = .data$y),
       color = "red",
       alpha = aesthetic_config$point_alpha
     ) +
@@ -2836,6 +2855,7 @@ plot_network_structure <- function(network_results, scenario_name,
 #' }
 #'
 #' @importFrom reshape2 melt
+#' @importFrom ggplot2 ggplot aes geom_tile scale_fill_gradient theme_minimal theme element_text labs ggsave
 #' @export
 plot_distance_heatmap <- function(heatmap_data, scenario_name,
                                   aesthetic_config = new_aesthetic_config(),
@@ -2870,7 +2890,7 @@ plot_distance_heatmap <- function(heatmap_data, scenario_name,
   # Create plot
   plot <- ggplot(
     plot_data,
-    aes(Var1, Var2, fill = value)
+    aes(.data$Var1, .data$Var2, fill = .data$value)
   ) +
     geom_tile() +
     scale_fill_gradient(
@@ -2932,8 +2952,9 @@ plot_distance_heatmap <- function(heatmap_data, scenario_name,
 #'                           scenario_name = "example",
 #'                           ndim = 5)
 #' }
-#' @importFrom ggplot2 ggplot aes geom_point geom_abline geom_smooth labs theme_classic
-#' @importFrom scales comma
+#' @importFrom stats na.omit cor lm coef
+#' @importFrom ggplot2 ggplot aes geom_point geom_abline geom_smooth geom_hline scale_y_continuous ggsave
+#' @importFrom ggplot2 annotate labs theme_classic theme element_text element_blank element_rect scale_x_continuous 
 #' @export
 # In visualization.R
 scatterplot_fitted_vs_true <- function(distance_matrix, p_dist_mat, 
@@ -2963,7 +2984,7 @@ scatterplot_fitted_vs_true <- function(distance_matrix, p_dist_mat,
   intercept <- coef(reg_line)[1]
   
   # Create scatter plot 
-  scatter_plot <- ggplot(evaldf, aes(x = distance_matrix, y = p_dist_mat)) +
+  scatter_plot <- ggplot(evaldf, aes(x = .data$distance_matrix, y = .data$p_dist_mat)) +
     geom_point(alpha = 0.6, color = "#3366FF", size = 2) +
     geom_abline(intercept = 0, slope = 1, linetype = "dashed", 
                 color = "green", size = 0.7) +
@@ -2993,14 +3014,14 @@ scatterplot_fitted_vs_true <- function(distance_matrix, p_dist_mat,
     labs(
       x = "Original Distance",
       y = "Estimated Distance",
-      title = sprintf("Mean Absolute Error = %.2f, Pearson's r = %.2f\nPrediction interval = ±%.2f",
+      title = sprintf("Mean Absolute Error = %.2f, Pearson's r = %.2f\nPrediction interval = \\u00B1%.2f",
                      mae, Pearson_corr, margin_of_error)
     )
   
   # Create residuals plot
   evaldf$residuals <- evaldf$distance_matrix - evaldf$p_dist_mat
   
-  residuals_plot <- ggplot(evaldf, aes(x = p_dist_mat, y = residuals)) +
+  residuals_plot <- ggplot(evaldf, aes(x = .data$p_dist_mat, y = .data$residuals)) +
     geom_point(alpha = 0.6, color = "red") +
     geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
     theme_classic() +

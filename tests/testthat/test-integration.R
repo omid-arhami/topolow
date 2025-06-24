@@ -1,4 +1,6 @@
 test_that("full workflow executes correctly", {
+  # Create a temporary file path
+  temp_csv_path <- tempfile(fileext = ".csv")
   # Create test data
   test_data <- data.frame(
     antigen = rep(paste0("V", 1:3), each=3),
@@ -14,11 +16,12 @@ test_that("full workflow executes correctly", {
   test_data$antigen <- paste0(test_data$antigen, "/", test_data$virusYear)
   test_data$serum <- paste0(test_data$serum, "/", test_data$serumYear)
   
-  write.csv(test_data, "test_workflow.csv", row.names = FALSE)
+  # Write to the temporary path
+  write.csv(test_data, temp_csv_path, row.names = FALSE)
   
-  # Process data
+  # Process data using the temporary file path
   results <- process_antigenic_data(
-    "test_workflow.csv",
+    temp_csv_path,
     antigen_col = "antigen",
     serum_col = "serum",
     value_col = "titer",
@@ -33,7 +36,8 @@ test_that("full workflow executes correctly", {
     mapping_max_iter = 100,
     k0 = 3.0,
     cooling_rate = 0.1,
-    c_repulsion = 0.001
+    c_repulsion = 0.001,
+    write_positions_to_csv = FALSE
   )
   
   # Create visualization
@@ -60,9 +64,7 @@ test_that("full workflow executes correctly", {
   
   plot <- plot_temporal_mapping(positions, ndim = 2)
   expect_s3_class(plot, "ggplot")
-  
-  # Clean up
-  unlink("test_workflow.csv")
+
 })
 
 
@@ -99,6 +101,8 @@ test_that("parameter optimization workflow works", {
 
 
 test_that("adaptive sampling workflow executes", {
+  # Create a temporary file path for the samples
+  temp_samples_path <- tempfile(fileext = ".csv")
   # Create initial samples
   samples <- data.frame(
     log_N = log(c(5,3,4,3, 3.5, 4.5, 2.5, 5.5, 3.2)),
@@ -109,7 +113,8 @@ test_that("adaptive sampling workflow executes", {
     Holdout_MAE = c(2, 1.8, 1.9, 2.8, 1.85, 1.95, 2.6, 1.75, 2.1)
   )
   
-  write.csv(samples, "test_samples.csv", row.names = FALSE)
+  # Write the samples to the temporary file
+  write.csv(samples, temp_samples_path, row.names = FALSE)
   
   # Create test distance matrix
   test_mat <- matrix(0, 10, 10)
@@ -122,9 +127,9 @@ test_that("adaptive sampling workflow executes", {
     }
   }
   
-  # Run adaptive sampling
+  # Run adaptive sampling using the temporary file
   result <- adaptive_MC_sampling(
-    samples_file = "test_samples.csv",
+    samples_file = temp_samples_path,
     distance_matrix = test_mat,
     iterations = 1,
     mapping_max_iter = 10,
@@ -136,7 +141,5 @@ test_that("adaptive sampling workflow executes", {
   expect_true(is.data.frame(result))
   expect_true(all(c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion", 
                     "NLL", "Holdout_MAE") %in% names(result)))
-  
-  # Clean up
-  unlink("test_samples.csv")
+
 })

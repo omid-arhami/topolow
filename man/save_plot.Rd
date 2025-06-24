@@ -73,5 +73,4 @@ save_plot(p, "high_res_plot", layout_config)
 p3d <- plot_3d_mapping(data, ndim=3, interactive=FALSE)
 save_plot(p3d, "3d_plot.png", layout_config)
 }
-
 }

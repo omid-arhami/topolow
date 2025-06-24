@@ -214,7 +214,7 @@ generate_unique_string <- function(n, length = 8, lower_bound = 1, upper_bound =
 #' }
 #' @importFrom MASS mvrnorm
 #' @importFrom stats runif rnorm prcomp
-#' @importFrom ggplot2 ggplot aes geom_point theme_minimal labs coord_fixed
+#' @importFrom ggplot2 ggplot aes geom_point theme_minimal labs coord_fixed ggsave
 #' @export
 generate_complex_data <- function(n_points = 500, n_dim = 10, n_clusters = 4, 
                                 cluster_spread = 1, fig_name = NA) {
@@ -279,7 +279,7 @@ generate_complex_data <- function(n_points = 500, n_dim = 10, n_clusters = 4,
     colnames(pca_data) <- c("PC1", "PC2")
     
     # Create plot
-    p <- ggplot(pca_data, aes(x = PC1, y = PC2)) +
+    p <- ggplot(pca_data, aes(x = .data$PC1, y = .data$PC2)) +
       geom_point(alpha = 0.5) +
       theme_minimal() +
       labs(title = "PCA of Simulated High-Dimensional Data",
@@ -497,6 +497,7 @@ copy_reproduction_examples <- function(dest_dir = file.path(getwd(), "examples")
 #' @description
 #' Wrapper around ggplot2::ggsave that ensures white background.
 #' This function masks ggplot2::ggsave.
+#' @importFrom ggplot2 ggsave
 #' @inheritParams ggplot2::ggsave
 #' @export
 ggsave <- function(..., bg = 'white') {

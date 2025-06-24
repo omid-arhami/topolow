@@ -11,7 +11,8 @@ required_cols <- c("virusStrain", "serumStrain", "titer",
 if(!all(required_cols %in% names(h3n2_raw))) {
   stop("Missing required columns in H3N2 data")
 }
-
+h3n2_raw <- h3n2_raw[, c("virusStrain", "serumStrain", "titer", 
+                         "virusYear", "serumYear", "cluster", "color")] # Keep only documented columns
 # Clean and compress
 h3n2_data <- h3n2_raw
 h3n2_data$cluster <- factor(h3n2_data$cluster)
@@ -19,24 +20,29 @@ h3n2_data$cluster <- factor(h3n2_data$cluster)
 
 ####################
 # Load DENV data. Ref: https://doi.org/10.7554/eLife.42496
-denv_raw <- read.csv("data-raw/DENV_titers.csv")
+denv_data <- read.csv("data-raw/DENV_titers.csv")
+
+denv_data <- denv_data[, c("virus_strain", "serum_strain", "titer", 
+                  "virusYear", "serumYear", "cluster", "color")] # Keep only documented columns
 
 # Basic validation
 required_cols <- c("virus_strain", "serum_strain", "titer", 
                   "virusYear", "serumYear", "cluster", "color")
-if(!all(required_cols %in% names(denv_raw))) {
+if(!all(required_cols %in% names(denv_data))) {
   stop("Missing required columns in DENV data")
 }
 
 # Clean and compress
-denv_data <- denv_raw
 denv_data$cluster <- factor(denv_data$cluster)
 
 
 ####################
 # Load HIV data
-hiv_viruses <- read.csv("data-raw/HIV_viruses.csv")
-hiv_titers <- read.csv("data-raw/hiv_assay_titers.csv")
+hiv_viruses_raw <- read.csv("data-raw/hiv_viruses.csv")
+hiv_viruses <- hiv_viruses_raw[, c("Virus.name", "Country", "Subtype", "Year")] # Keep only documented columns
+
+hiv_titers_raw <- read.csv("data-raw/hiv_assay_titers.csv")
+hiv_titers <- hiv_titers_raw[, c("Antibody", "Virus", "IC50")] # Keep only documented columns
 
 # Validate HIV data
 if(!all(c("Virus.name", "Country", "Subtype", "Year") %in% names(hiv_viruses))) {

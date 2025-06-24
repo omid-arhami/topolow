@@ -67,3 +67,22 @@
 #' }
 #' @source Los Alamos HIV Database (https://www.hiv.lanl.gov/)
 "hiv_titers"
+
+#' Dengue Virus (DENV) Titer Data
+#'
+#' A dataset containing neutralization titer data for Dengue virus. This data can be used to
+#' create antigenic maps and explore the antigenic relationships between different DENV strains.
+#'
+#' @format A data frame with the following columns:
+#' \describe{
+#'   \item{virus_strain}{Character, the name of the virus strain.}
+#'   \item{serum_strain}{Character, the name of the serum strain.}
+#'   \item{titer}{Character, the neutralization titer value. May include values like '<10' or '>1280'.}
+#'   \item{virusYear}{Numeric, the year the virus was isolated.}
+#'   \item{serumYear}{Numeric, the year the serum was collected.}
+#'   \item{cluster}{Factor, the cluster or serotype assignment for the strains.}
+#'   \item{color}{Character, a color associated with the cluster for plotting.}
+#' }
+#' @source
+#' Katzelnick, L.C., et al. (2019). An antigenically diverse, representative panel of dengue viruses for neutralizing antibody discovery and vaccine evaluation. *eLife*. \doi{10.7554/eLife.42496}
+"denv_data"

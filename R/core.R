@@ -183,6 +183,7 @@ vectorized_process_distance_matrix <- function(distances_numeric, threshold_mask
 #' }
 #'
 #' @examples
+#' \dontrun{
 #' # Create a simple distance matrix
 #' dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
 #' 
@@ -192,7 +193,9 @@ vectorized_process_distance_matrix <- function(distances_numeric, threshold_mask
 #'                       
 #' # Plot results
 #' plot(result$positions)
-#'
+#' }
+#' @importFrom stats runif dist
+#' @importFrom utils write.csv
 #' @export
 create_topolow_map <- function(distance_matrix, 
                          ndim, 
@@ -504,10 +507,12 @@ create_topolow_map <- function(distance_matrix,
 #' @param ... Additional arguments passed to print (not used)
 #' 
 #' @examples
+#' \dontrun{
 #' dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
-#' result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=100, k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
+#' result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=100, 
+#'                              k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
 #' print(result)
-#' 
+#' }
 #' @export
 print.topolow <- function(x, ...) {
   cat("TopoLow optimization result:\n")
@@ -528,10 +533,12 @@ print.topolow <- function(x, ...) {
 #' @param ... Additional arguments passed to summary (not used)
 #' 
 #' @examples
+#' \dontrun{
 #' dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
-#' result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=100, k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
+#' result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=100, 
+#'                              k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
 #' summary(result)
-#' 
+#' }
 #' @export
 summary.topolow <- function(object, ...) {
   print(object)

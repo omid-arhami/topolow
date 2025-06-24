@@ -121,8 +121,8 @@
 #' \code{\link{create_topolow_map}} for the core optimization algorithm
 #'
 #' @importFrom lhs maximinLHS
-#' @importFrom parallel mclapply detectCores
-#' @importFrom stats runif qunif
+#' @importFrom stats qunif complete.cases aggregate
+#' @importFrom parallel detectCores mclapply makeCluster clusterExport clusterEvalQ parLapply stopCluster
 #' @export
 initial_parameter_optimization <- function(# Mapping related arguments:
                                           distance_matrix,
@@ -739,6 +739,8 @@ submit_parameter_jobs <- function(matrix_list_file,
 #' \code{\link{initial_parameter_optimization}} for running the optimization
 #' \code{\link{submit_parameter_jobs}} for job submission
 #'
+#' @importFrom stats aggregate complete.cases
+#' @importFrom utils read.csv write.csv
 #' @export
 aggregate_parameter_optimization_results <- function(scenario_name, write_files = TRUE,
                                                      dir = NULL) {
@@ -863,6 +865,8 @@ aggregate_parameter_optimization_results <- function(scenario_name, write_files 
 #'
 #' @return NULL. Results are  written to: model_parameters/\{scenario_name\}_model_parameters.csv
 #'
+#' @importFrom utils read.csv write.csv write.table
+#' @importFrom parallel detectCores makeCluster clusterExport clusterEvalQ parLapply stopCluster mclapply
 #' @export
 run_adaptive_sampling <- function(initial_samples_file,
                                   scenario_name,
@@ -1130,6 +1134,9 @@ run_adaptive_sampling <- function(initial_samples_file,
 #' @param dist List with mean and covariance matrix from previous samples
 #' @param n Integer number of samples to generate 
 #' @param epsilon Numeric probability of sampling from wider distribution
+#' 
+#' @importFrom stats runif
+#' @importFrom MASS mvrnorm
 #' @return Data frame of n new samples with columns for each parameter
 #' @keywords internal
 sample_from_distribution <- function(dist, n, epsilon) {
@@ -1196,6 +1203,8 @@ sample_from_distribution <- function(dist, n, epsilon) {
 #' @param samples Data frame of previous samples with parameters and NLL
 #' @param n Integer number of samples to generate
 #' @param epsilon Numeric probability of wider bandwidth sampling
+#' 
+#' @importFrom stats na.omit runif bw.nrd0 approx
 #' @return Data frame of n new samples
 #' @keywords internal
 generate_kde_samples <- function(samples, n, epsilon = 0) {
@@ -1253,6 +1262,8 @@ generate_kde_samples <- function(samples, n, epsilon = 0) {
 #'   \item{x}{Vector of evaluation points}
 #'   \item{y}{Vector of density estimates}
 #' 
+#' @importFrom stats sd dnorm
+#' @importFrom parallel detectCores mclapply
 #' @export
 weighted_kde <- function(x, weights, n = 512, from = min(x), to = max(x)) {
   # Normalize weights
@@ -1300,6 +1311,8 @@ weighted_kde <- function(x, weights, n = 512, from = min(x), to = max(x)) {
 #'   \item{x}{Vector of evaluation points}
 #'   \item{y}{Vector of density estimates}
 #'   \item{bw}{Selected bandwidth}
+#'   
+#' @importFrom stats bw.nrd0 bw.nrd bw.ucv bw.bcv bw.SJ dnorm
 #' @export
 unweighted_kde <- function(x, n = 512, from = min(x), to = max(x), bw = "nrd0") {
   # Determine bandwidth
@@ -1351,6 +1364,8 @@ unweighted_kde <- function(x, n = 512, from = min(x), to = max(x), bw = "nrd0") 
 #' @return List with:
 #'   \item{Holdout_MAE}{Mean absolute error on validation data}
 #'   \item{NLL}{Negative log likelihood}
+#'   
+#' @importFrom parallel makeCluster stopCluster clusterExport clusterEvalQ parLapply mclapply
 #' @keywords internal
 likelihood_function <- function(distance_matrix, mapping_max_iter,
                               relative_epsilon, N, k0, cooling_rate,
@@ -1517,6 +1532,11 @@ likelihood_function <- function(distance_matrix, mapping_max_iter,
 #' @param output_dir Character. Directory for output files. If NULL, uses current directory
 #'
 #' @return Data frame of samples with evaluated likelihoods
+#' 
+#' @importFrom filelock lock unlock
+#' @importFrom utils read.csv write.table
+#' @importFrom stats na.omit
+#' @importFrom parallel makeCluster stopCluster clusterExport clusterEvalQ parLapply mclapply
 #' @export
 adaptive_MC_sampling <- function(samples_file, 
                                  distance_matrix,
@@ -1713,8 +1733,8 @@ adaptive_MC_sampling <- function(samples_file,
 #' Uses kernel density estimation weighted by normalized likelihoods.
 #' Parallelizes computation across parameter dimensions using mclapply.
 #'
-#' @importFrom parallel mclapply detectCores
-#' @importFrom stats dnorm sd
+#' @importFrom stats na.omit
+#' @importFrom parallel makeCluster stopCluster clusterExport clusterEvalQ parLapply mclapply detectCores
 #' @export
 calculate_weighted_marginals <- function(samples) {
   # Input validation
@@ -1755,33 +1775,53 @@ calculate_weighted_marginals <- function(samples) {
 
   #  parallel processing:
   if (Sys.info()["sysname"] == "Windows") {
-    # Define the worker function in global environment to ensure visibility
-    assign("temp_process_var", function(var, sample_data, weight_data) {
+    # # Define the worker function in global environment to ensure visibility
+    # assign("temp_process_var", function(var, sample_data, weight_data) {
+    #   weighted_kde(sample_data[[var]], weights = weight_data)
+    # }, envir = .GlobalEnv)
+    # Define the worker function LOCALLY for CRAN
+    temp_process_var <- function(var, sample_data, weight_data) {
+      # This function now correctly refers to the weighted_kde function
+      # available in the topolow package namespace.
       weighted_kde(sample_data[[var]], weights = weight_data)
-    }, envir = .GlobalEnv)
+    }
 
     # Create cluster
     cl <- parallel::makeCluster(min(parallel::detectCores(), 4))
-
+    on.exit(parallel::stopCluster(cl)) # Ensure cluster is stopped
+    
     # Export all needed objects
     parallel::clusterExport(cl,
                            c("samples", "weights", "weighted_kde", "temp_process_var"),
                            envir = environment())
 
+    # Export all needed objects AND the local function for CRAN
+    parallel::clusterExport(cl,
+                            c("samples", "weights", "temp_process_var"),
+                            envir = environment())
+    
+    # Ensure the 'topolow' package is loaded on each worker
+    parallel::clusterEvalQ(cl, {
+      library(topolow)
+    })
+    
     # Run parallel computation
     marginals <- parallel::parLapply(cl, vars, function(v) {
       temp_process_var(v, samples, weights)
     })
 
-    parallel::stopCluster(cl)
-
-    # Clean up
-    rm("temp_process_var", envir = .GlobalEnv)
+    # parallel::stopCluster(cl)
+    # # Clean up
+    # rm("temp_process_var", envir = .GlobalEnv)
   } else {
-    # For non-Windows, use sequential approach (safest for now)
-    marginals <- lapply(vars, function(var) {
+    # # For non-Windows, use sequential approach (safest for now)
+    # marginals <- lapply(vars, function(var) {
+    #   weighted_kde(samples[[var]], weights = weights)
+    # })
+    # For non-Windows, mclapply works with local functions directly
+    marginals <- parallel::mclapply(vars, function(var) {
       weighted_kde(samples[[var]], weights = weights)
-    })
+    }, mc.cores = min(parallel::detectCores(), 4))
   }
 
   # Set names and return
@@ -1918,6 +1958,8 @@ profile_likelihood_result <- function(param_values, ll_values, param_name,
 #' }
 #' @seealso 
 #' \code{\link{plot.profile_likelihood}} for visualization
+#' 
+#' @importFrom stats sd approx
 #' @export
 profile_likelihood <- function(param, samples, grid_size = 40, 
                              bandwidth_factor = 0.05,
@@ -2025,6 +2067,9 @@ profile_likelihood <- function(param, samples, grid_size = 40,
 #' plot(pl_result, LL_max, width = 4, height = 3)
 #' }
 #' @method plot profile_likelihood
+#' 
+#' @importFrom ggplot2 ggplot aes geom_line geom_hline geom_text labs theme_minimal theme element_text element_line element_blank element_rect margin scale_y_continuous ggsave
+#' @importFrom scales label_number
 #' @export 
 plot.profile_likelihood <- function(x, LL_max, width = 3.5, height = 3.5,
                                     save_plot = TRUE, output_dir = NULL, ...) {
@@ -2052,11 +2097,11 @@ plot.profile_likelihood <- function(x, LL_max, width = 3.5, height = 3.5,
   
   CI_95_LL <- LL_max - 3.84 / 2
   
-  p <- ggplot(LL_list_param, aes(x = param, y = LL)) +
+  p <- ggplot(LL_list_param, aes(x = .data$param, y = .data$LL)) +
     geom_line(color = "steelblue", size = 0.5) +
     geom_hline(yintercept = CI_95_LL, 
                linetype = "dashed", color = "black", size = 0.4) +
-    geom_text(aes(x = min(param), y = CI_95_LL + 0.02, 
+    geom_text(aes(x = min(.data$param), y = CI_95_LL + 0.02, 
                   label = "95% CI"),
               color = "black", vjust = -0.5, hjust = -0.05, size = 2.1) +
     labs(title = title_expr,
@@ -2148,6 +2193,9 @@ print.profile_likelihood <- function(x, ...) {
 #'   \item{threshold}{Threshold value (default: Topolow min. +5%)}
 #'   \item{min_value}{Minimum MAE value across all bins}
 #'   \item{sample_counts}{Number of samples per bin}
+#'   
+#' @importFrom stats na.omit
+#' @importFrom graphics hist
 #' @export
 parameter_sensitivity_analysis <- function(param, samples, bins = 30, 
                                           mae_col = "Holdout_MAE",
@@ -2244,6 +2292,8 @@ parameter_sensitivity_analysis <- function(param, samples, bins = 30,
 #' @param ... Additional arguments passed to plot
 #' @return A ggplot object
 #' @method plot parameter_sensitivity
+#' @importFrom ggplot2 ggplot aes geom_line geom_hline annotate labs theme_minimal theme element_text element_line element_blank element_rect margin scale_y_continuous ggsave
+#' @importFrom scales comma label_number
 #' @export
 plot.parameter_sensitivity <- function(x, width = 3.5, height = 3.5,
                                      save_plot = TRUE, output_dir = NULL,
@@ -2277,7 +2327,7 @@ plot.parameter_sensitivity <- function(x, width = 3.5, height = 3.5,
   p <- ggplot() +
     # Main data line
     geom_line(data = plot_data, 
-              aes(x = param, y = min_mae),
+              aes(x = .data$param, y = .data$min_mae),
               color = "steelblue",
               size = 0.8) +
     # Threshold line with direct label

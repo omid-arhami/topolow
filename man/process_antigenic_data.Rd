@@ -89,5 +89,4 @@ results <- process_antigenic_data(
   is_titer = FALSE
 )
 }
-
 }

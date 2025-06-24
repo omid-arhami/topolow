@@ -143,8 +143,7 @@ create_cv_folds <- function(truth_matrix, no_noise_truth = NULL,
 #'   scenario_name = "example_map"
 #' )
 #' }
-#' @importFrom Racmacs acmap optimizeMap keepBestOptimization
-#' @importFrom parallel detectCores
+#' @importFrom Racmacs acmap optimizeMap keepBestOptimization save.coords
 #' @export
 create_and_optimize_RACMACS_map <- function(titer_table, 
                                           dim = 2,
@@ -219,6 +218,7 @@ create_and_optimize_RACMACS_map <- function(titer_table,
 #'   missingness_levels = list(low=0.5, high=0.8)
 #' )
 #' }
+#' @importFrom stats dist
 #' @export
 generate_synthetic_datasets <- function(n_dims_list, seeds, n_points,
                                      missingness_levels = list(S=0.67, M=0.77, L=0.87),

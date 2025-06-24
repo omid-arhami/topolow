@@ -31,6 +31,8 @@
 #' @return List containing:
 #'   \item{report_df}{Data frame with error metrics per point}
 #'   \item{Completeness}{Numeric Completeness statistic}
+#'   
+#' @importFrom dplyr %>% select
 #' @export
 error_calculator_comparison <- function(p_dist_mat, truth_matrix, input_matrix) {
   # Validate inputs
@@ -115,6 +117,7 @@ error_calculator_comparison <- function(p_dist_mat, truth_matrix, input_matrix) 
 #' @param p_dist_mat Matrix of predicted distances 
 #' @param confidence_level Confidence level for interval (default: 0.95)
 #' @return Numeric margin of error for prediction interval
+#' @importFrom stats sd qt
 #' @export
 calculate_prediction_interval <- function(distance_matrix, p_dist_mat, confidence_level = 0.95) {
   # Validate inputs

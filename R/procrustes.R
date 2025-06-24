@@ -32,6 +32,7 @@
 #' map2 <- read.csv("map2_coords.csv")
 #' p_val <- calculate_procrustes_significance(map1, map2)
 #' }
+#' @importFrom dplyr %>% filter
 #' @importFrom vegan protest
 #' @export
 calculate_procrustes_significance <- function(map1, map2) {
@@ -64,6 +65,7 @@ calculate_procrustes_significance <- function(map1, map2) {
 #' map2 <- read.csv("map2_coords.csv")
 #' diff <- calculate_procrustes_difference(map1, map2)
 #' }
+#' @importFrom dplyr %>% filter
 #' @importFrom vegan procrustes
 #' @export
 calculate_procrustes_difference <- function(map1, map2) {

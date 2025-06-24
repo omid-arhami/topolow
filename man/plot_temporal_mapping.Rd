@@ -13,7 +13,6 @@ plot_temporal_mapping(
   annotation_config = new_annotation_config(),
   output_dir = NULL,
   show_shape_legend = TRUE,
-  cluster_legend_title = "Cluster",
   draw_arrows = FALSE,
   annotate_arrows = TRUE,
   phylo_tree = NULL,
@@ -43,8 +42,6 @@ Use x_limits and y_limits in layout_config to set axis limits.}
 \item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
 
 \item{show_shape_legend}{Logical. Whether to show the shape legend (default: TRUE)}
-
-\item{cluster_legend_title}{Character. Title for the cluster legend (default: "Cluster")}
 
 \item{draw_arrows}{logical; if TRUE, compute and draw antigenic drift vectors}
 

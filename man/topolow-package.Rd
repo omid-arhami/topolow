@@ -228,7 +228,7 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Omid Arhami \email{omid.arhami@uga.edu} (\href{https://orcid.org/0009-0005-2681-6598}{ORCID})
+\strong{Maintainer}: Omid Arhami \email{omid.arhami@uga.edu} (\href{https://orcid.org/0009-0005-2681-6598}{ORCID}) [copyright holder]
 
 }
 \keyword{internal}

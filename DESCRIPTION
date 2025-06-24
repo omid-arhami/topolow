@@ -1,21 +1,30 @@
 Package: topolow
-Title: Antigenic Mapping Using TopoLow Algorithm
+Title: Topolow: Antigenic Mapping and Antigenic Velocity Algorithm
 Version: 0.3.2
 Authors@R: 
-    person("Omid", "Arhami", , "omid.arhami@uga.edu", role = c("aut", "cre"),
+    person("Omid", "Arhami", , "omid.arhami@uga.edu", role = c("aut", "cre", "cph"),
            comment = c(ORCID = "0009-0005-2681-6598"))
-Description: An implementation of the TopoLow algorithm for antigenic cartography 
-    mapping and analysis. The package provides tools for:
-    * Optimizing point configurations in high-dimensional spaces
-    * Handling missing and thresholded measurements
-    * Processing antigenic assay data
-    * Visualizing antigenic maps
-    * Cross-validation and error analysis
-    * Network structure analysis
-    The algorithm uses a physics-inspired approach combining spring forces and 
-    repulsive interactions to find optimal point configurations.
+Description: An implementation of the TopoLow algorithm, a novel, physics-inspired method for 
+    antigenic cartography. TopoLow addresses significant challenges in mapping antigenic relationships, 
+    especially from sparse and noisy experimental data. The package transforms cross-reactivity and 
+    binding affinity measurements into accurate spatial representations in a phenotype space.
+    Key features include:
+    * Robust Mapping from Sparse Data: Effectively creates complete and consistent maps even with high 
+    proportions of missing data (e.g., >95%).
+    * Physics-Inspired Optimization: Models antigens as particles connected by springs (for measured 
+    interactions) and subject to repulsive forces (for missing interactions), reducing the need for 
+    complex gradient computations.
+    * Automatic Dimensionality Detection: Employs a likelihood-based approach to determine the optimal 
+    number of dimensions for the antigenic map, avoiding distortions common in methods with fixed low dimensions.
+    * Noise and Bias Reduction: Naturally mitigates experimental noise and bias through its network-based, 
+    error-dampening mechanism.
+    * Antigenic Velocity Calculation: Introduces and quantifies "antigenic velocity," a vector that describes 
+    the rate and direction of antigenic drift for each pathogen isolate. This can help identify cluster 
+    transitions and potential lineage replacements.
+    * Broad Applicability: Analyzes data from various pathogens, including influenza, HIV, and Dengue viruses. 
+    It can be applied to any continuous and relational phenotype under directional selection pressure.
     Methods are described in Arhami and Rohani (2025) <doi:10.1101/2025.02.09.637307>.
-License: MIT + file LICENSE
+License: BSD_3_clause + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
@@ -38,12 +47,14 @@ Imports:
     umap,
     gridExtra,
     scales,
-    Rtsne
+    Rtsne,
+    ggrepel,
+    rgl (>= 1.0.0),
+    rlang,
+    ape
 Suggests:
     covr,
-    ggrepel,
     knitr,
-    rgl (>= 1.0.0),
     rmarkdown,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3

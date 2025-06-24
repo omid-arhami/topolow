@@ -25,14 +25,14 @@ test_that("create_topolow_map handles input validation correctly", {
   # Basic matrix validation
   expect_error(
     create_topolow_map(distance_matrix = "not a matrix", ndim = 2, mapping_max_iter = 10,
-                 k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01),
+                 k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01, write_positions_to_csv=FALSE),
     "distance_matrix must be a matrix"
   )
   
   # Non-square matrix
   expect_error(
     create_topolow_map(distance_matrix = matrix(1:6, nrow=2), ndim = 2, mapping_max_iter = 10,
-                 k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01),
+                 k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01, write_positions_to_csv=FALSE),
     "distance_matrix must be square"
   )
   
@@ -60,7 +60,7 @@ test_that("create_topolow_map handles input validation correctly", {
   # Test high k0 warning
   expect_warning(
     create_topolow_map(distance_matrix = test_mat, ndim = 2, mapping_max_iter = 10,
-                 k0 = 35, cooling_rate = 0.01, c_repulsion = 0.01),
+                 k0 = 35, cooling_rate = 0.01, c_repulsion = 0.01, write_positions_to_csv=FALSE),
     "High k0 value"
   )
 })
@@ -75,7 +75,7 @@ test_that("create_topolow_map handles initial positions correctly", {
   rownames(init_pos) <- rownames(test_mat)
   result <- create_topolow_map(test_mat, ndim=ndim, mapping_max_iter=10,
                         k0=1.0, cooling_rate=0.01, c_repulsion=0.01,
-                        initial_positions=init_pos)
+                        initial_positions=init_pos, write_positions_to_csv=FALSE)
   expect_equal(dim(result$positions), c(n, ndim))
   
   # Test invalid dimensions
@@ -83,7 +83,7 @@ test_that("create_topolow_map handles initial positions correctly", {
   expect_error(
     create_topolow_map(test_mat, ndim=ndim, mapping_max_iter=10,
                  k0=1.0, cooling_rate=0.01, c_repulsion=0.01,
-                 initial_positions=wrong_pos),
+                 initial_positions=wrong_pos, write_positions_to_csv=FALSE),
     "initial_positions must have same number of rows"
   )
 })
@@ -94,7 +94,8 @@ test_that("create_topolow_map convergence behavior works correctly", {
   # Test convergence tracking
   result <- create_topolow_map(test_mat, ndim=2, mapping_max_iter=10,
                         k0=1.0, cooling_rate=0.01, c_repulsion=0.01,
-                        relative_epsilon=1e-4, convergence_counter=5)
+                        relative_epsilon=1e-4, convergence_counter=5, 
+                        write_positions_to_csv=FALSE)
   
   expect_true(!is.null(result$convergence))
   expect_true(is.logical(result$convergence$achieved))
@@ -107,7 +108,8 @@ test_that("create_topolow_map force calculations preserve distance relationships
   colnames(test_mat) <- rownames(test_mat) <- c("A","B","C")
   
   result <- create_topolow_map(test_mat, ndim=2, mapping_max_iter=10,
-                        k0=1.0, cooling_rate=0.01, c_repulsion=0.01)
+                        k0=1.0, cooling_rate=0.01, c_repulsion=0.01, 
+                        write_positions_to_csv=FALSE)
   
   # Get pairwise distances from result
   get_dist <- function(p1, p2) {
@@ -128,7 +130,8 @@ test_that("create_topolow_map handles missing values appropriately", {
   test_mat[1,2] <- test_mat[2,1] <- NA
   
   result <- create_topolow_map(test_mat, ndim=2, mapping_max_iter=10,
-                        k0=1.0, cooling_rate=0.01, c_repulsion=0.01)
+                        k0=1.0, cooling_rate=0.01, c_repulsion=0.01, 
+                        write_positions_to_csv=FALSE)
   
   # Missing values should use repulsive forces
   expect_true(!is.na(result$est_distances[1,2]))
@@ -137,7 +140,7 @@ test_that("create_topolow_map handles missing values appropriately", {
 
 test_that("create_topolow_map returns correct object structure", {
   result <- create_topolow_map(create_test_matrix(), ndim=2, mapping_max_iter=10,
-                        k0=1.0, cooling_rate=0.01, c_repulsion=0.01)
+                        k0=1.0, cooling_rate=0.01, c_repulsion=0.01, write_positions_to_csv=FALSE)
   
   expected_elements <- c("positions", "est_distances", "mae", "iter",
                          "parameters", "convergence")

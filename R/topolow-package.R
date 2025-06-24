@@ -75,8 +75,13 @@
 #' @importFrom dplyr %>% select filter mutate group_by summarise ungroup
 #' @importFrom reshape2 melt
 #' @import ggplot2
-#' @importFrom stats median sd var
 #' @importFrom parallel mclapply detectCores
-#' @importFrom utils write.csv read.csv
 #' @importFrom coda mcmc mcmc.list gelman.diag effectiveSize
+#' @importFrom stats median sd var aggregate approx bw.nrd bw.nrd0 bw.ucv bw.bcv bw.SJ coef complete.cases cor cov dist lm na.omit qt residuals setNames mad
+#' @importFrom utils read.csv write.csv write.table tail globalVariables
+#' @importFrom grDevices colorRampPalette colors
+#' @importFrom graphics hist
+#' @importFrom vegan protest procrustes
+#' @importFrom ape is.rooted unroot dist.nodes nodepath extract.clade
+#' @importFrom Racmacs save.coords
 NULL
