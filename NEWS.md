@@ -1,6 +1,6 @@
 # topolow 0.3.2
 
-*  Initial release to CRAN.
+*  Initial release to CRAN (revised per CRAN reviewr's instructions).
 *  Introduces the Topolow algorithm, a physics-inspired method for antigenic cartography.
 *  Provides robust mapping and complete positioning of all antigens, even with highly sparse datasets (>95% missing values).
 *  Implements automatic, likelihood-based estimation to determine the optimal dimensionality of the antigenic map.

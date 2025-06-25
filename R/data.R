@@ -20,7 +20,7 @@
 #'   \item{year}{Year of strain isolation}
 #' }
 #' @source Arhami and Rohani 2025
-#'         \doi{}
+#'         \doi{https://doi.org/10.1101/2025.02.09.637307}
 "example_positions"
 
 #' H3N2 Influenza HI Assay Data from Smith et al. 2004

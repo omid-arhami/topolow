@@ -11,3 +11,4 @@
 ^paper\.md$
 ^set_up_testing\.R$
 ^\.github$
+^CRAN-SUBMISSION$

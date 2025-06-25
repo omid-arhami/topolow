@@ -1,5 +1,5 @@
 # Copyright (c) 2024 Omid Arhami o.arhami@gmail.com
-# Licensed under Pre-Publication Academic License https://github.com/omid-arhami/topolow/blob/main/LICENSE
+# License BSD 3-clause https://github.com/omid-arhami/topolow/blob/main/LICENSE
 
 # R/topolow-package.R
 

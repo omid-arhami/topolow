@@ -2,9 +2,12 @@
 
 Dear CRAN maintainers,
 
-This is the initial submission of the `topolow` package to CRAN.
+This is the revised initial submission of the `topolow` package to CRAN. DOI and title issues are resolved.
 
-The `topolow` package provides a novel, physics-inspired algorithm for antigenic cartography. [cite_start]It is designed to create complete and accurate antigenic maps from sparse and complex immunological assay data. [cite_start]The package includes tools for automatic dimensionality detection and the calculation of "antigenic velocity" to track pathogen evolution. [cite_start]The theories and methods are described in our paper, Arhami and Rohani (2025) https://www.biorxiv.org/content/10.1101/2025.02.09.637307v1.
+The `topolow` package provides a novel, physics-inspired algorithm for antigenic cartography. 
+* It is designed to create complete and accurate antigenic maps from sparse and complex immunological assay data. 
+* The package includes tools for automatic dimensionality detection and the calculation of "antigenic velocity" to track pathogen evolution. 
+* The theories and methods are described in our paper, Arhami and Rohani (2025) https://www.biorxiv.org/content/10.1101/2025.02.09.637307v1.
 
 ## Test Environments
 * local: macOS Sonoma 14.5, R 4.4.1

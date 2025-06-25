@@ -1,5 +1,5 @@
 Package: topolow
-Title: Topolow: Antigenic Mapping and Antigenic Velocity Algorithm
+Title: Antigenic Mapping and Antigenic Velocity Algorithm
 Version: 0.3.2
 Authors@R: 
     person("Omid", "Arhami", , "omid.arhami@uga.edu", role = c("aut", "cre", "cph"),
