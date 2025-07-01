@@ -2204,7 +2204,7 @@ make_interactive <- function(plot, tooltip_vars = NULL) {
 #' @param mutual_size Integer number of samples to use from end of each chain
 #' @param output_file Character path for saving plot. Required if `save_plot` is `TRUE`.
 #' @param output_dir Character. Directory for output files. Required if `save_plot` is `TRUE`.
-#' @param save_plot Logical. Whether to save plots to files. Default: TRUE
+#' @param save_plot Logical. Whether to save plots to files. Default: FALSE
 #' @param width,height,res Plot dimensions and resolution for saving
 #' @return A ggplot object of the combined plots.
 #' @examples
@@ -2229,7 +2229,7 @@ create_diagnostic_plots <- function(chain_files,
                                   mutual_size = 2000,
                                   output_file = "diagnostic_plots.png",
                                   output_dir,
-                                  save_plot = TRUE,
+                                  save_plot = FALSE,
                                   width = 3000, height = 3000, res = 300) {
   
   if (save_plot && (missing(output_dir) || missing(output_file))) {

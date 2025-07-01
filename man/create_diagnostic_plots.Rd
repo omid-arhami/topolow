@@ -9,7 +9,7 @@ create_diagnostic_plots(
   mutual_size = 2000,
   output_file = "diagnostic_plots.png",
   output_dir,
-  save_plot = TRUE,
+  save_plot = FALSE,
   width = 3000,
   height = 3000,
   res = 300
@@ -24,7 +24,7 @@ create_diagnostic_plots(
 
 \item{output_dir}{Character. Directory for output files. Required if \code{save_plot} is \code{TRUE}.}
 
-\item{save_plot}{Logical. Whether to save plots to files. Default: TRUE}
+\item{save_plot}{Logical. Whether to save plots to files. Default: FALSE}
 
 \item{width, height, res}{Plot dimensions and resolution for saving}
 }

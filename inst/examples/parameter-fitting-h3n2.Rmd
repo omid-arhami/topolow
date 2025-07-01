@@ -60,9 +60,15 @@ First, let's load required packages:
 library(topolow)
 library(ggplot2)
 library(dplyr)
-library(data.table)
 library(foreach)
 library(doParallel)
+
+# Define a common output directory for all generated files
+output_dir <- getwd()
+# Create the directory if it doesn't exist
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
 ```
 
 ## Data Loading and Preprocessing 
@@ -109,16 +115,16 @@ param_ranges <- list(
 
 # Setup optimization parameters
 opt_params <- list(
-  mapping_max_iter = 1000,    # Maximum mapping optimization iterations
+  mapping_max_iter = 500,    # Maximum mapping optimization iterations
   folds = 20,         # Number of CV folds
-  num_samples = 50,
+  num_samples = 5,
   write_files = FALSE # Only Set to TRUE to save intermediate files
 )
 ```
 
 ```{r eval=FALSE}
-scenario_name = "H3N2_2003_data_AMC202"
-samples_file = "model_parameters/H3N2_2003_data_AMC202_model_parameters.csv"
+scenario_name = "H3N2_2003_data_AMC302"
+samples_file = "model_parameters/H3N2_2003_data_AMC302_model_parameters.csv"
 
 # Record start time for timing report
 start_time <- Sys.time()
@@ -128,7 +134,7 @@ results <- initial_parameter_optimization(
   distance_matrix = h3n2_distance_matrix,
   mapping_max_iter = opt_params$mapping_max_iter,
   relative_epsilon = 1e-4,
-  convergence_counter = 5,
+  convergence_counter = 2,
   scenario_name = scenario_name,
   N_min = param_ranges$N_min, 
   N_max = param_ranges$N_max,
@@ -174,13 +180,13 @@ You can check the console outputs, warnings, or errors in .out and .err files in
 
 ```{r eval=FALSE}
 # Transform samples (with previous code's path)
-scenario_name = "H3N2_2003_data_AMC201"
-samples_file = "model_parameters/H3N2_2003_data_AMC201_model_parameters.csv"
-samples <- log_transform_parameters(samples_file)
+scenario_name = "H3N2_2003_data_AMC302"
+samples_file = file.path(output_dir, "model_parameters/H3N2_2003_data_AMC302_model_parameters.csv")
+samples <- log_transform_parameters(samples_file, output_file = samples_file)
 
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_samples = 500, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
+  num_samples = 2, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
   num_parallel_jobs = parallel::detectCores()-1,  # For local execution: Number of CPU cores available (Can try parallel::detectCores() ); For SLURM: Number of jobs to submit
   mapping_max_iter = 1000, # Maximum iterations per map optimization
   relative_epsilon = 1e-4,
@@ -192,13 +198,14 @@ start_time <- Sys.time()
 
 run_adaptive_sampling(
   initial_samples_file = samples_file,
+  scenario_name = scenario_name,
   distance_matrix = h3n2_distance_matrix,
   num_samples = amc_params$num_samples,
   num_parallel_jobs = amc_params$num_parallel_jobs,
   mapping_max_iter = amc_params$mapping_max_iter,
-  scenario_name = scenario_name,
   relative_epsilon = amc_params$relative_epsilon,
   folds = amc_params$folds,
+  output_dir = output_dir,
   verbose = FALSE
 )
 
@@ -242,9 +249,9 @@ print(diagnostics)
 diag_plots <- create_diagnostic_plots(
   chain_files = chain_files,
   mutual_size = mutual_size,
-  output_file = "H3N2_2003_data_diagnostic_plots.png"
+  save_plot = FALSE
+  #output_file = "H3N2_2003_data_diagnostic_plots.png"
 )
-print(diag_plots)
 ```
 
 ## Profile Likelihood Analysis
@@ -300,7 +307,7 @@ for (param in params) {
   )
   
   # Plot results
-  sens_plot <- plot(sensitivity, y_limit_factor=NULL)
+  sens_plot <- plot(sensitivity, y_limit_factor=NULL,  save_plot = FALSE)
   #ggsave_white_bg(paste0("parameter_sensitivity_", param, ".pdf"), sens_plot)
   print(sens_plot)
 }

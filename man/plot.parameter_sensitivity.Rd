@@ -8,7 +8,7 @@
   x,
   width = 3.5,
   height = 3.5,
-  save_plot = TRUE,
+  save_plot = FALSE,
   output_dir,
   y_limit_factor = NULL,
   ...
@@ -21,7 +21,7 @@
 
 \item{height}{Numeric height of output plot in inches (default: 3.5)}
 
-\item{save_plot}{Logical. Whether to save plot to file. Default: TRUE}
+\item{save_plot}{Logical. Whether to save plot to file. Default: FALSE}
 
 \item{output_dir}{Character. Directory for output files. Required if \code{save_plot} is TRUE.}
 

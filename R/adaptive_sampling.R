@@ -1885,7 +1885,7 @@ parameter_sensitivity_analysis <- function(param, samples, bins = 30,
 #' @param x A parameter_sensitivity object
 #' @param width Numeric width of output plot in inches (default: 3.5)
 #' @param height Numeric height of output plot in inches (default: 3.5)
-#' @param save_plot Logical. Whether to save plot to file. Default: TRUE
+#' @param save_plot Logical. Whether to save plot to file. Default: FALSE
 #' @param output_dir Character. Directory for output files. Required if `save_plot` is TRUE.
 #' @param y_limit_factor Numeric. Factor to set the upper y-axis limit as a percentage above 
 #'        the threshold value (e.g., 1.10 for 10% above). Default: NULL (automatic scaling)
@@ -1896,7 +1896,7 @@ parameter_sensitivity_analysis <- function(param, samples, bins = 30,
 #' @importFrom scales comma label_number
 #' @export
 plot.parameter_sensitivity <- function(x, width = 3.5, height = 3.5,
-                                     save_plot = TRUE, output_dir,
+                                     save_plot = FALSE, output_dir,
                                      y_limit_factor = NULL, ...) {
   # Convert to data frame for ggplot
   plot_data <- data.frame(
