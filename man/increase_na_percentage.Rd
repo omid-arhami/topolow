@@ -12,7 +12,7 @@ increase_na_percentage(mat, target_na_percentage)
 \item{target_na_percentage}{Numeric between 0 and 1 specifying desired proportion of NAs}
 }
 \value{
-Matrix with increased NA values, maintaining symmetry
+A \code{matrix} with an increased number of \code{NA} values, maintaining symmetry.
 }
 \description{
 Strategically introduces NA values into a distance matrix while maintaining symmetry.
@@ -29,7 +29,6 @@ The function:
 }
 }
 \examples{
-\dontrun{
 # Create sample distance matrix
 dist_mat <- matrix(runif(100), 10, 10)
 dist_mat[lower.tri(dist_mat)] <- t(dist_mat)[lower.tri(dist_mat)]
@@ -37,5 +36,4 @@ diag(dist_mat) <- 0
 
 # Increase NAs to 70\%
 sparse_mat <- increase_na_percentage(dist_mat, 0.7)
-}
 }

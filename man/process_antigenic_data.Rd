@@ -36,9 +36,9 @@ process_antigenic_data(
 \item{scale_factor}{Numeric. Scale factor for titers (default: 10).}
 }
 \value{
-List containing:
-\item{long}{Data frame in long format with standardized columns}
-\item{matrix}{Distance matrix}
+A list containing two elements:
+\item{long}{A \code{data.frame} in long format with standardized columns, including the original identifiers, processed values, and calculated distances. Any specified metadata is also included.}
+\item{matrix}{A numeric \code{matrix} representing the processed symmetric distance matrix, with antigens and sera on columns and rows.}
 }
 \description{
 Processes raw antigenic assay data from CSV files into standardized long and matrix
@@ -69,24 +69,24 @@ Input requirements and constraints:
 }
 }
 \examples{
-\dontrun{
-# Process titer data (e.g., HI assay)
-results <- process_antigenic_data(
-  "smith2004.csv",
-  antigen_col = "virusStrain",
-  serum_col = "serumStrain", 
-  value_col = "titer",
-  is_titer = TRUE,
-  metadata_cols = c("cluster", "color")
-)
+# Locate the example data file included in the package
+file_path <- system.file("extdata", "example_titer_data.csv", package = "topolow")
 
-# Process IC50 data
-results <- process_antigenic_data(
-  "hiv_assays.csv",
-  antigen_col = "Virus",
-  serum_col = "Antibody",
-  value_col = "IC50",
-  is_titer = FALSE
-)
+# Check if the file exists before running the example
+if (file.exists(file_path)) {
+  # Process the example titer data
+  results <- process_antigenic_data(
+    file_path,
+    antigen_col = "virusStrain",
+    serum_col = "serumStrain", 
+    value_col = "titer",
+    is_titer = TRUE,
+    metadata_cols = c("cluster", "color")
+  )
+
+  # View the long format data
+  print(results$long)
+  # View the distance matrix
+  print(results$matrix)
 }
 }

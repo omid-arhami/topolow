@@ -474,8 +474,7 @@ for(dataset_name in names(datasets)) { #
         titer_table = titer_table,
         dim = dim,  # Set the dimension
         optimization_number = opt_setting$racmacs_opt_rounds,
-        num_cores = opt_setting$num_cores,
-        scenario_name = paste0(dataset_name, "_dim", dim, "_fold", i)
+        num_cores = opt_setting$num_cores
       )
       
       # Save coordinates
@@ -657,8 +656,7 @@ for (dataset_name in names(datasets) ) { #
     titer_table = titer_table,
     dim = racmacs_dim,
     optimization_number = opt_setting$racmacs_opt_rounds,
-    num_cores = opt_setting$num_cores,
-    scenario_name = dataset_name
+    num_cores = opt_setting$num_cores
   )
   
   coords_file <- file.path(coords_dir, 
@@ -1675,8 +1673,7 @@ for(dataset_name in names(datasets) ) {
       titer_table = titer_table,
       dim = racmacs_dim,
       optimization_number = opt_setting$racmacs_opt_rounds,
-      num_cores = opt_setting$num_cores,
-      scenario_name = paste0(dataset_name, "_fold", i)
+      num_cores = opt_setting$num_cores
     )
     
     # Save coordinates
@@ -1809,9 +1806,8 @@ error_summary <- errors_df %>%
   )
 
 # ---------------------------------------------------------------------------
-#  NEW: separate top- and bottom-padding so we have an “annotation band”
-#       equal to 35 % of the core y-range
-# ---------------------------------------------------------------------------
+#   separate top- and bottom-padding so we have an “annotation band”
+#   equal to 35 % of the core y-range
 core_vals   <- clean_data(errors_df$OutSampleError, k = 3.05)
 core_min    <- min(core_vals, na.rm = TRUE)
 core_max    <- max(core_vals, na.rm = TRUE)
@@ -1887,7 +1883,7 @@ p1 <- ggplot() +
     fill = "Algorithm"
   )
 
-ggsave(
+ggsave_white_bg(
   file.path(plots_dir, "comparison_real_data.pdf"),
   p1,
   width  = 100,

@@ -9,4 +9,9 @@
 library(testthat)
 library(topolow)
 
+# Correct usage:
+if (requireNamespace("rgl", quietly = TRUE)) {
+  rgl::rgl.useNULL()
+}
+
 test_check("topolow")

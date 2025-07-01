@@ -21,17 +21,18 @@ create_cv_folds(
 \item{random_seed}{Integer random seed for reproducibility}
 }
 \value{
-List of lists, each containing:
-\item{truth}{Truth matrix for this fold}
-\item{train}{Training matrix with masked validation entries}
+A list of length \code{n_folds}. Each element is a list containing two matrices:
+\item{truth}{The truth matrix for that fold.}
+\item{train}{The training matrix with some values replaced by \code{NA} for validation.}
 }
 \description{
 Creates k-fold cross-validation splits of a distance matrix while maintaining
 symmetry. Each fold has a training matrix with some values masked for validation.
 }
 \examples{
-\dontrun{
+# Create a sample distance matrix
+dist_matrix <- matrix(runif(100), 10, 10)
+diag(dist_matrix) <- 0
 # Create 5-fold CV splits
 folds <- create_cv_folds(dist_matrix, n_folds = 5, random_seed = 123)
-}
 }

@@ -11,6 +11,9 @@
 
 \item{...}{Additional arguments passed to print}
 }
+\value{
+No return value, called for side effects (prints a summary to the console).
+}
 \description{
 Print Method for Convergence Diagnostics
 }

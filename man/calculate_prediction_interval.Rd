@@ -18,7 +18,7 @@ calculate_prediction_interval(
 \item{confidence_level}{Confidence level for interval (default: 0.95)}
 }
 \value{
-Numeric margin of error for prediction interval
+A single numeric value representing the margin of error for the prediction interval.
 }
 \description{
 Computes prediction intervals for the estimated distances based on

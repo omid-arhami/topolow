@@ -14,14 +14,15 @@ check_gaussian_convergence(data, window_size = 300, tolerance = 0.01)
 \item{tolerance}{Numeric convergence threshold for relative changes}
 }
 \value{
-List containing:
-\item{converged}{Logical indicating if convergence achieved}
-\item{mean_converged}{Logical for mean convergence}
-\item{cov_converged}{Logical for covariance convergence}
-\item{final_mean}{Vector of final mean values}
-\item{final_cov}{Final covariance matrix}
-\item{mean_history}{Matrix of mean values over iterations}
-\item{cov_changes}{Vector of covariance changes}
+An object of class \code{topolow_convergence} containing diagnostics about the convergence of the multivariate samples. This list includes:
+\item{converged}{A logical flag, \code{TRUE} if both mean and covariance have converged.}
+\item{mean_converged}{A logical flag, \code{TRUE} if the mean vector has converged.}
+\item{cov_converged}{A logical flag, \code{TRUE} if the covariance matrix has converged.}
+\item{final_mean}{The mean vector calculated from the last \code{window_size} samples.}
+\item{final_cov}{The covariance matrix calculated from the last \code{window_size} samples.}
+\item{mean_history}{A matrix tracking the history of the running mean of each parameter.}
+\item{cov_changes}{A numeric vector of the relative changes in the Frobenius norm of the covariance matrix.}
+\item{param_names}{The names of the parameters (columns) from the input data.}
 }
 \description{
 Assesses convergence of multivariate samples by monitoring changes in mean
@@ -29,10 +30,11 @@ vector and covariance matrix over a sliding window. Useful for checking
 stability of parameter distributions in optimization or sampling.
 }
 \examples{
-\dontrun{
-data <- read.csv("chain_data.csv")
-conv_results <- check_gaussian_convergence(data)
+# Assuming 'chain_data' is a data frame with samples
+chain_data <- as.data.frame(matrix(rnorm(500 * 4), ncol = 4))
+colnames(chain_data) <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
+conv_results <- check_gaussian_convergence(chain_data)
 print(conv_results)  # Shows summary
-plot(conv_results)   # Creates convergence plots
-}
+# The plot method for this object would create convergence plots.
+# plot(conv_results)
 }

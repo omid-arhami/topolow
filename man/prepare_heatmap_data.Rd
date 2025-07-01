@@ -18,19 +18,25 @@ prepare_heatmap_data(
 \item{cluster_cols}{Logical; whether to cluster columns}
 }
 \value{
-List containing:
-\item{matrix_data}{Processed matrix for visualization}
-\item{row_order}{Optional row ordering from clustering}
-\item{col_order}{Optional column ordering from clustering}
-\item{stats}{List of matrix statistics}
+A list of data prepared for generating a heatmap of the distance matrix:
+\item{matrix_data}{The distance \code{matrix}, potentially reordered by clustering.}
+\item{row_order}{An integer vector of the row indices after clustering. If \code{cluster_rows}
+is \code{FALSE}, this is the original order.}
+\item{col_order}{An integer vector of the column indices after clustering. If \code{cluster_cols}
+is \code{FALSE}, this is the original order.}
+\item{stats}{A list of summary statistics for the distance matrix, including \code{mean}, \code{sd},
+\code{min}, \code{max}, and \code{completeness}.}
 }
 \description{
 Prepares distance matrix data for heatmap visualization by handling missing values
 and calculating relevant statistics.
 }
 \examples{
-\dontrun{
+# Create a sample distance matrix
+dist_mat <- matrix(runif(25), 5, 5)
+
+# Prepare data for a heatmap
 heatmap_data <- prepare_heatmap_data(dist_mat)
 print(heatmap_data$stats$completeness)
-}
+
 }

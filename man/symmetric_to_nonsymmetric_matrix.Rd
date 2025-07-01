@@ -12,7 +12,7 @@ symmetric_to_nonsymmetric_matrix(dist_matrix, selected_names)
 \item{selected_names}{Names of reference points}
 }
 \value{
-Matrix in assay panel format
+A non-symmetric \code{matrix} in assay panel format, where rows are test antigens and columns are reference antigens.
 }
 \description{
 Convert distance matrix to assay panel format

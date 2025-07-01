@@ -10,10 +10,10 @@ add_noise_bias(matrix_data)
 \item{matrix_data}{Numeric matrix to add noise to}
 }
 \value{
-List containing three matrices:
-\item{n1}{Matrix with first noise realization}
-\item{n2}{Matrix with second noise realization}
-\item{nb}{Matrix with noise and negative bias}
+A \code{list} containing three noisy \code{matrix} objects:
+\item{n1}{Matrix with the first realization of random Gaussian noise.}
+\item{n2}{Matrix with a second, different realization of random Gaussian noise.}
+\item{nb}{Matrix with both random noise and a systematic negative bias.}
 }
 \description{
 Creates noisy versions of a distance matrix by adding random noise and/or systematic bias.
@@ -30,7 +30,6 @@ The function generates three variants of the input matrix:
 The noise level is scaled relative to the data mean to maintain realistic error magnitudes.
 }
 \examples{
-\dontrun{
 # Create sample distance matrix
 dist_mat <- matrix(runif(100), 10, 10)
 dist_mat[lower.tri(dist_mat)] <- t(dist_mat)[lower.tri(dist_mat)]
@@ -38,5 +37,4 @@ diag(dist_mat) <- 0
 
 # Generate noisy versions
 noisy_variants <- add_noise_bias(dist_mat)
-}
 }

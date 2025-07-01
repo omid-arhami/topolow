@@ -26,26 +26,15 @@ calculate_cumulative_distances(
 \item{na.rm}{Logical indicating whether to remove NA values}
 }
 \value{
-List containing either:
-If reference_row provided:
-\item{summary_data}{Data frame with columns:
+A list containing the calculated distance metrics. The content of the list depends
+on the \code{reference_row} parameter.
 \itemize{
-\item season_num: Numeric season identifier based on Influenza A.
-\item cluster: Cluster assignment
-\item color: Point color
-\item avg_euclidean_dist: Mean distance to reference
-\item count: Points per cluster
-\item total_count: Total points per season
-\item fraction: Proportion of points in cluster
-}
-}
-If reference_row = FALSE:
-\item{dist_data}{Data frame with columns:
-\itemize{
-\item year_diff: Years between points
-\item euclidean_dist: Distance between points
-\item ref_year: Reference year
-}
+\item If \code{reference_row} is specified, the list contains \code{summary_data}: a \code{data.frame}
+with distances from the specified reference point to all other points, summarized by
+season and cluster. The columns include \code{season_num}, \code{cluster}, \code{color}, \code{avg_euclidean_dist},
+\code{count}, \code{total_count}, and \code{fraction}.
+\item If \code{reference_row} is \code{FALSE}, the list contains \code{dist_data}: a \code{data.frame} with all unique
+pairwise distances. The columns include \code{year_diff}, \code{euclidean_dist}, and \code{ref_year}.
 }
 }
 \description{
@@ -53,11 +42,15 @@ Calculates cumulative distance metrics either from a reference point or between
 all pairs. Handles both seasonal and year-based analyses.
 }
 \examples{
-\dontrun{
+# Create sample coordinate data
+coords <- data.frame(V1 = rnorm(10), V2 = rnorm(10), year = rep(2000:2004, 2),
+                     season = paste0(rep(2000:2004, 2), "-S"),
+                     cluster = factor(rep(1:2, 5)), color = "blue")
+
 # Calculate distances from reference point
 ref_distances <- calculate_cumulative_distances(coords, ndim=2, reference_row=1)
 
 # Calculate all pairwise distances
 all_distances <- calculate_cumulative_distances(coords, ndim=2, reference_row=FALSE)
-}
+
 }

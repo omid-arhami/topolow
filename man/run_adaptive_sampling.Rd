@@ -14,11 +14,7 @@ run_adaptive_sampling(
   mapping_max_iter = 1000,
   relative_epsilon = 1e-04,
   folds = 20,
-  time = "8:00:00",
-  memory = "10G",
-  output_dir = NULL,
-  use_slurm = FALSE,
-  cider = FALSE,
+  output_dir,
   verbose = FALSE
 )
 }
@@ -30,37 +26,70 @@ Must contain columns: log_N, log_k0, log_cooling_rate, log_c_repulsion, NLL}
 
 \item{distance_matrix}{Matrix. Distance matrix of the input data.}
 
-\item{num_parallel_jobs}{Integer. Number of parallel jobs (cores on local machine or SLURM jobs).}
+\item{num_parallel_jobs}{Integer. Number of parallel local jobs (chains) to run.}
 
-\item{max_cores}{Integer. Maximum number of cores to use for parallel processing. If NULL,
-uses all available cores minus 1 (default: NULL).}
+\item{max_cores}{Integer. Maximum number of cores to use for parallel processing across all jobs.
+If NULL, uses all available cores minus 1 (default: NULL).}
 
-\item{num_samples}{Integer. Number of new samples to be added to the CSV file containing initial samples through Adaptive Monte Carlo sampling (default: 10).}
+\item{num_samples}{Integer. Number of new samples to be added to the CSV file containing initial samples
+through Adaptive Monte Carlo sampling (default: 10).}
 
 \item{mapping_max_iter}{Integer. Maximum iterations per map optimization.}
 
 \item{relative_epsilon}{Numeric. Convergence threshold.}
 
-\item{folds}{Integer. Number of CV folds (default: 10).}
+\item{folds}{Integer. Number of CV folds (default: 20).}
 
-\item{time}{Character. Walltime for SLURM jobs in HH:MM:SS format. Default: "8:00:00".}
-
-\item{memory}{Character. Memory allocation for SLURM jobs. Default: "10G".}
-
-\item{output_dir}{Character. Directory for output files. If NULL, uses current directory.}
-
-\item{use_slurm}{Logical. Whether to use SLURM (default: FALSE).}
-
-\item{cider}{Logical. Whether to use cider queue (default: FALSE).}
+\item{output_dir}{Character. Directory for output job files. The project's working directory is a
+straightforward example. This argument is required.}
 
 \item{verbose}{Logical. Whether to print progress messages. Default: FALSE.}
 }
 \value{
-NULL. Results are  written to: model_parameters/\{scenario_name\}_model_parameters.csv
+No return value, called for side effects. The function writes the
+results of the adaptive sampling to a CSV file within the specified \code{output_dir}.
 }
 \description{
-Performs adaptive Monte Carlo sampling to explore parameter space, either locally
-or distributed via SLURM. Samples are drawn adaptively based on previous evaluations
-to focus sampling in high-likelihood regions. Results from all jobs accumulate in
-a single output file.
+Performs adaptive Monte Carlo sampling to explore parameter space, running locally
+in parallel. Samples are drawn adaptively based on previous evaluations
+to focus sampling in high-likelihood regions. Results from all parallel jobs
+accumulate in a single output file. This function always writes to the file system
+and therefore requires the \code{output_dir} argument.
+}
+\examples{
+\donttest{
+# 1. Locate the example initial samples file included with the package
+initial_file <- system.file(
+  "extdata", "initial_samples_example.csv", 
+  package = "topolow"
+)
+
+# 2. Create a temporary directory for the function's output
+# This function requires a writable directory for its results.
+temp_out_dir <- tempdir()
+
+# 3. Create a sample distance matrix for the function to use
+dist_mat <- matrix(runif(100, 1, 10), 10, 10)
+diag(dist_mat) <- 0
+
+# 4. Run the adaptive sampling only if the example file is found
+if (nzchar(initial_file)) {
+  run_adaptive_sampling(
+    initial_samples_file = initial_file,
+    scenario_name = "adaptive_test_example",
+    distance_matrix = dist_mat,
+    output_dir = temp_out_dir,
+    num_parallel_jobs = 2, # Use small values for a quick example
+    num_samples = 2,
+    verbose = FALSE
+  )
+  
+  # 5. Verify output files were created
+  print("Output files from adaptive sampling:")
+  print(list.files(temp_out_dir, recursive = TRUE))
+  
+  # 6. Clean up the temporary directory
+  unlink(temp_out_dir, recursive = TRUE)
+}
+}
 }

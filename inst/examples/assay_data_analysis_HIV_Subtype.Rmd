@@ -506,9 +506,7 @@ param_ranges <- list(
 opt_params <- list(
   mapping_max_iter = 1000,    # Maximum optimization iterations
   folds = 20,         # Number of CV folds
-  num_samples = 40, 
-  use_slurm = FALSE,
-  cider = FALSE
+  num_samples = 40
 )
 ```
 
@@ -537,11 +535,7 @@ results <- initial_parameter_optimization(
   cooling_rate_max = param_ranges$cooling_rate_max,
   num_samples = opt_params$num_samples,
   folds = opt_params$folds,
-  write_files = FALSE, # Only set TRUE on SLURM
-  # time = "6:00:00",
-  # memory = "2G",
-  # use_slurm = opt_params$use_slurm,
-  # cider = opt_params$cider,
+  write_files = FALSE,
   verbose = TRUE
 )
 
@@ -558,7 +552,7 @@ write.csv(results, samples_file, row.names=FALSE)
 
 ## Aggregate the results
 
-(Only if SLURM was used) Wait until the jobs are done.
+If `write_files = TRUE` was used during optimization, the individual result files can be aggregated into a single file.
 
 ```{r eval=FALSE}
 # scenario_name <- "HIV_BC_MC80"
@@ -583,9 +577,7 @@ amc_params <- list(
   num_parallel_jobs = parallel::detectCores()-1,  # For local execution: Number of CPU cores available (Can try parallel::detectCores() ); For SLURM: Number of jobs to submit
   mapping_max_iter = 1000, # Maximum iterations per map optimization
   relative_epsilon = 1e-4,
-  folds = 20, # Number of CV folds
-  use_slurm = FALSE,
-  cider = FALSE
+  folds = 20 # Number of CV folds
 )
 
 # Record start time for timing report
@@ -600,10 +592,6 @@ run_adaptive_sampling(
   scenario_name = scenario_name,
   relative_epsilon = amc_params$relative_epsilon,
   folds = amc_params$folds,
-  # time = "15:00:00",
-  # memory = "2G",
-  # use_slurm = amc_params$use_slurm,
-  # cider = amc_params$cider,
   verbose = TRUE
 )
 
@@ -693,7 +681,7 @@ for(param in params) {
   
   # Plot results
   pl_plot <- plot(pl_result, max_ll)
-  #ggsave(paste0("profile_likelihood_HIV_", param, ".pdf"), pl_plot)
+  #ggsave_white_bg(paste0("profile_likelihood_HIV_", param, ".pdf"), pl_plot)
   print(pl_plot)
 }
 ```
@@ -710,7 +698,7 @@ for (param in params) {
   
   # Plot results
   sens_plot <- plot(sensitivity) # , reference_error = 2.231
-  ggsave(paste0("parameter_sensitivity_", param, ".pdf"), sens_plot)
+  ggsave_white_bg(paste0("parameter_sensitivity_", param, ".pdf"), sens_plot)
   print(sens_plot)
 }
 ```

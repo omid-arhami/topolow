@@ -2,46 +2,65 @@
 % Please edit documentation in R/experiments.R
 \name{create_and_optimize_RACMACS_map}
 \alias{create_and_optimize_RACMACS_map}
-\title{Create and Optimize RACMACS Map}
+\title{Create and Optimize a RACMACS Map}
 \usage{
 create_and_optimize_RACMACS_map(
   titer_table,
   dim = 2,
   optimization_number = 400,
-  scenario_name,
+  output_file = NULL,
   num_cores = 1
 )
 }
 \arguments{
-\item{titer_table}{Matrix or data frame of titer measurements}
+\item{titer_table}{Matrix or data frame of titer measurements.}
 
-\item{dim}{Integer number of dimensions for the map (default: 2)}
+\item{dim}{Integer number of dimensions for the map (default: 2).}
 
-\item{optimization_number}{Integer number of optimization runs (default: 400)}
+\item{optimization_number}{Integer number of optimization runs (default: 400).}
 
-\item{scenario_name}{Character string for output file naming}
+\item{output_file}{Character. An optional, full path (including filename and
+extension) where the map coordinates will be saved as a CSV file.
+If NULL (the default), the coordinates are not saved to a file.}
 
-\item{num_cores}{Integer number of cores to use for optimization (default: 1)}
+\item{num_cores}{Integer number of cores to use for parallel optimization
+(default: 1).}
 }
 \value{
-RACMACS map object containing optimized coordinates
+A \code{racmap} object from the \code{Racmacs} package, containing the optimized coordinates and other map data.
 }
 \description{
-Creates and optimizes an antigenic map using RACMACS and keeps the best optimization.
-This function wraps RACMACS functionality to provide a simplified interface for
-map creation and optimization.
+Creates and optimizes an antigenic map using the RACMACS package and keeps the
+best optimization result. This function wraps common RACMACS functionality to
+provide a simplified interface for map creation and optimization.
 }
 \examples{
-\dontrun{
-# Create and optimize map from titer data
-map <- create_and_optimize_RACMACS_map(titer_table)
+# Create a dummy titer table for the example
+ag_names <- paste("V", 1:5)
+sr_names <- paste("S", 1:4)
+titer_table <- matrix(
+  sample(c(10, 20, 40, 80, 160, 320, 640, 1280, 2560, 5120), 20, replace = TRUE),
+  nrow = length(ag_names), ncol = length(sr_names),
+  dimnames = list(ag_names, sr_names)
+)
 
-# Create map with specific settings
-map <- create_and_optimize_RACMACS_map(
+# Create and optimize map without saving coordinates
+map_obj <- create_and_optimize_RACMACS_map(titer_table)
+
+# Create map and save coordinates to a temporary file.
+# tempfile() creates a path in the session's temporary directory.
+temp_coords_file <- tempfile(fileext = ".csv")
+map_obj_saved <- create_and_optimize_RACMACS_map(
   titer_table, 
   dim = 3,
-  optimization_number = 1000,
-  scenario_name = "example_map"
+  optimization_number = 100,
+  output_file = temp_coords_file
 )
-}
+
+# Check that the file was created
+file.exists(temp_coords_file)
+
+# Clean up the temporary file
+unlink(temp_coords_file)
+
 }

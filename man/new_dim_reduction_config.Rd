@@ -37,7 +37,8 @@ new_dim_reduction_config(
 \item{random_state}{Random seed for reproducibility}
 }
 \value{
-A dim_reduction_config object
+An S3 object of class \code{dim_reduction_config}, which is a list
+containing the specified configuration parameters for dimensionality reduction.
 }
 \description{
 S3 class for configuring dimension reduction parameters including

@@ -43,13 +43,4 @@ MAD scaling constant 1.4826 is calculated as 1/Phi^(-1)(3/4), where Phi is the
 standard normal CDF. This makes MAD consistent with standard deviation for
 normal distributions.
 }
-\examples{
-\dontrun{
-# Detect outliers in parameter values
-params <- c(0.01, 0.012, 0.011, 0.1, 0.009, 0.011, 0.15)
-outliers <- detect_outliers_mad(params)
-print(outliers$stats$n_outliers) # Number of outliers
-clean_params <- params[!outliers$outlier_mask] # Remove outliers
-}
-}
 \keyword{internal}

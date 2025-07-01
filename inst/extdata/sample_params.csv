@@ -1,0 +1,3 @@
+N,k0,cooling_rate,c_repulsion,Holdout_MAE,NLL
+2,10,0.1,0.5,1.0,100
+4,20,0.2,0.6,1.2,110

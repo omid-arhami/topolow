@@ -42,7 +42,8 @@ new_annotation_config(
 \item{outline_size}{Numeric. Size of the outline for annotations}
 }
 \value{
-An annotation_config object
+An S3 object of class \code{annotation_config}, which is a list
+containing the specified configuration parameters for plot annotations.
 }
 \description{
 S3 class for configuring point annotations in plots, including labels,

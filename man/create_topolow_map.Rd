@@ -14,7 +14,8 @@ create_topolow_map(
   relative_epsilon = 1e-04,
   convergence_counter = 5,
   initial_positions = NULL,
-  write_positions_to_csv = TRUE,
+  write_positions_to_csv = FALSE,
+  output_dir,
   verbose = FALSE
 )
 }
@@ -44,19 +45,22 @@ random initialization is used. Matrix should have nrow = nrow(distance_matrix)
 and ncol = ndim.}
 
 \item{write_positions_to_csv}{Logical. Whether to save point positions to CSV file.
-Default is TRUE.}
+Default is FALSE}
+
+\item{output_dir}{Character. Directory to save CSV file. Required if \code{write_positions_to_csv} is TRUE.}
 
 \item{verbose}{Logical. Whether to print progress messages. Default is TRUE.}
 }
 \value{
-A list with class "topolow" containing:
+A \code{list} object of class \code{topolow}. This list contains the results of the
+optimization and includes the following components:
 \itemize{
-\item positions: Matrix of optimized point coordinates
-\item est_distances: Matrix of distances in the optimized configuration
-\item mae: Mean absolute error between target and optimized distances
-\item iter: Number of iterations performed
-\item parameters: List of input parameters used
-\item convergence: List with convergence status and final error
+\item \code{positions}: A \code{matrix} of the optimized point coordinates in the n-dimensional space.
+\item \code{est_distances}: A \code{matrix} of the Euclidean distances between points in the final optimized configuration.
+\item \code{mae}: The final Mean Absolute Error between the target distances and the estimated distances.
+\item \code{iter}: The total number of iterations performed before the algorithm terminated.
+\item \code{parameters}: A \code{list} containing the input parameters used for the optimization run.
+\item \code{convergence}: A \code{list} containing the final convergence status, including a logical \code{achieved} flag and the final \code{error} value.
 }
 }
 \description{
@@ -91,15 +95,14 @@ Higher values do not necessarily lead to a better convergence
 }
 }
 \examples{
-\dontrun{
 # Create a simple distance matrix
 dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
 
-# Run TopoLow in 2D
-result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=1000, 
-                      k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
+# Run TopoLow in 2D without writing to a file
+result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=100, 
+                      k0=1.0, cooling_rate=0.001, c_repulsion=0.01, verbose=FALSE)
                       
-# Plot results
-plot(result$positions)
-}
+# results
+head(result$positions)
+
 }

@@ -12,9 +12,12 @@ calculate_diagnostics(chain_files, mutual_size = 500)
 \item{mutual_size}{Integer number of samples to use from end of each chain}
 }
 \value{
-List containing:
-\item{rhat}{R-hat statistic for each parameter}
-\item{ess}{Effective sample size for each parameter}
+A list object of class \code{topolow_amcs_diagnostics} containing convergence diagnostics for the MCMC chains.
+\item{rhat}{A numeric vector of the R-hat (potential scale reduction factor) statistic for each parameter. Values close to 1 indicate convergence.}
+\item{ess}{A numeric vector of the effective sample size for each parameter.}
+\item{chains}{A list of data frames, where each data frame is a cleaned and trimmed MCMC chain.}
+\item{param_names}{A character vector of the parameter names being analyzed.}
+\item{mutual_size}{The integer number of samples used from the end of each chain for calculations.}
 }
 \description{
 Calculates standard Adaptive Monte Carlo Sampling diagnostics including R-hat (potential scale reduction)
@@ -22,12 +25,26 @@ and effective sample size for multiple chains. Can be used with any iterative
 sampling or optimization procedure that produces chain-like output.
 }
 \examples{
-\dontrun{
-chain_files <- c("chain1.csv", "chain2.csv", "chain3.csv")
-diag <- calculate_diagnostics(chain_files, mutual_size = 1000)
-print(diag)  # Shows R-hat and ESS
-plot(diag)   # Creates density plots
-print(diag$rhat) # Should be close to 1
-print(diag$ess)  # Should be large enough (>400) for reliable inference
+# This example demonstrates how to use the function with temporary files,
+# Create dummy chain files in a temporary directory
+temp_dir <- tempdir()
+chain_files <- character(3)
+par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
+sample_data <- data.frame(
+  log_N = rnorm(100), log_k0 = rnorm(100),
+  log_cooling_rate = rnorm(100), log_c_repulsion = rnorm(100),
+  NLL = runif(100), Holdout_MAE = runif(100)
+)
+for (i in 1:3) {
+  chain_files[i] <- file.path(temp_dir, paste0("chain", i, ".csv"))
+  write.csv(sample_data, chain_files[i], row.names = FALSE)
 }
+
+# Calculate diagnostics
+diag_results <- calculate_diagnostics(chain_files, mutual_size = 50)
+print(diag_results)
+
+# Clean up the temporary files and directory
+unlink(chain_files)
+unlink(temp_dir, recursive = TRUE)
 }

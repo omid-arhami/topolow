@@ -1,6 +1,4 @@
 # Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
-# License: free of charge access granted to any academic researcher to use this software for non-commercial, academic research purposes **only**.  Nobody may modify, distribute, sublicense, or publicly share the Software or any derivative works, until the paper is published by the original authors.  The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.  In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the Software or the use or other dealings in the Software.
-
 # R/core.R
 
 #' TopoLow Core Functions
@@ -169,31 +167,33 @@ vectorized_process_distance_matrix <- function(distances_numeric, threshold_mask
 #'        random initialization is used. Matrix should have nrow = nrow(distance_matrix)
 #'        and ncol = ndim.
 #' @param write_positions_to_csv Logical. Whether to save point positions to CSV file.
-#'        Default is TRUE.
+#'        Default is FALSE
+#' @param output_dir Character. Directory to save CSV file. Required if `write_positions_to_csv` is TRUE.
+
 #' @param verbose Logical. Whether to print progress messages. Default is TRUE.
 #'
-#' @return A list with class "topolow" containing:
+#' @return A `list` object of class `topolow`. This list contains the results of the
+#'   optimization and includes the following components:
 #' \itemize{
-#'   \item positions: Matrix of optimized point coordinates
-#'   \item est_distances: Matrix of distances in the optimized configuration
-#'   \item mae: Mean absolute error between target and optimized distances
-#'   \item iter: Number of iterations performed
-#'   \item parameters: List of input parameters used
-#'   \item convergence: List with convergence status and final error
+#'   \item `positions`: A `matrix` of the optimized point coordinates in the n-dimensional space.
+#'   \item `est_distances`: A `matrix` of the Euclidean distances between points in the final optimized configuration.
+#'   \item `mae`: The final Mean Absolute Error between the target distances and the estimated distances.
+#'   \item `iter`: The total number of iterations performed before the algorithm terminated.
+#'   \item `parameters`: A `list` containing the input parameters used for the optimization run.
+#'   \item `convergence`: A `list` containing the final convergence status, including a logical `achieved` flag and the final `error` value.
 #' }
 #'
 #' @examples
-#' \dontrun{
 #' # Create a simple distance matrix
 #' dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
 #' 
-#' # Run TopoLow in 2D
-#' result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=1000, 
-#'                       k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
+#' # Run TopoLow in 2D without writing to a file
+#' result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=100, 
+#'                       k0=1.0, cooling_rate=0.001, c_repulsion=0.01, verbose=FALSE)
 #'                       
-#' # Plot results
-#' plot(result$positions)
-#' }
+#' # results
+#' head(result$positions)
+#' 
 #' @importFrom stats runif dist
 #' @importFrom utils write.csv
 #' @export
@@ -206,7 +206,8 @@ create_topolow_map <- function(distance_matrix,
                          relative_epsilon = 1e-4,
                          convergence_counter = 5,
                          initial_positions = NULL,
-                         write_positions_to_csv = TRUE,
+                         write_positions_to_csv = FALSE,
+                         output_dir,
                          verbose = FALSE) {
   
   # Input validation with informative messages
@@ -464,13 +465,21 @@ create_topolow_map <- function(distance_matrix,
     k <- k * (1 - cooling_rate)
   }
   
-  # Save positions if requested (unchanged)
+  # Save positions if requested
   if(write_positions_to_csv) {
+    if (!dir.exists(output_dir)) {
+        dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+    }
+    if (missing(output_dir)) {
+      stop("An 'output_dir' must be provided when 'write_positions_to_csv' is TRUE.", call. = FALSE)
+    }
     csv_filename <- sprintf(
       "Positions_dim_%d_k0_%.4f_cooling_%.4f_c_repulsion_%.4f.csv",
       ndim, k0, cooling_rate, c_repulsion
     )
-    utils::write.csv(positions, file = csv_filename, row.names = TRUE)
+    # Write to the SPECIFIED directory
+    full_path <- file.path(output_dir, csv_filename)
+    utils::write.csv(positions, file = full_path, row.names = TRUE)
   }
   
   # Create result object (unchanged)
@@ -505,14 +514,16 @@ create_topolow_map <- function(distance_matrix,
 #' 
 #' @param x A topolow object returned by create_topolow_map()
 #' @param ... Additional arguments passed to print (not used)
-#' 
+#' @return The original `topolow` object (invisibly). This function is called for its 
+#' side effect of printing a summary to the console.
 #' @examples
-#' \dontrun{
+#' # Create a simple distance matrix and run the optimization
 #' dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
-#' result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=100, 
-#'                              k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
+#' result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=50, 
+#'                              k0=1.0, cooling_rate=0.001, c_repulsion=0.1,
+#'                              verbose = FALSE)
+#' # Print the result object
 #' print(result)
-#' }
 #' @export
 print.topolow <- function(x, ...) {
   cat("TopoLow optimization result:\n")
@@ -521,6 +532,7 @@ print.topolow <- function(x, ...) {
   cat(sprintf("MAE: %.4f\n", x$mae))
   cat(sprintf("Convergence achieved: %s\n", x$convergence$achieved))
   cat(sprintf("Final convergence error: %.4f\n", x$convergence$error))
+  invisible(x)
 }
 
 
@@ -531,14 +543,16 @@ print.topolow <- function(x, ...) {
 #' 
 #' @param object A topolow object returned by create_topolow_map()
 #' @param ... Additional arguments passed to summary (not used)
-#' 
+#' @return No return value. This function is called for its side effect of 
+#' printing a detailed summary to the console.
 #' @examples
-#' \dontrun{
+#' # Create a simple distance matrix and run the optimization
 #' dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
-#' result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=100, 
-#'                              k0=1.0, cooling_rate=0.001, c_repulsion=0.1)
+#' result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=50, 
+#'                              k0=1.0, cooling_rate=0.001, c_repulsion=0.1,
+#'                              verbose = FALSE)
+#' # Summarize the result object
 #' summary(result)
-#' }
 #' @export
 summary.topolow <- function(object, ...) {
   print(object)

@@ -6,11 +6,14 @@ test_that("process_antigenic_data handles various input formats", {
     value = c(40, 80, "<160"),
     stringsAsFactors = FALSE
   )
-  write.csv(test_data, "test_data.csv", row.names = FALSE)
+  
+  # Use a temporary file for testing
+  temp_file <- tempfile(fileext = ".csv")
+  write.csv(test_data, temp_file, row.names = FALSE)
   
   # Test titer data processing
   result <- process_antigenic_data(
-    file_path = "test_data.csv",
+    file_path = temp_file,
     antigen_col = "antigen",
     serum_col = "serum",
     value_col = "value",
@@ -21,8 +24,8 @@ test_that("process_antigenic_data handles various input formats", {
   expect_true(all(c("long", "matrix") %in% names(result)))
   expect_true(is.matrix(result$matrix))
   
-  # Clean up
-  unlink("test_data.csv")
+  # Clean up is handled automatically for tempfiles, but explicit unlink is fine
+  unlink(temp_file)
 })
 
 test_that("long_to_matrix creates correct matrix", {

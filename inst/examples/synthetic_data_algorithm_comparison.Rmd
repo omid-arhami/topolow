@@ -25,7 +25,7 @@ knitr::opts_chunk$set(
 
 This vignette demonstrates how to perform a rigorous comparison between Topolow and RACMACS algorithms for antigenic cartography. We conduct k-fold cross-validation and evaluate performance using multiple metrics including mean absolute error (MAE), Mean Absolute Percentage Error (MAPE), and Completeness.
 
-You need the optimal parameters to create topolow maps. They are in csv files named "optimal_parameters_250points.csv" which are provided on Github or you can generate them by running sufficient Monte Carlo simulations (on a distributed cluster or a machine with tens of CPU cores for faster calculations) in file synthetic-parameter-fitting.Rmd in the same folder as current file.
+You need the optimal parameters to create topolow maps. They are in csv files named "optimal_parameters_250points.csv" which are provided on Github or you can generate them by running sufficient Monte Carlo simulations (on a machine with tens of CPU cores for faster calculations) in file synthetic-parameter-fitting.Rmd in the same folder as current file.
 
 ##Setup
 
@@ -51,8 +51,7 @@ opt_params <- list(
   topolow_opt_rounds = 1, # Optimization rounds for Topolow
   racmacs_opt_rounds = 100,  # Optimization rounds for RACMACS (You needs to do many optimizations and pick the best result)
   topolow_params = read.csv("optimal_parameters_250points.csv"),  # From parameter fitting
-  use_slurm = FALSE,
-  num_cores = 83
+  num_cores = parallel::detectCores() - 1 # Use all available cores except one
 )
 
 #  optimal dimensions of RACMACS
@@ -196,13 +195,17 @@ find_optimal_racmacs_dimensions <- function(sim_data, matrix_variants, opt_setti
           # Create scenario name for this run
           scenario_name <- sprintf("dim%d_%s_fold%d", orig_dim, variant, i)
           
-          # Run RACMACS optimization
+          # Define the output file path for the coordinates
+          coords_file <- file.path(racmacs_coords_dir, 
+                                  paste0("RACMACS_dim", orig_dim, "_", variant, "_fold", i, ".csv"))
+
+          # Run RACMACS optimization and save coordinates in one step
           map <- create_and_optimize_RACMACS_map(
             titer_table = titer_table,
             dim = test_dim,
             optimization_number = opt_setting$racmacs_opt_rounds,
             num_cores = opt_params$num_cores,
-            scenario_name = scenario_name
+            output_file = coords_file
           )
           
           # Save coordinates
@@ -353,7 +356,7 @@ plot_dimension_results <- function(results, output_dir, optimal_dims = NULL) {
       
       # Save individual plot
       individual_file <- file.path(plots_dir, paste0(plot_key, ".pdf"))
-      ggsave(individual_file, p, width = 2.5, height = 2, units = "in")
+      ggsave_white_bg(individual_file, p, width = 2.5, height = 2, units = "in")
     }
   }
   
@@ -477,7 +480,7 @@ plot_dimension_results <- function(results, output_dir, optimal_dims = NULL) {
   
   # Save the faceted plot with adjusted dimensions for 3×9 layout
   facet_file <- file.path(plots_dir, "faceted_dimension_analysis.pdf")
-  ggsave(facet_file, facet_plot, width = 12, height = 6, units = "in")
+  ggsave_white_bg(facet_file, facet_plot, width = 12, height = 6, units = "in")
   
   return(list(
     faceted_plot = facet_plot
@@ -668,100 +671,58 @@ for (original_dim in sim_data$metadata$dimension) {
       n_folds = opt_params$n_folds,
     )
     
-    # Save matrix list for SLURM jobs
-    if (opt_params$use_slurm) {
-      matrix_file <- file.path(matrix_dir,
-                               sprintf("%s_matrices.rds", scenario_name))
-      saveRDS(matrix_list, matrix_file)
-    }
-    
     # Run comparison for each fold
     for(i in seq_len(opt_params$n_folds)) {
       
-      
-      
-      #           ##################Topolow#####################
+      # ################## Topolow #####################
 
+      cat(sprintf("\n#####################\n##Scenario %d out of %d \n", cc, length(sim_data$metadata$dimension)*length(matrix_variants)))
+      # Run Topolow locally and collect results in same format as RACMACS
+      truth_matrix <- matrix_list[[i]][[1]]
+      input_matrix <- matrix_list[[i]][[2]]
 
-      if (opt_params$use_slurm) {
-        # Submit Topolow job to SLURM
-        args_list <- c(
-          normalizePath(matrix_file),
-          as.character(best_params$N),
-          as.character(opt_params$max_topolow_iter),
-          as.character(best_params$k0),
-          as.character(best_params$cooling_rate),
-          as.character(best_params$c_repulsion),
-          scenario_name,
-          as.character(i),
-          as.character(topolow_results_dir)
+      # Run Topolow optimization
+      result <- create_topolow_map(
+        distance_matrix = input_matrix,
+        ndim = best_params$N,
+        mapping_max_iter = opt_params$max_topolow_iter,
+        k0 = best_params$k0,
+        cooling_rate = best_params$cooling_rate,
+        c_repulsion = best_params$c_repulsion,
+        write_positions_to_csv = FALSE,
+        verbose = FALSE
+      )
+
+      p_dist_mat <- result$est_distances
+
+      # Calculate performance metrics
+      topolow_errors <- error_calculator_comparison(
+        p_dist_mat = p_dist_mat,
+        truth_matrix = truth_matrix,
+        input_matrix = input_matrix
+      )
+
+      # Store error results
+      topolow_df <- topolow_errors$report_df
+      topolow_df$Dimension <- best_params$N
+      topolow_df$Algorithm <- "Topolow"
+      topolow_df$Scenario <- scenario_name
+      topolow_df$Fold <- i
+      topolow_errors_df <- rbind(topolow_errors_df, topolow_df)
+
+      # Store Completeness results
+      topolow_mapped_objects_df <- rbind(
+        topolow_mapped_objects_df,
+        data.table(
+          Dimension = best_params$N,
+          Mapped = nrow(p_dist_mat),
+          Total = nrow(truth_matrix),
+          Validation_Completeness = topolow_errors$Completeness,
+          Algorithm = "Topolow",
+          Scenario = scenario_name,
+          Fold = i
         )
-
-        slurm_script <- create_slurm_script(
-          job_name = sprintf("%d_comparison_topolow_%s", i, scenario_name),
-          script_path = system.file("scripts/run_topolow_comparison.R",
-                                    package = "topolow"),
-          args = args_list,
-          num_cores = 21,
-          time = "5:00:00",
-          memory = "1G",
-          output_file = file.path(topolow_results_dir,
-                                  sprintf("%s_fold%d.out", scenario_name, i)),
-          error_file = file.path(topolow_results_dir,
-                                 sprintf("%s_fold%d.err", scenario_name, i))
-        )
-
-        submit_job(slurm_script, use_slurm = opt_params$use_slurm,
-                   cider = TRUE)
-      } else{
-        cat(sprintf("\n#####################\n##Scenario %d out of %d \n", cc, length(sim_data$metadata$dimension)*length(matrix_variants)))
-        # Run Topolow locally and collect results in same format as RACMACS
-        truth_matrix <- matrix_list[[i]][[1]]
-        input_matrix <- matrix_list[[i]][[2]]
-
-        # Run Topolow optimization
-        result <- create_topolow_map(
-          distance_matrix = input_matrix,
-          ndim = best_params$N,
-          mapping_max_iter = opt_params$max_topolow_iter,
-          k0 = best_params$k0,
-          cooling_rate = best_params$cooling_rate,
-          c_repulsion = best_params$c_repulsion,
-          write_positions_to_csv = FALSE,
-          verbose = FALSE
-        )
-
-        p_dist_mat <- result$est_distances
-
-        # Calculate performance metrics
-        topolow_errors <- error_calculator_comparison(
-          p_dist_mat = p_dist_mat,
-          truth_matrix = truth_matrix,
-          input_matrix = input_matrix
-        )
-
-        # Store error results
-        topolow_df <- topolow_errors$report_df
-        topolow_df$Dimension <- best_params$N
-        topolow_df$Algorithm <- "Topolow"
-        topolow_df$Scenario <- scenario_name
-        topolow_df$Fold <- i
-        topolow_errors_df <- rbind(topolow_errors_df, topolow_df)
-
-        # Store Completeness results
-        topolow_mapped_objects_df <- rbind(
-          topolow_mapped_objects_df,
-          data.table(
-            Dimension = best_params$N,
-            Mapped = nrow(p_dist_mat),
-            Total = nrow(truth_matrix),
-            Validation_Completeness = topolow_errors$Completeness,
-            Algorithm = "Topolow",
-            Scenario = scenario_name,
-            Fold = i
-          )
-        )
-      }
+      )
       
       
                 #################RACMACS ######################
@@ -775,13 +736,16 @@ for (original_dim in sim_data$metadata$dimension) {
       # Convert to titer format for RACMACS
       titer_table <- dist_to_titer_table(input_matrix, base=2, tens=10)
 
-      # Run RACMACS optimization
+      # Define the output file path for the coordinates
+      coords_file <- file.path(output_dir, "RACMACS_coords.csv")
+
+      # Run RACMACS optimization and save coordinates
       map <- create_and_optimize_RACMACS_map(
         titer_table = titer_table,
         dim = optimal_dim,  # Use the optimal dimension
         optimization_number = opt_params$racmacs_opt_rounds,
         num_cores = opt_params$num_cores,
-        scenario_name = scenario_name
+        output_file = coords_file
       )
 
       save.coords(map, filename = "RACMACS_coords.csv",
@@ -856,7 +820,7 @@ write.csv(racmacs_Completeness, "RACMACS_mapped_objects.csv",
 
 ##Collect and Aggregate Results
 
-After all Topolow jobs complete, collect and analyze results:
+After all  jobs complete, collect and analyze results:
 
 ```{r}
 # Read the CSV files back into dataframes
@@ -866,30 +830,6 @@ racmacs_Completeness <- read.csv("RACMACS_mapped_objects.csv")
 topolow_errors_df <- read.csv("Topolow_comparisondf.csv")
 topolow_mapped_objects_df <- read.csv("Topolow_mapped_objects.csv")
 ```
-
-```{r}
-## If SLURM was used:
-# Collect Topolow results from SLURM output
-
-
-# directory_path <- "results"
-# 
-# # Errors
-# pattern <- paste0("_errors", "\\.csv$")
-# csv_files <- list.files(path = directory_path, pattern = pattern, 
-#                        full.names = TRUE)
-# topolow_errors_df <- rbindlist(lapply(csv_files, fread), 
-#                            use.names = TRUE, fill = TRUE)
-# 
-# # Completeness
-# pattern <- paste0("_Completeness", "\\.csv$")
-# csv_files <- list.files(path = directory_path, pattern = pattern,
-#                        full.names = TRUE)
-# topolow_mapped_objects_df <- rbindlist(lapply(csv_files, fread),
-#                                      use.names = TRUE, fill = TRUE)
-# 
-```
-
 
 ##Analyze Results
 
@@ -992,7 +932,7 @@ p <- ggplot(all_mape_results, aes(x = Missing, y = MAPE, fill = Method)) +
   )
 
 # Save plot
-ggsave("Method_comparison_MAPE_plot_250points.pdf", plot = p, width = 172, height = 0.5*172, units = "mm", dpi = 300)
+ggsave_white_bg("Method_comparison_MAPE_plot_250points.pdf", plot = p, width = 172, height = 0.5*172, units = "mm", dpi = 300)
 
 print(p)
 ```
@@ -1038,7 +978,7 @@ p <- ggplot(all_mae_results, aes(x = Missing, y = MAE, fill = Method)) +
   )
 
 # Save with adjusted dimensions to accommodate smaller text
-ggsave("Method_comparison_MAE_plot_250points.pdf", plot = p, width = 172, height = 0.5*172, units = "mm", dpi = 300)
+ggsave_white_bg("Method_comparison_MAE_plot_250points.pdf", plot = p, width = 172, height = 0.5*172, units = "mm", dpi = 300)
 
 print(p)
 ```
@@ -1354,7 +1294,7 @@ for(ndim in sim_data$metadata$dimension) {
     layout_config = layout_config
   )
 
-  ggsave(
+  ggsave_white_bg(
     file.path(plots_dir,
              sprintf("original_temporal_map_dim%d.pdf", ndim)),
     temporal_plot,
@@ -1655,7 +1595,7 @@ for(ndim in sim_data$metadata$dimension) {
         layout_config = layout_config
       )
       
-      ggsave(
+      ggsave_white_bg(
         file.path(plots_dir,
                  sprintf("Topolow_temporal_map_dim%d_%s.pdf", ndim, matrix_type)),
         temporal_plot,
@@ -1691,13 +1631,17 @@ for(ndim in sim_data$metadata$dimension) {
     # Convert to titer format for RACMACS
     titer_table <- dist_to_titer_table(distance_matrix, base=2, tens=10)
 
-    # Run RACMACS optimization
+    # Define the output file path for the coordinates
+    coords_file <- file.path(coords_dir, 
+                           sprintf("RACMACS_coords_dim%d_%s.csv", ndim, matrix_type))
+
+    # Run RACMACS optimization and save coordinates
     map <- create_and_optimize_RACMACS_map(
       titer_table = titer_table,
       dim = 2,
       optimization_number = opt_params$racmacs_opt_rounds,
       num_cores = opt_params$num_cores,
-      scenario_name = base_scenario
+      output_file = coords_file
     )
 
     # Save coordinates
@@ -1751,7 +1695,7 @@ for(ndim in sim_data$metadata$dimension) {
       layout_config = layout_config
     )
     
-    ggsave(
+    ggsave_white_bg(
       file.path(plots_dir,
                sprintf("RACMACS_temporal_map_dim%d_%s.pdf", ndim, matrix_type)),
       temporal_plot,

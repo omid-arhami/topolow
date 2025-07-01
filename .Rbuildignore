@@ -1,5 +1,4 @@
 ^data-raw$
-^inst/examples$
 ^LICENSE\.txt$
 ^README\.html$
 ^build_package\.R$
@@ -12,3 +11,4 @@
 ^set_up_testing\.R$
 ^\.github$
 ^CRAN-SUBMISSION$
+^inst/examples$

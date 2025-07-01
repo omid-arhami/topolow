@@ -6,7 +6,7 @@
 \usage{
 plot_network_structure(
   network_results,
-  scenario_name,
+  output_file = NULL,
   aesthetic_config = new_aesthetic_config(),
   layout_config = new_layout_config()
 )
@@ -14,22 +14,30 @@ plot_network_structure(
 \arguments{
 \item{network_results}{List output from analyze_network_structure()}
 
-\item{scenario_name}{Character string for output file naming}
+\item{output_file}{Character. Full path (including filename and extension) where the plot will be saved.
+If NULL, the plot is not saved.}
 
 \item{aesthetic_config}{Plot aesthetic configuration object}
 
 \item{layout_config}{Plot layout configuration object}
 }
 \value{
-ggplot object
+A \code{ggplot} object representing the network graph.
 }
 \description{
 Creates visualization of distance matrix network structure showing data
 availability patterns and connectivity.
 }
 \examples{
-\dontrun{
-net_analysis <- analyze_network_structure(dist_mat)
-p <- plot_network_structure(net_analysis, "scenario1")
-}
+# Create sample network data
+adj_mat <- matrix(sample(c(0,1), 25, replace=TRUE), 5, 5)
+# Add row and column names, which are required by the analysis function
+rownames(adj_mat) <- colnames(adj_mat) <- paste0("Point", 1:5)
+# Ensure the matrix is symmetric for the analysis
+adj_mat[lower.tri(adj_mat)] <- t(adj_mat)[lower.tri(adj_mat)]
+diag(adj_mat) <- 0
+net_analysis <- analyze_network_structure(adj_mat)
+
+# Create plot and return the plot object
+plot_network_structure(net_analysis)
 }

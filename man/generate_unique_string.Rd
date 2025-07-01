@@ -16,7 +16,7 @@ generate_unique_string(n, length = 8, lower_bound = 1, upper_bound = 20)
 \item{upper_bound}{Upper bound for year suffix (default: 20)}
 }
 \value{
-Character vector of unique strings with year suffixes
+A character vector of unique strings with year suffixes
 }
 \description{
 Generate unique string identifiers with year suffix

@@ -111,13 +111,10 @@ param_ranges <- list(
 opt_params <- list(
   mapping_max_iter = 1000,    # Maximum mapping optimization iterations
   folds = 20,         # Number of CV folds
-  num_samples = 50, 
-  use_slurm = TRUE,
-  cider = FALSE,
-  write_files = TRUE # Only set TRUE on SLURM
+  num_samples = 50,
+  write_files = FALSE # Only Set to TRUE to save intermediate files
 )
 ```
-
 
 ```{r eval=FALSE}
 scenario_name = "H3N2_2003_data_AMC202"
@@ -144,10 +141,6 @@ results <- initial_parameter_optimization(
   num_samples = opt_params$num_samples,
   folds = opt_params$folds,
   write_files = opt_params$write_files,
-  # time = "6:00:00",
-  # memory = "2G",
-  # use_slurm = opt_params$use_slurm,
-  # cider = opt_params$cider,
   verbose = TRUE
 )
 
@@ -164,7 +157,7 @@ write.csv(results, samples_file, row.names=FALSE)
 
 ## Aggregate the results
 
-Aggregation is only needed if the argument write_files was TRUE in previous step which creates one file for each sample (typically when task is done through submitting jobs to SLURM). If so, Wait until the jobs are done.
+Aggregation is only needed if the argument write_files was TRUE in previous step which creates one file for each sample. If so, Wait until the jobs are done.
  Wait until the jobs are done.
 
 ```{r eval=FALSE}
@@ -191,9 +184,7 @@ amc_params <- list(
   num_parallel_jobs = parallel::detectCores()-1,  # For local execution: Number of CPU cores available (Can try parallel::detectCores() ); For SLURM: Number of jobs to submit
   mapping_max_iter = 1000, # Maximum iterations per map optimization
   relative_epsilon = 1e-4,
-  folds = 20, # Number of CV folds
-  use_slurm = TRUE,
-  cider = TRUE
+  folds = 20 # Number of CV folds
 )
 
 # Record start time for timing report
@@ -208,10 +199,6 @@ run_adaptive_sampling(
   scenario_name = scenario_name,
   relative_epsilon = amc_params$relative_epsilon,
   folds = amc_params$folds,
-  time = "5:00:00",
-  memory = "2G",
-  use_slurm = amc_params$use_slurm,
-  cider = amc_params$cider,
   verbose = FALSE
 )
 
@@ -298,7 +285,7 @@ for (param in params) {
   
   # Plot results
   pl_plot <- plot(pl_result, max_ll)
-  #ggsave(paste0("profile_likelihood_H3N2_2003_data_", param, ".png"), pl_plot)
+  #ggsave_white_bg(paste0("profile_likelihood_H3N2_2003_data_", param, ".png"), pl_plot)
   print(pl_plot)
 }
 ```
@@ -314,7 +301,7 @@ for (param in params) {
   
   # Plot results
   sens_plot <- plot(sensitivity, y_limit_factor=NULL)
-  #ggsave(paste0("parameter_sensitivity_", param, ".pdf"), sens_plot)
+  #ggsave_white_bg(paste0("parameter_sensitivity_", param, ".pdf"), sens_plot)
   print(sens_plot)
 }
 ```
@@ -591,7 +578,7 @@ p_grid <- plot_grid(plotlist = plots_no_legend, ncol = 3, align = 'h')
 final_plot <- plot_grid(p_grid, legend, ncol = 2, rel_widths = c(3, 0.4))
 
 # Save the final combined plot to a single PDF file
-ggsave("Temporal_Bandwidth_plots_h3n2.pdf", final_plot, width = 12, height = 8)
+ggsave_white_bg("Temporal_Bandwidth_plots_h3n2.pdf", final_plot, width = 12, height = 8)
 ```
 
 

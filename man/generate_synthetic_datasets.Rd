@@ -23,39 +23,44 @@ generate_synthetic_datasets(
 
 \item{missingness_levels}{Named list of missingness percentages (default: list(S=0.67, M=0.77, L=0.87))}
 
-\item{output_dir}{Character path to directory for saving outputs (optional)}
+\item{output_dir}{Character path to directory for saving outputs. If NULL (the default), no files are saved.}
 
 \item{prefix}{Character string to prefix output files (optional)}
 
-\item{save_plots}{Logical whether to save network visualization plots}
+\item{save_plots}{Logical whether to save network visualization plots. Requires \code{output_dir} to be set.}
 }
 \value{
-List containing:
-\item{matrices}{List of generated distance matrices}
-\item{panels}{List of generated assay panels}
-\item{metadata}{Data frame with generation parameters}
+A list containing the generated synthetic data and metadata:
+\item{matrices}{A list of generated symmetric distance matrices for each dimension.}
+\item{panels}{A list of generated assay panels (non-symmetric matrices) for each dimension.}
+\item{metadata}{A \code{data.frame} with the generation parameters for each dataset.}
 }
 \description{
 Creates synthetic distance matrices with controlled levels of missingness and noise
 for testing and validating mapping algorithms. Generates multiple datasets with
-different dimensionalities and missingness patterns.
+different dimensionalities and missingness patterns. If \code{output_dir} is provided,
+the generated datasets are saved as RDS files.
 }
 \examples{
-\dontrun{
-# Generate datasets with different dimensions
+# Generate datasets without saving to disk
 results <- generate_synthetic_datasets(
-  n_dims_list = c(2, 5, 10),
-  seeds = c(123, 456, 789),
-  n_points = 250,
-  output_dir = "sim_data"
-)
-
-# Custom missingness levels
-results <- generate_synthetic_datasets(
-  n_dims_list = c(2, 5),
+  n_dims_list = c(2, 3),
   seeds = c(123, 456),
-  n_points = 200,
-  missingness_levels = list(low=0.5, high=0.8)
+  n_points = 50
 )
+\donttest{
+# Generate datasets and save to a temporary directory
+temp_out_dir <- tempdir()
+results_saved <- generate_synthetic_datasets(
+  n_dims_list = c(2),
+  seeds = c(123),
+  n_points = 10,
+  missingness_levels = list(low=0.5, high=0.8),
+  output_dir = temp_out_dir,
+  save_plots = TRUE
+)
+list.files(temp_out_dir)
+# Clean up the directory
+unlink(temp_out_dir, recursive = TRUE)
 }
 }

@@ -7,10 +7,10 @@
 scatterplot_fitted_vs_true(
   distance_matrix,
   p_dist_mat,
-  scenario_name = NA,
-  ndim = NA,
-  save_plot = TRUE,
-  output_dir = NULL,
+  scenario_name,
+  ndim,
+  save_plot = FALSE,
+  output_dir,
   confidence_level = 0.95
 )
 }
@@ -19,32 +19,32 @@ scatterplot_fitted_vs_true(
 
 \item{p_dist_mat}{Matrix of predicted/fitted distances}
 
-\item{scenario_name}{Character string for output file naming}
+\item{scenario_name}{Character string for output file naming. Used if \code{save_plot} is TRUE.}
 
 \item{ndim}{Integer number of dimensions used in the model}
 
 \item{save_plot}{Logical. Whether to save plots to files. Default: TRUE}
 
-\item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+\item{output_dir}{Character. Directory for output files. Required if \code{save_plot} is \code{TRUE}.}
 
 \item{confidence_level}{Numeric confidence level for prediction intervals (default: 0.95)}
 }
 \value{
-Invisibly returns NULL, creates two plot files:
-\itemize{
-\item \{scenario_name\}\emph{prediction_scatter_dim}\{ndim\}.png
-\item \{scenario_name\}\emph{residuals_vs_fitted_dim}\{ndim\}.png
-}
+A list containing the \code{scatter_plot} and \code{residuals_plot} ggplot objects.
 }
 \description{
 Creates diagnostic plots comparing fitted distances from a model against true distances.
 Generates both a scatter plot with prediction intervals and a residuals plot.
 }
 \examples{
-\dontrun{
-# Create scatter and residual plots
-scatterplot_fitted_vs_true(truth_matrix, predicted_matrix, 
-                          scenario_name = "example",
-                          ndim = 5)
-}
+# Create sample data
+true_dist <- matrix(runif(100, 1, 10), 10, 10)
+pred_dist <- true_dist + rnorm(100)
+
+# Create plots without saving
+plots <- scatterplot_fitted_vs_true(true_dist, pred_dist, save_plot = FALSE)
+
+# You can then display a plot, for instance:
+# plots$scatter_plot
+
 }

@@ -4,15 +4,7 @@
 \alias{plot.profile_likelihood}
 \title{Plot Method for Profile Likelihood Objects}
 \usage{
-\method{plot}{profile_likelihood}(
-  x,
-  LL_max,
-  width = 3.5,
-  height = 3.5,
-  save_plot = TRUE,
-  output_dir = NULL,
-  ...
-)
+\method{plot}{profile_likelihood}(x, LL_max, width = 3.5, height = 3.5, save_plot = FALSE, output_dir, ...)
 }
 \arguments{
 \item{x}{A profile_likelihood object}
@@ -23,9 +15,9 @@
 
 \item{height}{Numeric height of output plot in inches (default: 3.5)}
 
-\item{save_plot}{Logical. Whether to save plot to file. Default: TRUE}
+\item{save_plot}{Logical. Whether to save plot to file. Default: FALSE}
 
-\item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+\item{output_dir}{Character. Directory for output files. Required if \code{save_plot} is TRUE.}
 
 \item{...}{Additional arguments passed to plot}
 }
@@ -44,12 +36,26 @@ The 95\% confidence interval is:
 \eqn{\{\theta_{ij} : LR(\theta_{ij}) \leq \chi^2_{1,0.05} = 3.84\}}
 }
 \examples{
-\dontrun{
+# These examples take more than 5 seconds to run, so they are not run by default. 
+# Use parallel processing (the default) to speed up.
+\donttest{
+# Create a sample data frame of MCMC samples
+samples <- data.frame(
+  log_N = log(runif(50, 2, 10)),
+  log_k0 = log(runif(50, 1, 5)),
+  log_cooling_rate = log(runif(50, 0.01, 0.1)),
+  log_c_repulsion = log(runif(50, 0.1, 1)),
+  NLL = runif(50, 20, 100)
+)
+
 # Calculate profile likelihood
-pl_result <- profile_likelihood("log_N", mcmc_samples)
+pl_result <- profile_likelihood("log_N", samples, grid_size = 10)
 
 # Plot with maximum likelihood from samples
 LL_max <- max(-samples$NLL)
-plot(pl_result, LL_max, width = 4, height = 3)
+# The plot function requires the ggplot2 package
+if (requireNamespace("ggplot2", quietly = TRUE)) {
+  plot(pl_result, LL_max, width = 4, height = 3)
+}
 }
 }

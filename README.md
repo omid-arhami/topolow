@@ -124,14 +124,7 @@ All of the estimated distances are close to the analytical solution, including m
 
 This package includes computationally intensive examples in the `inst/examples` directory. These examples demonstrate complete use cases in the paper but require computational time and resources.
 
-To run these studies after installing Topolow, you can copy all associated files, subdirectories, and the Rmd files to your machine by calling function below:
-
-``` r
-library(topolow)
-# Copy to a specific location:
-copy_reproduction_examples("path/to/my/examples")
-```
-
+To run these studies after installing Topolow, you can copy all associated files, subdirectories, and the Rmd files to your machine. 
 Then read through the markdown notebooks and choose which parts you wish to run. There are usually options to use the provided parameters to bypass some parts of the simulations.
 
 Note: Results of time-intensive sections are also provided in csv files and explained at the beginning of each Rmd file.
@@ -169,7 +162,7 @@ This approach allows Topolow to effectively optimize antigenic positions through
 -   **Noise reduction**: Decreases measurement errors through network-based dampening
 -   **Threshold handling**: Properly incorporates low and high reactor thresholds (e.g., \<40) as equality constraints
 -   **Cross-validation**: Built-in validation framework for performance assessment
--   **Parallel processing**: Support for multi-core and HPC environments
+-   **Parallel processing**: Support for multi-core execution
 -   **Visualization tools**: Interactive and publication-ready map generation
 -   **Phylogenetically-Aware Clade Detection**: Dynamic depth-based clades (no rooting or branch lengths required) are defined based on Average Leaf-to-Backbone Distance (ALBD) in the tree
 
@@ -216,7 +209,7 @@ Topolow is particularly valuable for:
 
 ## Using on HPC or SLURM Clusters
 
-When using topolow on HPC systems with SLURM, additional setup might be needed:
+When using topolow on HPC systems with SLURM (only available in Topolow v0.3.2), additional setup might be needed:
 
 1.  Ensure the correct R version is loaded (4.3.2 or newer):
 
@@ -224,7 +217,7 @@ When using topolow on HPC systems with SLURM, additional setup might be needed:
 module load R/4.4.1
 ```
 
-2.  Install required dependencies:
+2.  Install required dependencies, e.g.:
 
 ``` r
 install.packages(c("reshape2", "data.table", "dplyr", "ggplot2"))
@@ -268,7 +261,7 @@ The license will transition upon publication - see the LICENSE file for details.
 
 If you use this package, please cite the article:
 
-Arhami and Rohani, 2025 <doi:10.1101/2025.02.09.637307>
+Omid Arhami, Pejman Rohani, Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assays, Bioinformatics, 2025;, btaf372, https://doi.org/10.1093/bioinformatics/btaf372
 
 Software doi: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15620983.svg)](https://doi.org/10.5281/zenodo.15620983)
 

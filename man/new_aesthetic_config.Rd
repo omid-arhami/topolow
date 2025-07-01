@@ -63,7 +63,8 @@ new_aesthetic_config(
 \item{arrow_alpha}{Transparency of arrows (0 = invisible, 1 = fully opaque)}
 }
 \value{
-An aesthetic_config object
+An S3 object of class \code{aesthetic_config}, which is a list
+containing the specified configuration parameters for plot aesthetics.
 }
 \description{
 S3 class for configuring plot visual aesthetics including points, colors,

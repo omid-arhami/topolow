@@ -11,7 +11,7 @@ plot_3d_mapping(
   aesthetic_config = new_aesthetic_config(),
   layout_config = new_layout_config(),
   interactive = TRUE,
-  output_dir = NULL
+  output_dir
 )
 }
 \arguments{
@@ -32,11 +32,11 @@ plot_3d_mapping(
 
 \item{interactive}{Logical; whether to create an interactive plot}
 
-\item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+\item{output_dir}{Character. Directory for output files. Required if \code{interactive} is \code{FALSE}.}
 }
 \value{
-Invisibly returns rgl scene ID for further manipulation if rgl is available,
-or a 2D ggplot object as a fallback.
+Invisibly returns the rgl scene ID for further manipulation if rgl is
+available, or a 2D ggplot object as a fallback.
 }
 \description{
 Creates an interactive or static 3D visualization using rgl. Supports both
@@ -64,22 +64,22 @@ available, the function will return a 2D plot with a message explaining how to
 enable 3D visualization.
 }
 \examples{
-\dontrun{
 # Create sample data
 set.seed(123)
 data <- data.frame(
-  V1 = rnorm(100),
-  V2 = rnorm(100),
-  V3 = rnorm(100),
-  V4 = rnorm(100),
-  antigen = rep(c(0,1), 50),
-  antiserum = rep(c(1,0), 50),
-  cluster = rep(1:5, each=20),
-  year = rep(2000:2009, each=10)
+  V1 = rnorm(100), V2 = rnorm(100), V3 = rnorm(100), V4 = rnorm(100), name = 1:100,
+  antigen = rep(c(0,1), 50), antiserum = rep(c(1,0), 50),
+  cluster = rep(1:5, each=20), year = rep(2000:2009, each=10)
 )
 
-# Basic interactive plot
-plot_3d_mapping(data, ndim=4)
+# Create a static plot and save to a temporary file
+# This example requires an interactive session and the 'rgl' package.
+if (interactive() && requireNamespace("rgl", quietly = TRUE)) {
+  temp_dir <- tempdir()
+  # Basic interactive plot (will open a new window)
+  if(interactive()) {
+    plot_3d_mapping(data, ndim=4)
+  }
 
 # Custom configuration for temporal visualization
 aesthetic_config <- new_aesthetic_config(
@@ -97,28 +97,14 @@ layout_config <- new_layout_config(
   background_color = "black",
   show_axis = TRUE
 )
-
-# Create customized static plot
+  # Create customized static plot and save it
 plot_3d_mapping(data, ndim=4,
   aesthetic_config = aesthetic_config,
   layout_config = layout_config,
-  interactive = FALSE
+  interactive = FALSE, output_dir = temp_dir
 )
-
-# Dimension reduction with UMAP
-dim_config <- new_dim_reduction_config(
-  method = "umap",
-  n_components = 3,
-  umap_params = list(
-    n_neighbors = 20,
-    min_dist = 0.2
-  )
-)
-
-plot_3d_mapping(data, ndim=4,
-  dim_config = dim_config,
-  interactive = TRUE
-)
+  list.files(temp_dir)
+  unlink(temp_dir, recursive = TRUE)
 }
 
 }

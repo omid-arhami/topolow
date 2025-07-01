@@ -7,9 +7,9 @@ authors:
 - family-names: "Rohani"
   given-names: "Pejman"
   orcid: 0000-0002-7221-3801
-title: "TOPOLOW: A MAPPING ALGORITHM FOR ANTIGENIC CROSS-REACTIVITY AND BINDING AFFINITY ASSAY RESULTS"
-version: 0.3.2
-doi: https://doi.org/10.1101/2025.02.09.637307
+title: "Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assays, Bioinformatics, 2025"
+version: 1.0.0
+doi: https://doi.org/10.1093/bioinformatics/btaf372
 date-released: 2025
 url: "https://www.biorxiv.org/content/10.1101/2025.02.09.637307v1"
 preferred-citation:
@@ -19,6 +19,6 @@ preferred-citation:
     given-names: "Omid"
   - family-names: "Rohani"
     given-names: "Pejman"
-  title: "TOPOLOW: A MAPPING ALGORITHM FOR ANTIGENIC CROSS-REACTIVITY AND BINDING AFFINITY ASSAY RESULTS"
+  title: "Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assays, Bioinformatics, 2025"
   year: 2025
-  doi: https://doi.org/10.1101/2025.02.09.637307
+  doi: https://doi.org/10.1093/bioinformatics/btaf372

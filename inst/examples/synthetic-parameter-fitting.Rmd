@@ -28,7 +28,7 @@ This vignette demonstrates parameter fitting for synthetic datasets across diffe
 * Missing data patterns (S, M, L levels)
 * Noise types (random noise & biased noise)
 
-There are 27 combinations. Therefore, to run the simulation in this script, distributed processing is certainly needed.
+There are 27 combinations. Therefore, to run the simulation in this script, local parallel processing will be used.
 
 ## Required Packages
 
@@ -84,9 +84,8 @@ opt_params <- list(
   mapping_max_iter = 1000,    # Maximum map optimization iterations
   folds = 20,         # Number of CV folds
   num_samples = 50,
-  use_slurm = TRUE,
-  cider = TRUE,
-  write_files = TRUE  # Only set TRUE on SLURM
+  max_cores = NULL,           # Use NULL to let the function decide the number of cores
+  write_files = FALSE   # Set TRUE to save intermediate results
 )
 ```
 
@@ -128,10 +127,7 @@ for(i in seq_along(results$matrices)) {
       folds = opt_params$folds,
       num_samples = opt_params$num_samples,
       write_files = opt_params$write_files,
-      time = "2:00:00",
-      memory = "1G",
-      use_slurm = opt_params$use_slurm,
-      cider = opt_params$cider,
+      max_cores = opt_params$max_cores,
       verbose = TRUE
     )
   }
@@ -140,7 +136,7 @@ for(i in seq_along(results$matrices)) {
 
 ## Aggregate Results 
 
-After SLURM jobs complete, aggregate results for each dimension and matrix type:
+After the optimization jobs complete, aggregate the results for each dimension and matrix type:
 
 ```{r eval=FALSE}
 # Initialize results storage
@@ -173,17 +169,16 @@ You can check the console outputs, warnings, or errors in .out and .err files in
 ```{r eval=FALSE}
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_parallel_jobs = 200,  # For local execution: Number of CPU cores available; For SLURM: Number of samples
-  num_samples = 200,        # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
+  num_parallel_jobs = 200,  # For local execution: Number of CPU cores available; 
+  num_samples = 200,        # Number of new samples to add to the parameter distribution through AMC (for refinement.)
   mapping_max_iter = 1000,    # Maximum iterations per map optimization
   relative_epsilon = 1e-4
 )
 
 # Setup optimization parameters
 opt_params <- list(
-  folds = 20,         # Number of CV folds
-  use_slurm = TRUE,
-  cider = TRUE
+  folds = 20         # Number of CV folds
+
 )
 
 # Run adaptive sampling for each dimension and matrix type
@@ -217,16 +212,11 @@ for(ndim in results$metadata$dimension) { #
       max_cores = opt_params$folds+1, # Each job on SLURM can work with 20 cores for a 20-fold CV
       relative_epsilon = amc_params$relative_epsilon,
       folds = opt_params$folds,
-      time = "3:00:00",
-      memory = "1G",
-      use_slurm = opt_params$use_slurm,
-      cider = opt_params$cider,
       verbose = FALSE
     )
   }
 }
 ```
-
 
 ## Analyze fitted parameters Across Dimensions and Matrix Types
 
@@ -369,7 +359,6 @@ latex_table <- xtable(final_params[, c("Missing", "Variant", "True Dim", "N")],
 print(latex_table, include.rownames = FALSE)
 ```
 
-
 ## Convergence Analysis
 
 Check convergence for each case:
@@ -431,7 +420,6 @@ for(ndim in names(convergence_results)) {
   }
 }
 ```
-
 
 ## Session Info
 

@@ -1,6 +1,4 @@
 # Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
-# License: free of charge access granted to any academic researcher to use this software for non-commercial, academic research purposes **only**.  Nobody may modify, distribute, sublicense, or publicly share the Software or any derivative works, until the paper is published by the original authors.  The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.  In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the Software or the use or other dealings in the Software.
-
 # R/transformations.R
 
 #' Data Format Transformations for Antigenic Cartography
@@ -45,11 +43,10 @@
 #' The 'rc' parameter determines how to handle shared names between references
 #' and challenges.
 #'
-#' @return A symmetric matrix of distances with row and column names corresponding 
-#'         to the unique points in the data.
+#' @return A symmetric `matrix` of distances with row and column names corresponding 
+#'         to the unique points in the data. `NA` values represent unmeasured pairs.
 #'
 #' @examples
-#' \dontrun{
 #' data <- data.frame(
 #'   antigen = c("A", "B", "A"),
 #'   serum = c("X", "X", "Y"), 
@@ -71,7 +68,6 @@
 #'                             rorder = "year",
 #'                             values_column = "distance",
 #'                             sort = TRUE)
-#' }
 #' @importFrom data.table setDT
 #' @importFrom stats na.omit
 #' @export
@@ -206,14 +202,13 @@ long_to_matrix <- function(data, chnames, chorder = NULL,
 #' 3. Apply scaling factor
 #' 4. Reapply threshold indicators to transformed values
 #'
-#' @return A matrix of titers with:
+#' @return A `matrix` of titers with:
 #' - Rows corresponding to antigen strains (without "V/" prefix)
 #' - Columns corresponding to antisera (without "S/" prefix)
 #' - Values as character strings including threshold indicators where applicable
-#' - NA values replaced with "*"
+#' - `NA` values replaced with "*"
 #'
 #' @examples
-#' \dontrun{
 #' # Create sample distance matrix
 #' dist_mat <- matrix(c(0, 2, ">3", 2, 0, 4, "3", 4, 0), nrow=3)
 #' rownames(dist_mat) <- c("V/strain1", "V/strain2", "S/serum1")
@@ -221,7 +216,6 @@ long_to_matrix <- function(data, chnames, chorder = NULL,
 #'
 #' # Convert to titer panel
 #' titer_panel <- dist_to_titer_table(dist_mat)
-#' }
 #'
 #' @export
 dist_to_titer_table <- function(input_matrix, base=exp(1), tens=1) {
@@ -312,30 +306,32 @@ dist_to_titer_table <- function(input_matrix, base=exp(1), tens=1) {
   
   # Find column maxima
   column_maxes <- apply(numeric_dist_table, 2, max, na.rm = TRUE)
-  
-  # Convert distances to titers
-  titer_table <- t(apply(distance_table, 1, function(row, maxima) {
-    sapply(seq_along(row), function(j) {
-      value <- row[j]
-      max_value <- maxima[j]
-      
+
+  # Create an empty matrix to hold the results, preserving dimensions
+  titer_table <- matrix(NA, 
+                        nrow = nrow(distance_table), 
+                        ncol = ncol(distance_table),
+                        dimnames = list(rownames(distance_table), colnames(distance_table)))
+
+  # Loop through the matrix to calculate titers
+  for (j in 1:ncol(distance_table)) {
+    for (i in 1:nrow(distance_table)) {
+      value <- distance_table[i, j]
+      max_value <- column_maxes[j]
+
       if (is.na(value)) {
-        return(NA)
+        titer_table[i, j] <- NA
       } else if (is.character(value) && startsWith(value, ">")) {
         num_part <- as.numeric(sub(">", "", value))
-        return(paste0("<", max_value - num_part))
+        titer_table[i, j] <- paste0("<", max_value - num_part)
       } else if (is.character(value) && startsWith(value, "<")) {
         num_part <- as.numeric(sub("<", "", value))
-        return(paste0(">", max_value - num_part))
+        titer_table[i, j] <- paste0(">", max_value - num_part)
       } else {
-        return(max_value - as.numeric(value))
+        titer_table[i, j] <- as.character(max_value - as.numeric(value))
       }
-    })
-  }, maxima = column_maxes))
-
-  # Set names
-  rownames(titer_table) <- rownames(distance_table)
-  colnames(titer_table) <- colnames(distance_table)
+    }
+  }
 
   # Final transformation to titer scale
   transform_value <- function(x, base=base, tens=tens) {
@@ -367,7 +363,7 @@ dist_to_titer_table <- function(input_matrix, base=exp(1), tens=1) {
 #'
 #' @param dist_matrix Distance matrix
 #' @param selected_names Names of reference points
-#' @return Matrix in assay panel format
+#' @return A non-symmetric `matrix` in assay panel format, where rows are test antigens and columns are reference antigens.
 #' @export
 symmetric_to_nonsymmetric_matrix <- function(dist_matrix, selected_names) {
   if (!is.matrix(dist_matrix)) {
@@ -378,8 +374,7 @@ symmetric_to_nonsymmetric_matrix <- function(dist_matrix, selected_names) {
   }
   
   # Subset matrix keeping only virus rows and selected sera columns
-  panel <- dist_matrix[!rownames(dist_matrix) %in% selected_names, selected_names]
-  
+  panel <- dist_matrix[!rownames(dist_matrix) %in% selected_names, selected_names, drop = FALSE]
   return(panel)
 }
 
@@ -388,13 +383,17 @@ symmetric_to_nonsymmetric_matrix <- function(dist_matrix, selected_names) {
 #'
 #' Calculates pairwise Euclidean distances between points in coordinate space
 #' 
-#' @param positions Matrix of coordinates where rows are points and columns are dimensions
-#' @return Matrix of pairwise distances between points
+#' @param positions Matrix of coordinates where rows are points and columns are dimensions;
+#' It can be a matrix or a data frame.
+#' @return A symmetric `matrix` of pairwise Euclidean distances between points.
 #' @importFrom stats dist
 #' @export
 coordinates_to_matrix <- function(positions) {
-  if (!is.matrix(positions)) {
-    stop("positions must be a matrix")
+  if (!is.matrix(positions) && !is.data.frame(positions)) {
+    stop("positions must be a matrix or a data frame")
+  }
+  if (is.data.frame(positions)) {
+    positions <- as.matrix(positions)
   }
   
   num_points <- nrow(positions)
@@ -414,7 +413,7 @@ coordinates_to_matrix <- function(positions) {
 #'
 #' @param dist_matrix Distance matrix
 #' @param selected_names Names of selected reference points
-#' @return Filtered distance matrix
+#' @return A `matrix` of the same dimensions as the input, but with non-virus-vs-antiserum distances set to `NA`.
 #' @export
 only_virus_vs_as <- function(dist_matrix, selected_names) {
   if (!is.matrix(dist_matrix)) {
@@ -439,20 +438,27 @@ only_virus_vs_as <- function(dist_matrix, selected_names) {
 #'
 #' @description
 #' Reads samples from a CSV file and log transforms specific parameters (N, k0, cooling_rate, c_repulsion)
-#' if they exist in the data. Handles validation and error checking.
+#' if they exist in the data. If `output_file` is specified, the transformed data is saved. Otherwise,
+#' the transformed data frame is returned.
 #'
-#' @param samples_file Character. Path to CSV file containing samples
-#' @param output_file Character. Optional path for saving transformed data. If NULL,
-#'        overwrites input file
-#' @return Data frame with log-transformed parameters
+#' @param samples_file Character. Path to CSV file containing samples.
+#' @param output_file Character. Optional path (including filename) for saving transformed data as a CSV. 
+#' If NULL (the default), the function returns the transformed data frame without writing a file.
+#' @return A `data.frame` with log-transformed parameters. If `output_file` is specified, the function also
+#'         writes the data frame to the specified path and returns it invisibly.
 #' @examples
-#' \dontrun{
-#' # Transform and save to new file
-#' log_transform_parameters("input_samples.csv", "transformed_samples.csv")
-#'
-#' # Transform and overwrite original
-#' log_transform_parameters("samples.csv")
+#' # This example uses a sample file included with the package.
+#' sample_file <- system.file("extdata", "sample_params.csv", package = "topolow")
+#' 
+#' # Ensure the file exists before running the example
+#' if (nzchar(sample_file)) {
+#'   # Transform the data from the sample file and return as a data frame
+#'   transformed_data <- log_transform_parameters(sample_file, output_file = NULL)
+#'   
+#'   # Display the first few rows of the transformed data
+#'   print(head(transformed_data))
 #' }
+#' 
 #' @importFrom utils read.csv write.csv
 #' @importFrom stats na.omit
 #' @export
@@ -520,18 +526,21 @@ log_transform_parameters <- function(samples_file, output_file = NULL) {
   }
   samples <- samples[, desired_order, drop = FALSE]
   
-  # Write output
-  output_file <- if (is.null(output_file)) samples_file else output_file
+  # Write output if a path is provided
+  if (!is.null(output_file)) {
+      if (!is.character(output_file) || length(output_file) != 1) {
+          stop("'output_file' must be a single character string path.", call. = FALSE)
+      }
   tryCatch({
     utils::write.csv(samples, file = output_file, row.names = FALSE)
   }, error = function(e) {
     stop("Error writing output file: ", e$message)
   })
-  
-  # Report transformations
-  message("Log transformed parameters: ",
-          paste(existing_params, collapse = ", "))
+      message("Log transformed parameters: ", paste(existing_params, collapse = ", "))
   message("Output saved to: ", output_file)
+      return(invisible(samples))
+  }
   
+  # Return the transformed data frame if not writing to file
   return(samples)
 }

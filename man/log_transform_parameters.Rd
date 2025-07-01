@@ -7,24 +7,31 @@
 log_transform_parameters(samples_file, output_file = NULL)
 }
 \arguments{
-\item{samples_file}{Character. Path to CSV file containing samples}
+\item{samples_file}{Character. Path to CSV file containing samples.}
 
-\item{output_file}{Character. Optional path for saving transformed data. If NULL,
-overwrites input file}
+\item{output_file}{Character. Optional path (including filename) for saving transformed data as a CSV.
+If NULL (the default), the function returns the transformed data frame without writing a file.}
 }
 \value{
-Data frame with log-transformed parameters
+A \code{data.frame} with log-transformed parameters. If \code{output_file} is specified, the function also
+writes the data frame to the specified path and returns it invisibly.
 }
 \description{
 Reads samples from a CSV file and log transforms specific parameters (N, k0, cooling_rate, c_repulsion)
-if they exist in the data. Handles validation and error checking.
+if they exist in the data. If \code{output_file} is specified, the transformed data is saved. Otherwise,
+the transformed data frame is returned.
 }
 \examples{
-\dontrun{
-# Transform and save to new file
-log_transform_parameters("input_samples.csv", "transformed_samples.csv")
+# This example uses a sample file included with the package.
+sample_file <- system.file("extdata", "sample_params.csv", package = "topolow")
 
-# Transform and overwrite original
-log_transform_parameters("samples.csv")
+# Ensure the file exists before running the example
+if (nzchar(sample_file)) {
+  # Transform the data from the sample file and return as a data frame
+  transformed_data <- log_transform_parameters(sample_file, output_file = NULL)
+  
+  # Display the first few rows of the transformed data
+  print(head(transformed_data))
 }
+
 }

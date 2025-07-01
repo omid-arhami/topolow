@@ -15,12 +15,12 @@ dist_to_titer_table(input_matrix, base = exp(1), tens = 1)
 \item{tens}{Numeric. Scaling factor for final titers. Default 1. For HI Assay 10}
 }
 \value{
-A matrix of titers with:
+A \code{matrix} of titers with:
 \itemize{
 \item Rows corresponding to antigen strains (without "V/" prefix)
 \item Columns corresponding to antisera (without "S/" prefix)
 \item Values as character strings including threshold indicators where applicable
-\item NA values replaced with "*"
+\item \code{NA} values replaced with "*"
 }
 }
 \description{
@@ -47,7 +47,6 @@ Transformation steps:
 }
 }
 \examples{
-\dontrun{
 # Create sample distance matrix
 dist_mat <- matrix(c(0, 2, ">3", 2, 0, 4, "3", 4, 0), nrow=3)
 rownames(dist_mat) <- c("V/strain1", "V/strain2", "S/serum1")
@@ -55,6 +54,5 @@ colnames(dist_mat) <- c("V/strain1", "V/strain2", "S/serum1")
 
 # Convert to titer panel
 titer_panel <- dist_to_titer_table(dist_mat)
-}
 
 }

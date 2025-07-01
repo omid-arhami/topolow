@@ -1,6 +1,4 @@
 # Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
-# License: free of charge access granted to any academic researcher to use this software for non-commercial, academic research purposes **only**.  Nobody may modify, distribute, sublicense, or publicly share the Software or any derivative works, until the paper is published by the original authors.  The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.  In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the Software or the use or other dealings in the Software.
- 
 # R/procrustes.R
 
 #' Procrustes Analysis Functions
@@ -25,13 +23,12 @@
 #'
 #' @param map1 Data frame with coordinates from first map (must have X, X.1 columns)
 #' @param map2 Data frame with coordinates from second map (must have X, X.1 columns)
-#' @return Numeric p-value from Procrustes permutation test
+#' @return A single numeric p-value from the Procrustes permutation test.
 #' @examples
-#' \dontrun{
-#' map1 <- read.csv("map1_coords.csv")
-#' map2 <- read.csv("map2_coords.csv")
+#' # Create sample map data
+#' map1 <- data.frame(name = letters[1:10], X = rnorm(10), X.1 = rnorm(10))
+#' map2 <- data.frame(name = letters[1:10], X = rnorm(10), X.1 = rnorm(10))
 #' p_val <- calculate_procrustes_significance(map1, map2)
-#' }
 #' @importFrom dplyr %>% filter
 #' @importFrom vegan protest
 #' @export
@@ -58,13 +55,12 @@ calculate_procrustes_significance <- function(map1, map2) {
 #'
 #' @param map1 Data frame with coordinates from first map (must have X, X.1 columns)
 #' @param map2 Data frame with coordinates from second map (must have X, X.1 columns) 
-#' @return Numeric sum of squared differences after Procrustes transformation
+#' @return A single numeric value representing the sum of squared differences after Procrustes transformation.
 #' @examples
-#' \dontrun{
-#' map1 <- read.csv("map1_coords.csv")
-#' map2 <- read.csv("map2_coords.csv")
+#' # Create sample map data
+#' map1 <- data.frame(name = letters[1:10], X = rnorm(10), X.1 = rnorm(10))
+#' map2 <- data.frame(name = letters[1:10], X = rnorm(10), X.1 = rnorm(10))
 #' diff <- calculate_procrustes_difference(map1, map2)
-#' }
 #' @importFrom dplyr %>% filter
 #' @importFrom vegan procrustes
 #' @export

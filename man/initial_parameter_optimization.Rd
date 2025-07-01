@@ -23,11 +23,7 @@ initial_parameter_optimization(
   folds = 20,
   verbose = FALSE,
   write_files = FALSE,
-  output_dir = NULL,
-  time = "8:00:00",
-  memory = "3G",
-  use_slurm = FALSE,
-  cider = FALSE
+  output_dir
 )
 }
 \arguments{
@@ -60,30 +56,16 @@ uses all available cores minus 1 (default: NULL).}
 
 \item{verbose}{Logical. Whether to print progress messages. Default: FALSE.}
 
-\item{write_files}{Logical. Whether to save results to CSV. Default: FALSE. Only set TRUE on SLURM}
+\item{write_files}{Logical. Whether to save results to CSV. Default: FALSE.}
 
-\item{output_dir}{Character. Directory where output and temporary files will be saved. If NULL,
-uses current working directory. Directory will be created if it doesn't exist.}
-
-\item{time}{Character. Walltime for SLURM jobs in HH:MM:SS format. Default: "8:00:00".}
-
-\item{memory}{Character. Memory allocation for SLURM jobs. Default: "3G".}
-
-\item{use_slurm}{Logical. Whether to submit jobs via SLURM. Default: FALSE.}
-
-\item{cider}{Logical. Whether to use cider queue in SLURM. Default: FALSE.}
+\item{output_dir}{Character. Directory where output files will be saved.
+Required if \code{write_files} is \code{TRUE}.}
 }
 \value{
-If write_files=FALSE, returns a data frame with columns:
-\item{N}{Number of dimensions used}
-\item{k0}{Initial spring constant}
-\item{cooling_rate}{Spring decay rate}
-\item{c_repulsion}{Repulsion constant}
-\item{Holdout_MAE}{Mean absolute error on validation sets}
-\item{NLL}{Negative log likelihood}
-
-If write_files=TRUE, results are saved to CSV files in the format:
-\{scenario_name\}_model_parameters.csv
+A \code{data.frame} containing the parameter sets and their performance metrics
+(\code{Holdout_MAE} and \code{NLL}). The columns of the data frame are \code{N}, \code{k0},
+\code{cooling_rate}, \code{c_repulsion}, \code{Holdout_MAE}, and \code{NLL}.
+If \code{write_files} is \code{TRUE}, this data frame is also saved to a CSV file as a side effect.
 }
 \description{
 Performs parameter optimization using Latin Hypercube Sampling (LHS) combined with
@@ -106,43 +88,38 @@ The function performs these steps:
 \item Evaluates on validation set
 \item Calculates MAE and negative log likelihood
 }
-\item Can run computation locally or distribute via SLURM
+\item Computations are run locally in parallel.
 }
 
 Parameters ranges are transformed to log scale where appropriate to handle
 different scales effectively.
 }
 \examples{
-\dontrun{
-# Generate sample distance matrix
-dist_mat <- matrix(runif(100), 10, 10)
-dist_mat[lower.tri(dist_mat)] <- t(dist_mat)[lower.tri(dist_mat)]
-diag(dist_mat) <- 0
+\donttest{
+# This example is wrapped in \donttest{} because it can exceed 5 seconds,
+# 1. Create a structured, synthetic dataset for the example
+# Generate coordinates for a more realistic test case
+synth_coords <- generate_complex_data(n_points = 20, n_dim = 3)
+# Convert coordinates to a distance matrix
+dist_mat <- coordinates_to_matrix(synth_coords)
 
-# Run local optimization with 50 samples
+# 2. Run the optimization on the synthetic data
+# ensuring it passes CRAN's automated checks.
 results <- initial_parameter_optimization(
   distance_matrix = dist_mat,
-  mapping_max_iter = 1000,
-  relative_epsilon = 1e-4,
-  convergence_counter = 10,
-  scenario_name = "test_opt",
-  N_min = 2, N_max = 10,
-  k0_min = 1, k0_max = 30,
-  c_repulsion_min = 0.00001, c_repulsion_max = 0.2,
-  cooling_rate_min = 0.00001, cooling_rate_max = 0.2,
-  num_samples = 50,
-  max_cores = 4  # Limit to 4 cores
+  mapping_max_iter = 100,
+  relative_epsilon = 1e-3,
+  convergence_counter = 2,
+  scenario_name = "test_opt_synthetic",
+  N_min = 2, N_max = 5,
+  k0_min = 1, k0_max = 10,
+  c_repulsion_min = 0.001, c_repulsion_max = 0.05,
+  cooling_rate_min = 0.001, cooling_rate_max = 0.02,
+  num_samples = 4,
+  max_cores = 2,
+  verbose = FALSE
 )
-
-# Run with SLURM using 100 samples
-initial_parameter_optimization(
-  distance_matrix = dist_mat,
-  mapping_max_iter = 1000,
-  scenario_name = "slurm_opt",
-  N_min = 2, N_max = 10,
-  num_samples = 100,
-  use_slurm = TRUE
-)
+print(results)
 }
 
 }

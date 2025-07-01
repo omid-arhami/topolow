@@ -1,6 +1,4 @@
 # Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
-# License: free of charge access granted to any academic researcher to use this software for non-commercial, academic research purposes **only**.  Nobody may modify, distribute, sublicense, or publicly share the Software or any derivative works, until the paper is published by the original authors.  The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.  In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the Software or the use or other dealings in the Software.
-
 # R/diagnostics.R
 
 #' Model Diagnostics and Convergence Testing
@@ -33,21 +31,23 @@
 #' @param data Matrix or data frame of samples where columns are parameters
 #' @param window_size Integer size of sliding window for statistics
 #' @param tolerance Numeric convergence threshold for relative changes
-#' @return List containing:
-#'   \item{converged}{Logical indicating if convergence achieved}
-#'   \item{mean_converged}{Logical for mean convergence}
-#'   \item{cov_converged}{Logical for covariance convergence}
-#'   \item{final_mean}{Vector of final mean values}
-#'   \item{final_cov}{Final covariance matrix}
-#'   \item{mean_history}{Matrix of mean values over iterations}
-#'   \item{cov_changes}{Vector of covariance changes}
+#' @return An object of class `topolow_convergence` containing diagnostics about the convergence of the multivariate samples. This list includes:
+#'   \item{converged}{A logical flag, `TRUE` if both mean and covariance have converged.}
+#'   \item{mean_converged}{A logical flag, `TRUE` if the mean vector has converged.}
+#'   \item{cov_converged}{A logical flag, `TRUE` if the covariance matrix has converged.}
+#'   \item{final_mean}{The mean vector calculated from the last `window_size` samples.}
+#'   \item{final_cov}{The covariance matrix calculated from the last `window_size` samples.}
+#'   \item{mean_history}{A matrix tracking the history of the running mean of each parameter.}
+#'   \item{cov_changes}{A numeric vector of the relative changes in the Frobenius norm of the covariance matrix.}
+#'   \item{param_names}{The names of the parameters (columns) from the input data.}
 #' @examples
-#' \dontrun{
-#' data <- read.csv("chain_data.csv")
-#' conv_results <- check_gaussian_convergence(data)
+#' # Assuming 'chain_data' is a data frame with samples
+#' chain_data <- as.data.frame(matrix(rnorm(500 * 4), ncol = 4))
+#' colnames(chain_data) <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
+#' conv_results <- check_gaussian_convergence(chain_data)
 #' print(conv_results)  # Shows summary
-#' plot(conv_results)   # Creates convergence plots
-#' }
+#' # The plot method for this object would create convergence plots.
+#' # plot(conv_results)
 #' @importFrom stats na.omit cov
 #' @importFrom utils tail
 #' @export
@@ -137,18 +137,35 @@ check_gaussian_convergence <- function(data, window_size = 300, tolerance = 1e-2
 #'
 #' @param chain_files Character vector of paths to CSV files containing chains
 #' @param mutual_size Integer number of samples to use from end of each chain
-#' @return List containing:
-#'   \item{rhat}{R-hat statistic for each parameter}
-#'   \item{ess}{Effective sample size for each parameter}
+#' @return A list object of class `topolow_amcs_diagnostics` containing convergence diagnostics for the MCMC chains.
+#'   \item{rhat}{A numeric vector of the R-hat (potential scale reduction factor) statistic for each parameter. Values close to 1 indicate convergence.}
+#'   \item{ess}{A numeric vector of the effective sample size for each parameter.}
+#'   \item{chains}{A list of data frames, where each data frame is a cleaned and trimmed MCMC chain.}
+#'   \item{param_names}{A character vector of the parameter names being analyzed.}
+#'   \item{mutual_size}{The integer number of samples used from the end of each chain for calculations.}
 #' @examples
-#' \dontrun{
-#' chain_files <- c("chain1.csv", "chain2.csv", "chain3.csv")
-#' diag <- calculate_diagnostics(chain_files, mutual_size = 1000)
-#' print(diag)  # Shows R-hat and ESS
-#' plot(diag)   # Creates density plots
-#' print(diag$rhat) # Should be close to 1
-#' print(diag$ess)  # Should be large enough (>400) for reliable inference
+#' # This example demonstrates how to use the function with temporary files,
+#' # Create dummy chain files in a temporary directory
+#' temp_dir <- tempdir()
+#' chain_files <- character(3)
+#' par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
+#' sample_data <- data.frame(
+#'   log_N = rnorm(100), log_k0 = rnorm(100),
+#'   log_cooling_rate = rnorm(100), log_c_repulsion = rnorm(100),
+#'   NLL = runif(100), Holdout_MAE = runif(100)
+#' )
+#' for (i in 1:3) {
+#'   chain_files[i] <- file.path(temp_dir, paste0("chain", i, ".csv"))
+#'   write.csv(sample_data, chain_files[i], row.names = FALSE)
 #' }
+#' 
+#' # Calculate diagnostics
+#' diag_results <- calculate_diagnostics(chain_files, mutual_size = 50)
+#' print(diag_results)
+#' 
+#' # Clean up the temporary files and directory
+#' unlink(chain_files)
+#' unlink(temp_dir, recursive = TRUE)
 #' @importFrom utils read.csv
 #' @importFrom stats complete.cases var
 #' @importFrom coda mcmc.list mcmc gelman.diag effectiveSize
@@ -292,35 +309,28 @@ calculate_diagnostics <- function(chain_files, mutual_size=500) {
 #' @param ndim Number of coordinate dimensions
 #' @param reference_row Integer index of reference row (or FALSE for all-pairs analysis)
 #' @param na.rm Logical indicating whether to remove NA values
-#' @return List containing either:
-#'   If reference_row provided:
-#'   \item{summary_data}{Data frame with columns:
-#'     \itemize{
-#'       \item season_num: Numeric season identifier based on Influenza A.
-#'       \item cluster: Cluster assignment  
-#'       \item color: Point color
-#'       \item avg_euclidean_dist: Mean distance to reference
-#'       \item count: Points per cluster
-#'       \item total_count: Total points per season
-#'       \item fraction: Proportion of points in cluster
-#'     }
-#'   }
-#'   If reference_row = FALSE:
-#'   \item{dist_data}{Data frame with columns:
-#'     \itemize{
-#'       \item year_diff: Years between points
-#'       \item euclidean_dist: Distance between points
-#'       \item ref_year: Reference year
-#'     }
-#'   }
+#' @return A list containing the calculated distance metrics. The content of the list depends 
+#' on the `reference_row` parameter.
+#' \itemize{
+#'   \item If `reference_row` is specified, the list contains `summary_data`: a `data.frame` 
+#'    with distances from the specified reference point to all other points, summarized by 
+#'    season and cluster. The columns include `season_num`, `cluster`, `color`, `avg_euclidean_dist`, 
+#'    `count`, `total_count`, and `fraction`.
+#'   \item If `reference_row` is `FALSE`, the list contains `dist_data`: a `data.frame` with all unique 
+#'    pairwise distances. The columns include `year_diff`, `euclidean_dist`, and `ref_year`.
+#' }
 #' @examples
-#' \dontrun{
+#' # Create sample coordinate data
+#' coords <- data.frame(V1 = rnorm(10), V2 = rnorm(10), year = rep(2000:2004, 2),
+#'                      season = paste0(rep(2000:2004, 2), "-S"),
+#'                      cluster = factor(rep(1:2, 5)), color = "blue")
+#' 
 #' # Calculate distances from reference point
 #' ref_distances <- calculate_cumulative_distances(coords, ndim=2, reference_row=1)
 #'
 #' # Calculate all pairwise distances
 #' all_distances <- calculate_cumulative_distances(coords, ndim=2, reference_row=FALSE)
-#' }
+#'
 #' @importFrom stats na.omit
 #' @importFrom dplyr %>% filter mutate group_by summarize
 #' @importFrom grDevices colors
@@ -373,7 +383,7 @@ calculate_cumulative_distances <- function(df_coords, ndim,
     summary_data <- dist_data %>%
       group_by(season_num, cluster, color) %>%
       summarize(avg_euclidean_dist = mean(euclidean_dist),
-                count = n(), .groups = 'drop') %>%
+                count = dplyr::n(), .groups = 'drop') %>%
       group_by(season_num) %>% 
       mutate(total_count = sum(count),
              fraction = count / total_count)
@@ -411,24 +421,17 @@ calculate_cumulative_distances <- function(df_coords, ndim,
 #'        - name: Point identifiers (will use rownames if missing)
 #' @param ndim Number of coordinate dimensions
 #' @param na.rm Logical indicating whether to remove NA values
-#' @return List containing:
-#'   \item{dist_data}{Data frame with columns:
-#'     \itemize{
-#'       \item year: Collection year
-#'       \item distance: Distance from previous year mean
-#'     }
-#'   }
-#'   \item{summary}{List with:
-#'     \itemize{
-#'       \item overall_mean: Mean distance across all years
-#'       \item overall_sd: Standard deviation of distances
-#'     }
-#'   }
+#' @return A list containing year-over-year antigenic distance metrics:
+#'   \item{dist_data}{A `data.frame` where each row represents a point and its `distance` 
+#'    to the mean coordinate of the previous year.}
+#'   \item{summary}{A list containing the `overall_mean` and `overall_sd` (standard deviation) 
+#'    of the annual distances across all years.}
 #' @examples
-#' \dontrun{
+#' # Create sample coordinate data
+#' coords <- data.frame(V1 = rnorm(10), V2 = rnorm(10), year = rep(2000:2004, 2))
 #' annual_stats <- calculate_annual_distances(coords, ndim=2)
 #' print(annual_stats$summary$overall_mean)
-#' }
+#'
 #' @importFrom stats na.omit sd
 #' @importFrom dplyr %>% mutate left_join group_by summarise across all_of select
 #' @export
@@ -484,15 +487,26 @@ calculate_annual_distances <- function(df_coords, ndim, na.rm=TRUE) {
 #' a network representation. Useful for assessing data completeness and structure.
 #'
 #' @param distance_matrix Square symmetric matrix of distances
-#' @return List containing:
-#'   \item{adjacency}{Logical matrix indicating presence of measurements}
-#'   \item{connectivity}{Data frame with connectivity metrics per point}
-#'   \item{summary}{List of overall network statistics}
+#' @return A list containing the network analysis results:
+#'   \item{adjacency}{A logical `matrix` where `TRUE` indicates a measured distance 
+#'    between two points, representing the network's adjacency matrix.}
+#'   \item{connectivity}{A `data.frame` with node-level metrics, including the `completeness` 
+#'    (degree) for each point.}
+#'   \item{summary}{A list of overall network statistics, including `n_points`, `n_measurements`, 
+#'    and total `completeness`.}
 #' @examples
-#' \dontrun{
+#' # Create a sample distance matrix
+#' dist_mat <- matrix(runif(25), 5, 5)
+#' # Add row and column names
+#' rownames(dist_mat) <- colnames(dist_mat) <- paste0("Point", 1:5)
+#' dist_mat[lower.tri(dist_mat)] <- t(dist_mat)[lower.tri(dist_mat)]
+#' diag(dist_mat) <- 0
+#' dist_mat[1, 3] <- NA; dist_mat[3, 1] <- NA
+#' 
+#' # Analyze the network structure
 #' metrics <- analyze_network_structure(dist_mat)
 #' print(metrics$summary$completeness)
-#' }
+#'
 #' @importFrom igraph graph_from_adjacency_matrix
 #' @export
 analyze_network_structure <- function(distance_matrix) {
@@ -558,16 +572,22 @@ analyze_network_structure <- function(distance_matrix) {
 #' @param distance_matrix Square symmetric matrix of distances
 #' @param cluster_rows Logical; whether to cluster rows
 #' @param cluster_cols Logical; whether to cluster columns
-#' @return List containing:
-#'   \item{matrix_data}{Processed matrix for visualization}
-#'   \item{row_order}{Optional row ordering from clustering}
-#'   \item{col_order}{Optional column ordering from clustering}
-#'   \item{stats}{List of matrix statistics}
+#' @return A list of data prepared for generating a heatmap of the distance matrix:
+#'   \item{matrix_data}{The distance `matrix`, potentially reordered by clustering.}
+#'   \item{row_order}{An integer vector of the row indices after clustering. If `cluster_rows` 
+#'    is `FALSE`, this is the original order.}
+#'   \item{col_order}{An integer vector of the column indices after clustering. If `cluster_cols` 
+#'    is `FALSE`, this is the original order.}
+#'   \item{stats}{A list of summary statistics for the distance matrix, including `mean`, `sd`, 
+#'    `min`, `max`, and `completeness`.}
 #' @examples
-#' \dontrun{
+#' # Create a sample distance matrix
+#' dist_mat <- matrix(runif(25), 5, 5)
+#' 
+#' # Prepare data for a heatmap
 #' heatmap_data <- prepare_heatmap_data(dist_mat)
 #' print(heatmap_data$stats$completeness)
-#' }
+#'
 #' @importFrom stats sd hclust dist
 #' @export
 prepare_heatmap_data <- function(distance_matrix, 

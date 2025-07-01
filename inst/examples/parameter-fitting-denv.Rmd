@@ -66,7 +66,7 @@ library(doParallel)
 
 ## Data Loading and Preprocessing 
 
-We'll demonstrate using the Smith et al. 2004 influenza dataset included in topolow:
+We'll demonstrate using the DENV dataset from Katzelnick et al. 2015 (also in Bell et al. 2019):
 
 ```{r}
 # Load and process Denv data of Katzelnick et al 2015 (also in Bell et al 2019)
@@ -133,9 +133,8 @@ opt_params <- list(
   mapping_max_iter = 500,    # Maximum mapping optimization iterations
   folds = 20,         # Number of CV folds
   num_samples = 80, 
-  use_slurm = FALSE,
-  cider = FALSE,
-  write_files = FALSE # Only set TRUE on SLURM
+
+  write_files = FALSE # Set to TRUE to save intermediate files for each sample
 )
 ```
 
@@ -165,10 +164,6 @@ results <- initial_parameter_optimization(
   num_samples = opt_params$num_samples,
   folds = opt_params$folds,
   write_files = opt_params$write_files,
-  time = "1:00:00",
-  memory = "2G",
-  use_slurm = opt_params$use_slurm,
-  cider = opt_params$cider,
   verbose = TRUE
 )
 
@@ -179,14 +174,13 @@ time_diff <- difftime(end_time, start_time, units = "auto")
 cat("\n Initial LHS CV sampling completed in: ")
 time_diff
 
-if(!opt_params$use_slurm){
-  write.csv(results, samples_file, row.names=FALSE)
-}
+write.csv(results, samples_file, row.names=FALSE)
+
 ```
 
 ## Aggregate the results
 
-Aggregation is only needed if the argument write_files was TRUE in previous step which creates one file for each sample (typically when task is done through submitting jobs to SLURM). If so, Wait until the jobs are done.
+Aggregation is only needed if the argument write_files was TRUE in previous step which creates one file for each sample. If so, Wait until the jobs are done.
  Wait until the jobs are done.
 
 ```{r eval=FALSE}
@@ -209,13 +203,11 @@ samples <- log_transform_parameters(samples_file)
 
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_samples = 3000, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
-  num_parallel_jobs = 7,  # For local execution: Number of CPU cores available (Can try parallel::detectCores() ); For SLURM: Number of jobs to submit
+  num_samples = 3000, # Number of new samples to be added to the parameter distribution through AMC (for refinement.)
+  num_parallel_jobs = 7,  # Number of local parallel jobs (chains) to run.
   mapping_max_iter = 500, # Maximum iterations per map optimization
   relative_epsilon = 1e-4,
-  folds = 20, # Number of CV folds
-  use_slurm = FALSE,
-  cider = FALSE
+  folds = 20 # Number of CV folds
 )
 
 # Record start time for timing report
@@ -229,11 +221,7 @@ run_adaptive_sampling(
   mapping_max_iter = amc_params$mapping_max_iter,
   scenario_name = scenario_name,
   relative_epsilon = amc_params$relative_epsilon,
-  folds = amc_params$folds,
-  time = "4:00:00",
-  memory = "2G",
-  use_slurm = amc_params$use_slurm,
-  cider = amc_params$cider,
+  folds = amc_params$folds
   verbose = TRUE
 )
 
@@ -249,7 +237,7 @@ time_diff
 ## Convergence Diagnostics
 
 We can run the AMC sampling more than once and compare the results to asses the convergence of the sampling probabilities. If they are close, 
-it indicates that all sampling attempts are moving toward the same optimom, which increases its likelihood of being the global optimum. 
+it indicates that all sampling attempts are moving toward the same optimum, which increases its likelihood of being the global optimum. 
 
 Let's run the previous parts twice and check if our chains have converged:
 
@@ -287,8 +275,6 @@ invisible(lapply(chain_files, clean_and_overwrite))
 
 mutual_size = 1000  # Number of samples to use from end of chains
 
-# Print results
-print(diagnostics)
 
 # Create and display diagnostic plots
 diag_plots <- create_diagnostic_plots(
@@ -301,6 +287,8 @@ diag_plots <- create_diagnostic_plots(
 diagnostics <- calculate_diagnostics(
                   chain_files = chain_files,
                   mutual_size = mutual_size)
+# Print results
+print(diagnostics)
 
 ```
 
@@ -342,7 +330,7 @@ for (param in params) {
   
   # Plot results
   pl_plot <- plot(pl_result, max_ll)
-  #ggsave(paste0("profile_likelihood_denv_data_", param, ".png"), pl_plot)
+  #ggsave_white_bg(paste0("profile_likelihood_denv_data_", param, ".png"), pl_plot)
   print(pl_plot)
 }
 ```
@@ -358,7 +346,7 @@ for (param in params) {
   
   # Plot results
   sens_plot <- plot(sensitivity, y_limit_factor=NULL)
-  #ggsave(paste0("parameter_sensitivity_", param, ".pdf"), sens_plot)
+  #ggsave_white_bg(paste0("parameter_sensitivity_", param, ".pdf"), sens_plot)
   print(sens_plot)
 }
 ```
@@ -597,7 +585,7 @@ p_grid <- plot_grid(plotlist = plots_no_legend, ncol = 3, align = 'h')
 final_plot <- plot_grid(p_grid, legend, ncol = 2, rel_widths = c(3, 0.4))
 
 # Save the final combined plot to a single PDF file
-ggsave("clade_depth_plots_denv.pdf", final_plot, width = 12, height = 8)
+ggsave_white_bg("clade_depth_plots_denv.pdf", final_plot, width = 12, height = 8)
 ```
 
 ```{r}
@@ -673,7 +661,7 @@ p_grid <- plot_grid(plotlist = plots_no_legend, ncol = 3, align = 'h')
 final_plot <- plot_grid(p_grid, legend, ncol = 2, rel_widths = c(3, 0.4))
 
 # Save the final combined plot to a single PDF file
-ggsave("clade_depth_plots_denv.pdf", final_plot, width = 12, height = 8)
+ggsave_white_bg("clade_depth_plots_denv.pdf", final_plot, width = 12, height = 8)
 ```
 
 ## Session Info

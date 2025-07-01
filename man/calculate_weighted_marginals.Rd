@@ -18,9 +18,8 @@ Named list of marginal distributions, each containing:
 }
 \description{
 Calculates marginal distributions for each parameter with weights derived from
-log-likelihoods. Uses parallel processing for efficiency.
+log-likelihoods.
 }
 \details{
 Uses kernel density estimation weighted by normalized likelihoods.
-Parallelizes computation across parameter dimensions using mclapply.
 }

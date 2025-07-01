@@ -1,45 +1,14 @@
 # Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
-# License: free of charge access granted to any academic researcher to use this software for non-commercial, academic research purposes **only**.  Nobody may modify, distribute, sublicense, or publicly share the Software or any derivative works, until the paper is published by the original authors.  The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.  In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the Software or the use or other dealings in the Software.
-
 # R/utils.R
 
 #' Utility functions for the topolow package
 #' 
 #' @description
 #' This file contains utility functions used throughout the topolow package.
-#' Functions include data manipulation, format conversion, and optional SLURM support.
+#' Functions include data manipulation, and format conversion.
 #'
 #' @keywords internal
 "_PACKAGE"
-
-#' (Not used anywhere) Scale matrix columns to 0-10 range
-#'
-#' @param mat Numeric matrix to scale
-#' @return Matrix with columns scaled to 0-10 range
-#' @keywords internal
-scale_columns_0_to_10 <- function(mat) {
-  if (!is.matrix(mat)) {
-    stop("Input must be a matrix")
-  }
-  
-  scale_vector <- function(x) {
-    non_na_x <- x[!is.na(x)]
-    if (length(non_na_x) == 0) return(x)
-    
-    min_val <- min(non_na_x)
-    max_val <- max(non_na_x)
-    
-    if (min_val == max_val) {
-      return(ifelse(is.na(x), NA, 0))
-    }
-    
-    scaled_x <- (x - min_val) / (max_val - min_val) * 10
-    return(scaled_x)
-  }
-  
-  scaled_mat <- apply(mat, 2, scale_vector)
-  return(scaled_mat)
-}
 
 
 #' Convert 2-digit to 4-digit year
@@ -80,70 +49,13 @@ yy_to_yyyy <- function(dataframe, column_name) {
 }
 
 
-#' Extract year from sequence name
-#'
-#' @param seq_name Character string containing sequence name
-#' @return Extracted year as integer
-#' @keywords internal
-extract_year <- function(seq_name) {
-  if (!is.character(seq_name)) {
-    stop("seq_name must be a character string")
-  }
-  
-  # Check for year pattern
-  if (!grepl("\\d{4}", seq_name)) {
-    stop("No 4-digit year found in sequence name")
-  }
-  
-  year <- as.integer(sub(".*\\/(\\d{4}).*", "\\1", seq_name))
-  
-  # Validate extracted year
-  if (is.na(year) || year < 1900 || year > 2100) {
-    stop("Invalid year value extracted: ", year)
-  }
-  
-  return(year)
-}
-
-
-#' Sort symmetric matrix by year
-#'
-#' @param matrix symmetric matrix
-#' @return Sorted symmetric matrix
-#' @keywords internal
-sort_matrix_by_year <- function(matrix) {
-  # Verify matrix is symmetric
-  if (!isSymmetric(matrix)) {
-    stop("Input matrix must be symmetric")
-  }
-  
-  # Get row names and extract years
-  names <- rownames(matrix)
-  years <- sapply(names, extract_year)
-  
-  # Create ordering based on years
-  order_idx <- order(years)
-  
-  # Create new sorted matrix
-  sorted_matrix <- matrix[order_idx, order_idx]
-  
-  # Verify that the sorting preserved symmetry
-  if (!isSymmetric(sorted_matrix)) {
-    warning("Resulting matrix is not symmetric - something went wrong")
-  }
-  
-  # Return sorted matrix
-  return(sorted_matrix)
-}
-
-
 #' Generate unique string identifiers with year suffix
 #'
 #' @param n Number of strings to generate
 #' @param length Length of random part of string (default: 8)
 #' @param lower_bound Lower bound for year suffix (default: 1)
 #' @param upper_bound Upper bound for year suffix (default: 20)
-#' @return Character vector of unique strings with year suffixes
+#' @return A character vector of unique strings with year suffixes
 #' @export
 generate_unique_string <- function(n, length = 8, lower_bound = 1, upper_bound = 20) {
   if (n <= 0) stop("n must be positive")
@@ -199,19 +111,16 @@ generate_unique_string <- function(n, length = 8, lower_bound = 1, upper_bound =
 #' @param n_clusters Integer number of clusters
 #' @param cluster_spread Numeric controlling cluster variance
 #' @param fig_name Character path to save visualization (optional)
-#' @return Data frame with generated coordinates in n_dim dimensions. Column names 
+#' @return A `data.frame` with `n_points` rows and `n_dim` columns. Column names 
 #'         are "Dim1" through "DimN" where N is n_dim.
 #' @examples
-#' \dontrun{
 #' # Generate basic dataset
 #' data <- generate_complex_data(n_points = 500, n_dim = 10, 
 #'                              n_clusters = 4, cluster_spread = 1)
 #'                              
-#' # Generate and visualize dataset
-#' data <- generate_complex_data(n_points = 500, n_dim = 10,
-#'                              n_clusters = 4, cluster_spread = 1,
-#'                              fig_name = "cluster_viz.png")
-#' }
+#' # The function returns a data frame, which can be inspected
+#' head(data)
+#'
 #' @importFrom MASS mvrnorm
 #' @importFrom stats runif rnorm prcomp
 #' @importFrom ggplot2 ggplot aes geom_point theme_minimal labs coord_fixed ggsave
@@ -286,8 +195,14 @@ generate_complex_data <- function(n_points = 500, n_dim = 10, n_clusters = 4,
            x = "PC 1", y = "PC 2") +
       coord_fixed()
     
+    # ENSURE DIRECTORY EXISTS
+    output_dir <- dirname(fig_name)
+    if (!dir.exists(output_dir)) {
+        dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+    }
+
     # Save plot
-    ggsave(filename = fig_name, plot = p, dpi = 300)
+    ggsave_white_bg(filename = fig_name, plot = p, dpi = 300)
   }
   
   return(data)
@@ -311,9 +226,8 @@ generate_complex_data <- function(n_points = 500, n_dim = 10, n_clusters = 4,
 #'
 #' @param mat Matrix to modify
 #' @param target_na_percentage Numeric between 0 and 1 specifying desired proportion of NAs
-#' @return Matrix with increased NA values, maintaining symmetry
+#' @return A `matrix` with an increased number of `NA` values, maintaining symmetry.
 #' @examples
-#' \dontrun{
 #' # Create sample distance matrix
 #' dist_mat <- matrix(runif(100), 10, 10)
 #' dist_mat[lower.tri(dist_mat)] <- t(dist_mat)[lower.tri(dist_mat)]
@@ -321,7 +235,6 @@ generate_complex_data <- function(n_points = 500, n_dim = 10, n_clusters = 4,
 #' 
 #' # Increase NAs to 70%
 #' sparse_mat <- increase_na_percentage(dist_mat, 0.7)
-#' }
 #' @export
 increase_na_percentage <- function(mat, target_na_percentage) {
   # Input validation
@@ -396,12 +309,11 @@ increase_na_percentage <- function(mat, target_na_percentage) {
 #' The noise level is scaled relative to the data mean to maintain realistic error magnitudes.
 #'
 #' @param matrix_data Numeric matrix to add noise to
-#' @return List containing three matrices:
-#'   \item{n1}{Matrix with first noise realization}
-#'   \item{n2}{Matrix with second noise realization}
-#'   \item{nb}{Matrix with noise and negative bias}
+#' @return A `list` containing three noisy `matrix` objects:
+#'   \item{n1}{Matrix with the first realization of random Gaussian noise.}
+#'   \item{n2}{Matrix with a second, different realization of random Gaussian noise.}
+#'   \item{nb}{Matrix with both random noise and a systematic negative bias.}
 #' @examples
-#' \dontrun{
 #' # Create sample distance matrix
 #' dist_mat <- matrix(runif(100), 10, 10)
 #' dist_mat[lower.tri(dist_mat)] <- t(dist_mat)[lower.tri(dist_mat)]
@@ -409,7 +321,6 @@ increase_na_percentage <- function(mat, target_na_percentage) {
 #'
 #' # Generate noisy versions
 #' noisy_variants <- add_noise_bias(dist_mat)
-#' }
 #' @importFrom stats rnorm
 #' @export
 add_noise_bias <- function(matrix_data) {
@@ -460,37 +371,6 @@ add_noise_bias <- function(matrix_data) {
   ))
 }
 
-#' Copy Reproduction Examples to Working Directory
-#'
-#' Copies all reproduction examples, including data files and 
-#' supporting materials, to a specified directory.
-#'
-#' @param dest_dir Character. Destination directory (default: "reproduction_examples" 
-#'        in current working directory)
-#' @return Invisibly returns the path to the destination directory
-#' @export
-copy_reproduction_examples <- function(dest_dir = file.path(getwd(), "examples")) {
-  # Create destination directory if it doesn't exist
-  dir.create(dest_dir, showWarnings = FALSE, recursive = TRUE)
-  
-  # Get source directory from package
-  src_dir <- system.file("examples", package="topolow")
-  
-  if (src_dir == "") {
-    stop("Could not find reproduction examples directory in package")
-  }
-  
-  # Copy all files recursively
-  file.copy(list.files(src_dir, full.names = TRUE), 
-            dest_dir, 
-            recursive = TRUE, 
-            overwrite = TRUE)
-  
-  message("Reproduction examples copied to: ", dest_dir)
-  message("You can now work with them directly in this directory.")
-  
-  return(invisible(dest_dir))
-}
 
 #' Save ggplot with white background
 #' 
@@ -499,8 +379,9 @@ copy_reproduction_examples <- function(dest_dir = file.path(getwd(), "examples")
 #' This function masks ggplot2::ggsave.
 #' @importFrom ggplot2 ggsave
 #' @inheritParams ggplot2::ggsave
+#' @return No return value, called for side effects.
 #' @export
-ggsave <- function(..., bg = 'white') {
+ggsave_white_bg <- function(..., bg = 'white') {
   ggplot2::ggsave(..., bg = bg)
 }
 

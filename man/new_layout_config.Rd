@@ -21,6 +21,7 @@ new_layout_config(
   panel_background_color = "white",
   panel_border = TRUE,
   panel_border_color = "black",
+  save_plot = FALSE,
   save_format = "png",
   reverse_x = 1,
   reverse_y = 1,
@@ -62,6 +63,8 @@ new_layout_config(
 
 \item{panel_border_color}{Panel border color}
 
+\item{save_plot}{Logical. Whether to save the plot to a file.}
+
 \item{save_format}{Plot save format ("png", "pdf", "svg", "eps")}
 
 \item{reverse_x}{Numeric multiplier for x-axis direction (1 or -1)}
@@ -75,7 +78,8 @@ new_layout_config(
 \item{arrow_plot_threshold}{Threshold for velocity arrows to be drawn in the same antigenic distance unit (default: 0.10)}
 }
 \value{
-A layout_config object
+An S3 object of class \code{layout_config}, which is a list containing
+the specified configuration parameters for plot layout.
 }
 \description{
 S3 class for configuring plot layout including dimensions, margins,

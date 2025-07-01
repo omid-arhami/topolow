@@ -17,27 +17,20 @@ calculate_annual_distances(df_coords, ndim, na.rm = TRUE)
 \item{na.rm}{Logical indicating whether to remove NA values}
 }
 \value{
-List containing:
-\item{dist_data}{Data frame with columns:
-\itemize{
-\item year: Collection year
-\item distance: Distance from previous year mean
-}
-}
-\item{summary}{List with:
-\itemize{
-\item overall_mean: Mean distance across all years
-\item overall_sd: Standard deviation of distances
-}
-}
+A list containing year-over-year antigenic distance metrics:
+\item{dist_data}{A \code{data.frame} where each row represents a point and its \code{distance}
+to the mean coordinate of the previous year.}
+\item{summary}{A list containing the \code{overall_mean} and \code{overall_sd} (standard deviation)
+of the annual distances across all years.}
 }
 \description{
 Calculates year-over-year antigenic distances and statistics. Compares each point
 to the mean coordinates of the previous year.
 }
 \examples{
-\dontrun{
+# Create sample coordinate data
+coords <- data.frame(V1 = rnorm(10), V2 = rnorm(10), year = rep(2000:2004, 2))
 annual_stats <- calculate_annual_distances(coords, ndim=2)
 print(annual_stats$summary$overall_mean)
-}
+
 }

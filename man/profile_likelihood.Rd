@@ -52,15 +52,23 @@ For each value in the parameter grid, the function:
 }
 }
 \examples{
-\dontrun{
+# Create a sample data frame of MCMC samples
+mcmc_samples <- data.frame(
+  log_N = log(runif(50, 2, 10)),
+  log_k0 = log(runif(50, 1, 5)),
+  log_cooling_rate = log(runif(50, 0.01, 0.1)),
+  log_c_repulsion = log(runif(50, 0.1, 1)),
+  NLL = runif(50, 20, 100)
+)
+
 # Calculate profile likelihood for parameter "log_N"
 pl <- profile_likelihood("log_N", mcmc_samples, 
-                        grid_size = 60,
-                        bandwidth_factor = 0.02)
+                        grid_size = 10, # Smaller grid for a quick example
+                        bandwidth_factor = 0.05)
                         
-# Plot results
-plot(pl)
-}
+# Print the results
+print(pl)
+
 }
 \seealso{
 \code{\link{plot.profile_likelihood}} for visualization

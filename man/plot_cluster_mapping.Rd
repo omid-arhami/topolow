@@ -11,7 +11,7 @@ plot_cluster_mapping(
   aesthetic_config = new_aesthetic_config(),
   layout_config = new_layout_config(),
   annotation_config = new_annotation_config(),
-  output_dir = NULL,
+  output_dir,
   show_shape_legend = TRUE,
   cluster_legend_title = "Cluster",
   draw_arrows = FALSE,
@@ -42,7 +42,7 @@ Use x_limits and y_limits in layout_config to set axis limits.}
 
 \item{annotation_config}{Annotation configuration object for labeling notable points}
 
-\item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+\item{output_dir}{Character. Directory for output files. Required if \code{layout_config$save_plot} is \code{TRUE}.}
 
 \item{show_shape_legend}{Logical. Whether to show the shape legend (default: TRUE)}
 
@@ -66,7 +66,7 @@ Use x_limits and y_limits in layout_config to set axis limits.}
 provide a list with that order here; e.g., c("cluster 2", "cluster 1")}
 }
 \value{
-ggplot object containing the cluster mapping visualization
+A \code{ggplot} object containing the cluster mapping visualization.
 }
 \description{
 Creates a visualization of points colored by cluster assignment using dimension
@@ -88,18 +88,16 @@ color represents cluster assignment. The color palette can be customized
 through the aesthetic_config.
 }
 \examples{
-\dontrun{
 # Basic usage with default configurations
 data <- data.frame(
-  V1 = rnorm(100),
-  V2 = rnorm(100),
-  V3 = rnorm(100),
-  antigen = rep(c(0,1), 50),
-  antiserum = rep(c(1,0), 50),
+  V1 = rnorm(100), V2 = rnorm(100), V3 = rnorm(100), name = 1:100,
+  antigen = rep(c(0,1), 50), antiserum = rep(c(1,0), 50),
   cluster = rep(1:5, each=20)
 )
 p1 <- plot_cluster_mapping(data, ndim=3)
 
+# Save plot to a temporary directory
+temp_dir <- tempdir()
 # Custom configurations with specific color palette and axis limits
 aesthetic_config <- new_aesthetic_config(
   point_size = 4,
@@ -109,7 +107,7 @@ aesthetic_config <- new_aesthetic_config(
   label_size = 3
 )
 
-layout_config <- new_layout_config(
+layout_config_save <- new_layout_config(save_plot = TRUE,
   width = 10,
   height = 8,
   coord_type = "fixed",
@@ -119,19 +117,19 @@ layout_config <- new_layout_config(
   y_limits = c(-8, 8)
 )
 
-p2 <- plot_cluster_mapping(
-  data, 
-  ndim = 3,
+p_saved <- plot_cluster_mapping(data, ndim=3, 
+  layout_config = layout_config_save, 
   aesthetic_config = aesthetic_config,
-  layout_config = layout_config
+  output_dir = temp_dir
 )
-}
+
+list.files(temp_dir)
+unlink(temp_dir, recursive = TRUE)
 
 }
 \seealso{
 \code{\link{plot_temporal_mapping}} for temporal visualization
 \code{\link{plot_3d_mapping}} for 3D visualization
-\code{\link{plot_combined}} for creating multiple visualizations
 \code{\link{new_dim_reduction_config}} for dimension reduction options
 \code{\link{new_aesthetic_config}} for aesthetic options
 \code{\link{new_layout_config}} for layout options

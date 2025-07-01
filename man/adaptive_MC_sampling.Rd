@@ -14,12 +14,11 @@ adaptive_MC_sampling(
   folds = 20,
   num_cores = 1,
   scenario_name,
-  output_dir = NULL,
   verbose = FALSE
 )
 }
 \arguments{
-\item{samples_file}{Path to CSV with initial samples}
+\item{samples_file}{Path to CSV with initial samples for this job.}
 
 \item{distance_matrix}{Distance matrix to fit}
 
@@ -37,14 +36,16 @@ adaptive_MC_sampling(
 
 \item{scenario_name}{Name for output files}
 
-\item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
-
 \item{verbose}{Logical. Whether to print progress messages. Default: FALSE}
 }
 \value{
-Data frame of samples with evaluated likelihoods
+A \code{data.frame} containing all samples (initial and newly generated)
+with their parameters and evaluated performance metrics. The data frame includes
+columns for the log-transformed parameters, \code{Holdout_MAE}, and \code{NLL}.
+Returns \code{NULL} if the results file was not created.
 }
 \description{
 Main function implementing adaptive Monte Carlo sampling to explore parameter space.
-Updates sampling distribution based on evaluated likelihoods.
+Updates sampling distribution based on evaluated likelihoods. This is an internal
+function called by \code{run_adaptive_sampling}.
 }

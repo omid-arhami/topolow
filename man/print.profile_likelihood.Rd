@@ -11,6 +11,9 @@
 
 \item{...}{Additional arguments passed to print}
 }
+\value{
+The original \code{profile_likelihood} object (invisibly).
+}
 \description{
 Print Method for Profile Likelihood Objects
 }

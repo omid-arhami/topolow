@@ -12,7 +12,7 @@ make_interactive(plot, tooltip_vars = NULL)
 \item{tooltip_vars}{Vector of variable names to include in tooltips}
 }
 \value{
-plotly object with interactive features
+A \code{plotly} object with interactive features.
 }
 \description{
 Converts a static ggplot visualization to an interactive plotly visualization
@@ -32,15 +32,12 @@ If tooltip_vars is NULL, the function attempts to automatically determine
 relevant variables from the plot's mapping.
 }
 \examples{
-\dontrun{
+if (interactive() && requireNamespace("plotly", quietly = TRUE)) {
 # Create sample data and plot
 data <- data.frame(
-  V1 = rnorm(100),
-  V2 = rnorm(100),
-  antigen = rep(c(0,1), 50),
-  antiserum = rep(c(1,0), 50),
-  year = rep(2000:2009, each=10),
-  cluster = rep(1:5, each=20)
+  V1 = rnorm(100), V2 = rnorm(100), name=1:100,
+  antigen = rep(c(0,1), 50), antiserum = rep(c(1,0), 50),
+  year = rep(2000:2009, each=10), cluster = rep(1:5, each=20)
 )
 
 # Create temporal plot

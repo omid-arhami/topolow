@@ -21,6 +21,6 @@ List containing:
 \item{y}{Vector of density estimates}
 }
 \description{
-Performs weighted kernel density estimation for univariate data. Useful for
-analyzing parameter distributions with importance weights.
+Performs weighted kernel density estimation for univariate data. Uses parallel processing
+for efficiency. Useful for analyzing parameter distributions with importance weights.
 }

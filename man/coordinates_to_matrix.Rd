@@ -7,10 +7,11 @@
 coordinates_to_matrix(positions)
 }
 \arguments{
-\item{positions}{Matrix of coordinates where rows are points and columns are dimensions}
+\item{positions}{Matrix of coordinates where rows are points and columns are dimensions;
+It can be a matrix or a data frame.}
 }
 \value{
-Matrix of pairwise distances between points
+A symmetric \code{matrix} of pairwise Euclidean distances between points.
 }
 \description{
 Calculates pairwise Euclidean distances between points in coordinate space

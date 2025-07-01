@@ -9,7 +9,7 @@
   width = 3.5,
   height = 3.5,
   save_plot = TRUE,
-  output_dir = NULL,
+  output_dir,
   y_limit_factor = NULL,
   ...
 )
@@ -23,7 +23,7 @@
 
 \item{save_plot}{Logical. Whether to save plot to file. Default: TRUE}
 
-\item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+\item{output_dir}{Character. Directory for output files. Required if \code{save_plot} is TRUE.}
 
 \item{y_limit_factor}{Numeric. Factor to set the upper y-axis limit as a percentage above
 the threshold value (e.g., 1.10 for 10\% above). Default: NULL (automatic scaling)}

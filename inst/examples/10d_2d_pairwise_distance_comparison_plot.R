@@ -66,7 +66,7 @@ p <- ggplot(distances_comparison, aes(x = Distance_Original, y = Distance_Reduce
     axis.text = element_text(size = 8)    # Set tick numbers to size 8
   )
 
-ggsave("pairwise_distance_10d_2d_comparison.pdf", 
+ggsave_white_bg("pairwise_distance_10d_2d_comparison.pdf", 
        plot = p,
        width = 3.5, 
        height = 3.5,

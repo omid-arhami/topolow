@@ -14,7 +14,7 @@ clean_data(x, k = 3, take_log = FALSE)
 \item{take_log}{Logical. Whether to log transform data before outlier detection (default: FALSE)}
 }
 \value{
-Numeric vector with outliers replaced by NA
+A numeric vector of the same length as \code{x}, where detected outliers have been replaced with \code{NA}.
 }
 \description{
 Removes outliers from numeric data using the Median Absolute Deviation method.

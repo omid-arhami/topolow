@@ -11,7 +11,7 @@ plot_temporal_mapping(
   aesthetic_config = new_aesthetic_config(),
   layout_config = new_layout_config(),
   annotation_config = new_annotation_config(),
-  output_dir = NULL,
+  output_dir,
   show_shape_legend = TRUE,
   draw_arrows = FALSE,
   annotate_arrows = TRUE,
@@ -39,7 +39,7 @@ Use x_limits and y_limits in layout_config to set axis limits.}
 
 \item{annotation_config}{Annotation configuration object for labeling notable points}
 
-\item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+\item{output_dir}{Character. Directory for output files. Required if \code{layout_config$save_plot} is \code{TRUE}.}
 
 \item{show_shape_legend}{Logical. Whether to show the shape legend (default: TRUE)}
 
@@ -56,7 +56,7 @@ Use x_limits and y_limits in layout_config to set axis limits.}
 \item{clade_node_depth}{Optional; integer; number of levels of parent nodes to define clades. Antigens from different clades will be excluded from the calculation antigenic velocity arrows. (Default: Automatically calculated mode of leaf-to-backbone distance of the tree)}
 }
 \value{
-ggplot object containing the temporal mapping visualization
+A \code{ggplot} object containing the temporal mapping visualization.
 }
 \description{
 Creates a visualization of points colored by time (year) using dimension reduction, with optional antigenic velocity arrows.
@@ -77,33 +77,29 @@ Different shapes distinguish between antigens and antisera points, while
 color represents temporal progression.
 }
 \examples{
-\dontrun{
 # Basic usage with default configurations
 data <- data.frame(
-  V1 = rnorm(100),
-  V2 = rnorm(100),
-  V3 = rnorm(100),
-  antigen = rep(c(0,1), 50),
-  antiserum = rep(c(1,0), 50),
+  V1 = rnorm(100), V2 = rnorm(100), V3 = rnorm(100), name = 1:100,
+  antigen = rep(c(0,1), 50), antiserum = rep(c(1,0), 50),
   year = rep(2000:2009, each=10)
 )
-# Default axis limits
+# Plot without saving
 p1 <- plot_temporal_mapping(data, ndim=3)
 
-# Custom axis limits via layout configuration
-layout_config <- new_layout_config(
-  x_limits = c(-10, 10),
-  y_limits = c(-8, 8)
-)
-p2 <- plot_temporal_mapping(data, ndim=3, 
-                           layout_config=layout_config)
-}
+# Save plot to a temporary directory
+temp_dir <- tempdir()
+layout_config_save <- new_layout_config(save_plot = TRUE,
+                       x_limits = c(-10, 10),
+                       y_limits = c(-8, 8))
+p_saved <- plot_temporal_mapping(data, ndim = 3, layout_config = layout_config_save, 
+                                 output_dir = temp_dir)
+list.files(temp_dir) # Check that file was created
+unlink(temp_dir, recursive = TRUE) # Clean up
 
 }
 \seealso{
 \code{\link{plot_cluster_mapping}} for cluster-based visualization
 \code{\link{plot_3d_mapping}} for 3D visualization
-\code{\link{plot_combined}} for creating multiple visualizations
 \code{\link{new_dim_reduction_config}} for dimension reduction options
 \code{\link{new_aesthetic_config}} for aesthetic options
 \code{\link{new_layout_config}} for layout options

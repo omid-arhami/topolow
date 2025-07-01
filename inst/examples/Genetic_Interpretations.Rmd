@@ -364,7 +364,7 @@ calculate_aa_distances <- function(aligned_sequences) {
 
 
 # 1. amino acid distances
-aligned_aa <- readAAStringSet("data_files/matched_sequences alignment.fasta")
+aligned_aa <- readAAStringSet("data_files/matched_sequences_alignment.fasta")
 
 aa_dist_matrix <- calculate_aa_distances(aligned_sequences=aligned_aa)
 
@@ -807,7 +807,7 @@ comparison_plot <- ggplot(plot_data, aes(x = factor(Position), y = value, fill =
 # Display the plot
 print(comparison_plot)
 # Save the plot with consistent parameters
-ggsave(file.path( "amino_acid_discrimination_power.pdf"), 
+ggsave_white_bg(file.path( "amino_acid_discrimination_power.pdf"), 
        comparison_plot, width = 83, height = 73, units = "mm")
 
 ```
@@ -1007,7 +1007,7 @@ write.tree(
 # library(phangorn)
 # 
 # # read AA alignment
-# alignment_aa <- read.phyDat("data_files/matched_sequences alignment.fasta",
+# alignment_aa <- read.phyDat("data_files/matched_sequences_alignment.fasta",
 #                            format = "fasta",
 #                            type   = "AA")
 # 
@@ -1163,11 +1163,11 @@ write.tree(
 
 To get the clades:
 TreeCluster.py \
-  -i '/Users/omidarhami/Library/CloudStorage/OneDrive-UniversityofGeorgia/code/R package/topolow1/inst/examples/data_files/tree_output_HIV1BC_sequence_aligned_named.treefile' \
+  -i '/Users/XXX/topolow/inst/examples/data_files/tree_output_HIV1BC_sequence_aligned_named.treefile' \
   -t 0.045 \
   -s 70 \
   -m max_clade \
-  -o '/Users/omidarhami/Library/CloudStorage/OneDrive-UniversityofGeorgia/code/R package/topolow1/inst/examples/data_files/clusters.tsv'
+  -o '/Users/XXX/topolow/inst/examples/data_files/clusters.tsv'
 
 
 ```{r session-info}

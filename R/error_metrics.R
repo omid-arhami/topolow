@@ -1,5 +1,4 @@
 # Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
-# License: free of charge access granted to any academic researcher to use this software for non-commercial, academic research purposes **only**.  Nobody may modify, distribute, sublicense, or publicly share the Software or any derivative works, until the paper is published by the original authors.  The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.  In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the Software or the use or other dealings in the Software.
 # R/error_metrics.R
 
 #' Error calculation and validation metrics for topolow
@@ -28,9 +27,9 @@
 #' @param p_dist_mat Matrix of predicted distances
 #' @param truth_matrix Matrix of true distances 
 #' @param input_matrix Matrix of input distances (may contain NAs and is used to find the NAs' pattern)
-#' @return List containing:
-#'   \item{report_df}{Data frame with error metrics per point}
-#'   \item{Completeness}{Numeric Completeness statistic}
+#' @return A list containing:
+#'   \item{report_df}{A `data.frame` with detailed error metrics for each point-pair, including `InSampleError`, `OutSampleError`, and their percentage-based counterparts.}
+#'   \item{Completeness}{A single numeric value representing the completeness statistic, which is the fraction of validation points for which a prediction could be made.}
 #'   
 #' @importFrom dplyr %>% select
 #' @export
@@ -116,7 +115,7 @@ error_calculator_comparison <- function(p_dist_mat, truth_matrix, input_matrix) 
 #' @param distance_matrix Matrix of true distances
 #' @param p_dist_mat Matrix of predicted distances 
 #' @param confidence_level Confidence level for interval (default: 0.95)
-#' @return Numeric margin of error for prediction interval
+#' @return A single numeric value representing the margin of error for the prediction interval.
 #' @importFrom stats sd qt
 #' @export
 calculate_prediction_interval <- function(distance_matrix, p_dist_mat, confidence_level = 0.95) {

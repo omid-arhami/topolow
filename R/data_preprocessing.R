@@ -1,6 +1,4 @@
 # Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
-# License: free of charge access granted to any academic researcher to use this software for non-commercial, academic research purposes **only**.  Nobody may modify, distribute, sublicense, or publicly share the Software or any derivative works, until the paper is published by the original authors.  The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.  In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the Software or the use or other dealings in the Software.
-
 # R/data_preprocessing.R
 
 #' Antigenic Data Preprocessing Functions
@@ -31,9 +29,9 @@
 #' @param base Numeric. Base for logarithm transformation (default: 2 for titers, e for IC50).
 #' @param scale_factor Numeric. Scale factor for titers (default: 10).
 #'
-#' @return List containing:
-#'   \item{long}{Data frame in long format with standardized columns}
-#'   \item{matrix}{Distance matrix}
+#' @return A list containing two elements:
+#'   \item{long}{A `data.frame` in long format with standardized columns, including the original identifiers, processed values, and calculated distances. Any specified metadata is also included.}
+#'   \item{matrix}{A numeric `matrix` representing the processed symmetric distance matrix, with antigens and sera on columns and rows.}
 #'
 #' @details
 #' The function handles these key steps:
@@ -54,25 +52,25 @@
 #' * Allowed Year-related column names are "virusYear" and "serumYear"
 #'
 #' @examples
-#' \dontrun{
-#' # Process titer data (e.g., HI assay)
-#' results <- process_antigenic_data(
-#'   "smith2004.csv",
-#'   antigen_col = "virusStrain",
-#'   serum_col = "serumStrain", 
-#'   value_col = "titer",
-#'   is_titer = TRUE,
-#'   metadata_cols = c("cluster", "color")
-#' )
-#'
-#' # Process IC50 data
-#' results <- process_antigenic_data(
-#'   "hiv_assays.csv",
-#'   antigen_col = "Virus",
-#'   serum_col = "Antibody",
-#'   value_col = "IC50",
-#'   is_titer = FALSE
-#' )
+#' # Locate the example data file included in the package
+#' file_path <- system.file("extdata", "example_titer_data.csv", package = "topolow")
+#' 
+#' # Check if the file exists before running the example
+#' if (file.exists(file_path)) {
+#'   # Process the example titer data
+#'   results <- process_antigenic_data(
+#'     file_path,
+#'     antigen_col = "virusStrain",
+#'     serum_col = "serumStrain", 
+#'     value_col = "titer",
+#'     is_titer = TRUE,
+#'     metadata_cols = c("cluster", "color")
+#'   )
+#' 
+#'   # View the long format data
+#'   print(results$long)
+#'   # View the distance matrix
+#'   print(results$matrix)
 #' }
 #' @importFrom utils read.csv
 #' @importFrom dplyr %>% group_by mutate ungroup summarise select distinct left_join
@@ -290,282 +288,6 @@ process_antigenic_data <- function(file_path, antigen_col, serum_col,
 
 
 
-#' Process Raw Antigenic Assay Data without transformations
-#'
-#' @description
-#' Processes raw antigenic assay data from CSV files into standardized long and matrix
-#' formats. Handles both titer data (which needs conversion to distances) and direct
-#' distance measurements like IC50. Preserves threshold indicators (<, >) and handles
-#' repeated measurements by averaging.
-#'
-#' @param file_path Character. Path to CSV file containing raw data.
-#' @param antigen_col Character. Name of column containing virus/antigen identifiers.
-#' @param serum_col Character. Name of column containing serum/antibody identifiers.
-#' @param value_col Character. Name of column containing measurements (titers or distances).
-#' @param is_titer Logical. Whether values are titers (TRUE) or distances like IC50 (FALSE).
-#' @param metadata_cols Character vector. Names of additional columns to preserve.
-#' @param id_prefix Logical. Whether to prefix IDs with V/ and S/ (default: TRUE).
-#' @param base Numeric. Base for logarithm transformation (default: 2 for titers, e for IC50).
-#' @param scale_factor Numeric. Scale factor for titers (default: 10).
-#'
-#' @return List containing:
-#'   \item{long}{Data frame in long format with standardized columns}
-#'   \item{matrix}{Distance matrix}
-#'
-#' @details
-#' The function handles these key steps:
-#' 1. Reads and validates input data
-#' 2. Transforms values to log scale
-#' 3. Converts titers to distances if needed
-#' 4. Averages repeated measurements
-#' 5. Creates standardized long format
-#' 6. Creates distance matrix
-#' 7. Preserves metadata and threshold indicators
-#' 8. Preserves virusYear and serumYear columns if presen
-#' 
-#' Input requirements and constraints:
-#' * CSV file must contain required columns
-#' * Column names must match specified parameters in the function input
-#' * Values can include threshold indicators (< or >)
-#' * Metadata columns must exist if specified
-#' * Allowed Year-related column names are "virusYear" and "serumYear"
-#'
-#' @examples
-#' \dontrun{
-#' # Process titer data (e.g., HI assay)
-#' results <- process_antigenic_data(
-#'   "smith2004.csv",
-#'   antigen_col = "virusStrain",
-#'   serum_col = "serumStrain", 
-#'   value_col = "titer",
-#'   is_titer = TRUE,
-#'   metadata_cols = c("cluster", "color")
-#' )
-#'
-#' # Process IC50 data
-#' results <- process_antigenic_data(
-#'   "hiv_assays.csv",
-#'   antigen_col = "Virus",
-#'   serum_col = "Antibody",
-#'   value_col = "IC50",
-#'   is_titer = FALSE
-#' )
-#' }
-#' @importFrom utils read.csv
-#' @importFrom dplyr %>% group_by mutate ungroup summarise select distinct left_join
-#' @importFrom rlang sym
-#' @importFrom stats na.omit
-#' @export
-process_antigenic_data_notransform <- function(file_path, antigen_col, serum_col, 
-                                   value_col,
-                                   is_titer = TRUE, 
-                                   metadata_cols = NULL,
-                                   id_prefix = FALSE,
-                                   base = NULL, 
-                                   scale_factor = 10) {
-  # Input validation
-  if (!file.exists(file_path)) {
-    stop("File not found: ", file_path)
-  }
-  
-  # Read data
-  data <- utils::read.csv(file_path)
-  
-  # Validate required columns
-  req_cols <- c(antigen_col, serum_col, value_col)
-  if (!all(req_cols %in% names(data))) {
-    missing <- setdiff(req_cols, names(data))
-    stop("Missing required columns: ", paste(missing, collapse = ", "))
-  }
-  
-  # Clean invalid values
-  data <- data[!is.na(data[[value_col]]), ]  # Remove NA values
-  data <- data[data[[value_col]] != "", ]    # Remove empty strings
-  
-  # Keep only rows where value starts with a number or < or >
-  data <- data[grepl("^[0-9<>]", data[[value_col]]), ]
-  
-  if (nrow(data) == 0) {
-    stop("No valid measurements remaining after cleaning")
-  }
-  
-  # Check for year columns
-  year_cols <- intersect(c("virusYear", "serumYear"), names(data))
-  
-  # Add year columns to metadata if they exist
-  if (length(year_cols) > 0) {
-    metadata_cols <- unique(c(metadata_cols, year_cols))
-  }
-  
-  # Validate metadata columns if specified
-  if (!is.null(metadata_cols)) {
-    missing_meta <- setdiff(metadata_cols, names(data))
-    if (length(missing_meta) > 0) {
-      stop("Missing metadata columns: ", paste(missing_meta, collapse = ", "))
-    }
-  }
-  
-  
-  if (!is.logical(is_titer)) {
-    stop("is_titer must be logical")
-  }
-  
-  if (!is.null(base) && (!is.numeric(base) || base <= 0)) {
-    stop("base must be NULL or a positive number")
-  }
-  
-  if (!is.numeric(scale_factor) || scale_factor <= 0) {
-    stop("scale_factor must be a positive number")
-  }
-  
-  # Set default base if not provided
-  if (is.null(base)) {
-    base <- if(is_titer) 2 else exp(1)
-  }
-  
-  # Helper function definitions from your code
-  remove_sign <- function(x) {
-    as.numeric(gsub("[<>]", "", x))
-  }
-  
-  reapply_sign <- function(values, avg) {
-    if (any(grepl("[<>]", values))) {
-      sign <- ifelse(any(grepl("<", values)), "<", ">")
-      return(paste0(sign, avg))
-    } else {
-      return(as.character(avg))
-    }
-  }
-  
-  # Process values
-  if (is_titer) {
-    # Convert titers to log scale
-    data$log_value <- sapply(data[[value_col]], function(x) {
-      if (grepl("^<", x)) {
-        paste0("<", log(as.numeric(sub("<", "", x)) / scale_factor, base = base))
-      } else if (grepl("^>", x)) {
-        paste0(">", log(as.numeric(sub(">", "", x)) / scale_factor, base = base))
-      } else if (is.numeric(as.numeric(x))) {
-        log(as.numeric(x) / scale_factor, base = base)
-      } else {
-        NA
-      }
-    })
-    
-    data$processed_value <- sapply(data$log_value, function(x) {
-      if (grepl("^<", x)) {
-        as.numeric(sub("<", "", x))
-      } else if (grepl("^>", x)) {
-        as.numeric(sub(">", "", x))
-      } else {
-        as.numeric(x)
-      }
-    })
-    
-    # Calculate distances per reference
-    data <- data %>%
-      dplyr::group_by(!!sym(serum_col)) %>%
-      dplyr::mutate(
-        max_value = max(processed_value, na.rm = TRUE),
-        distance = max_value - processed_value
-      ) %>%
-      dplyr::ungroup()
-    
-    # Adjust distances for threshold values
-    data$distance <- sapply(1:nrow(data), function(i) {
-      if (grepl("^<", data$log_value[i])) {
-        paste0(">", data$distance[i])
-      } else if (grepl("^>", data$log_value[i])) {
-        paste0("<", data$distance[i])
-      } else {
-        data$distance[i]
-      }
-    })
-    
-  } else {
-    # For IC50, calculate log directly
-    data$distance <- sapply(data[[value_col]], function(x) {
-      if (grepl("^<", x)) {
-        x_num <- as.numeric(sub("<", "", x))
-        paste0("<", x_num)
-      } else if (grepl("^>", x)) {
-        x_num <- as.numeric(sub(">", "", x))
-        paste0(">", x_num)
-      } else if (is.numeric(as.numeric(x))) {
-        as.numeric(x)
-      } else {
-        NA
-      }
-    })
-  }
-  
-  # Combine repeated measurements
-  long_data <- data %>%
-    dplyr::group_by(!!sym(antigen_col), !!sym(serum_col)) %>%
-    dplyr::summarise(
-      raw_value = reapply_sign(!!sym(value_col), 
-                               if(is_titer) {
-                                 scale_factor * base^(mean(log(remove_sign(!!sym(value_col))/scale_factor, 
-                                                               base = base), na.rm = TRUE))
-                               } else {
-                                 mean(remove_sign(!!sym(value_col)), na.rm = TRUE)
-                               }),
-      distance = reapply_sign(distance, 
-                              mean(remove_sign(distance), na.rm = TRUE)),
-      .groups = 'drop'
-    )
-  
-  # Add back metadata columns if specified
-  if (!is.null(metadata_cols)) {
-    # Get combined distinct metadata for antigens
-    metadata <- data %>%
-      dplyr::select(!!sym(antigen_col), !!sym(serum_col), dplyr::any_of(metadata_cols)) %>%
-      dplyr::distinct()
-    
-    # Join metadata based on both antigen and serum columns
-    long_data <- long_data %>%
-      dplyr::left_join(metadata, by = c(antigen_col, serum_col))
-  }
-  
-  # Remove the non complete rows
-  long_data <- na.omit(long_data)
-  
-  # sort by year to conform with our assumptions used at various places
-  if("virusYear" %in% names(long_data)) {
-    long_data <- long_data[order(long_data$virusYear), ]
-  }
-  
-  # # Add prefixes if requested
-  # if (id_prefix) {
-  #   long_data[[antigen_col]] <- paste0("V/", long_data[[antigen_col]])
-  #   long_data[[serum_col]] <- paste0("S/", long_data[[serum_col]])
-  # }
-  
-  # Create matrix using long_to_matrix function
-  # Determine ordering columns
-  virus_year_col <- "virusYear"
-  serum_year_col <- "serumYear"
-  
-  distance_matrix <- long_to_matrix(
-    long_data,
-    chnames = antigen_col,
-    chorder = if("virusYear" %in% names(long_data)) "virusYear" else NULL,
-    rnames = serum_col,
-    rorder = if("serumYear" %in% names(long_data)) "serumYear" else NULL,
-    values_column = "distance",
-    rc = FALSE,
-    sort = ("virusYear" %in% names(long_data)) || ("serumYear" %in% names(long_data))
-  )
-  
-  # Return both formats
-  return(list(
-    long = long_data,
-    matrix = distance_matrix
-  ))
-}
-
-
-
 #' Validate Antigenic Dataset
 #'
 #' @description
@@ -645,27 +367,59 @@ validate_antigenic_data <- function(data, antigen_col, serum_col, value_col,
 #' @param antibody_col Character name of antibody/antiserum column 
 #' @param min_connections Integer minimum required connections per point
 #' @param iterations Integer maximum pruning iterations (default 100)
-#' @return List containing:
-#'   \item{pruned_data}{Data frame of pruned measurements}
-#'   \item{stats}{List of pruning statistics including:
+#' @return A list containing two elements:
+#'   \item{pruned_data}{A `data.frame` containing only the measurements for the well-connected subset of points.}
+#'   \item{stats}{A `list` of pruning statistics including:
 #'     \itemize{
-#'       \item original_points: Number of points before pruning
-#'       \item remaining_points: Number of points after pruning
-#'       \item iterations: Number of pruning iterations performed
-#'       \item min_connections: Minimum connections in final set
+#'       \item `original_points`: Number of unique antigens and sera before pruning.
+#'       \item `remaining_points`: Number of unique antigens and sera after pruning.
+#'       \item `iterations`: Number of pruning iterations performed.
+#'       \item `min_connections`: The minimum connection threshold used.
+#'       \item `is_connected`: A logical indicating if the final network is fully connected.
 #'     }
 #'   }
 #' @examples
-#' \dontrun{
-#' # Basic pruning keeping points with at least 10 connections
-#' pruned <- prune_distance_network(hiv_data, 
-#'                                 virus_col = "Virus",
-#'                                 antibody_col = "Antibody", 
-#'                                 min_connections = 10)
+#' # Create a sparse dataset with 12 viruses and 12 antibodies
+#' viruses <- paste0("V", 1:12)
+#' antibodies <- paste0("A", 1:12)
+#' all_pairs <- expand.grid(Virus = viruses, Antibody = antibodies, stringsAsFactors = FALSE)
+#' 
+#' # Sample 70 pairs to create a sparse matrix
+#' set.seed(42)
+#' assay_data <- all_pairs[sample(nrow(all_pairs), 70), ]
+#' 
+#' # Ensure some viruses/antibodies are poorly connected for the example
+#' assay_data <- assay_data[!(assay_data$Virus %in% c("V11", "V12")),]
+#' assay_data <- assay_data[!(assay_data$Antibody %in% c("A11", "A12")),]
+#' 
+#' # Add back single connections for the poorly connected nodes
+#' poor_connections <- data.frame(
+#'   Virus = c("V11", "V1", "V12", "V2"),
+#'   Antibody = c("A1", "A11", "A2", "A12")
+#' )
+#' assay_data <- rbind(assay_data, poor_connections)
+#' 
+#' # View connection counts before pruning
+#' # Virus V11 and V12, and Antibody A11 and A12 have only 1 connection
+#' table(assay_data$Virus)
+#' table(assay_data$Antibody)
+#' 
+#' # Prune the network to keep only nodes with at least 2 connections
+#' pruned_result <- prune_distance_network(
+#'   data = assay_data,
+#'   virus_col = "Virus",
+#'   antibody_col = "Antibody",
+#'   min_connections = 2
+#' )
 #'                                 
-#' # Check pruning statistics
-#' print(pruned$stats)
-#' }
+#' # View connection counts after pruning
+#' # The poorly connected nodes have been removed
+#' table(pruned_result$pruned_data$Virus)
+#' table(pruned_result$pruned_data$Antibody)
+#' 
+#' # Check the summary statistics
+#' print(pruned_result$stats)
+#' 
 #' @importFrom dplyr %>% filter
 #' @importFrom rlang sym
 #' @importFrom igraph graph_from_data_frame is_connected components
@@ -802,14 +556,6 @@ prune_distance_network <- function(data, virus_col, antibody_col,
 #'       \item n_outliers: Number of outliers detected
 #'     }
 #'   }
-#' @examples
-#' \dontrun{
-#' # Detect outliers in parameter values
-#' params <- c(0.01, 0.012, 0.011, 0.1, 0.009, 0.011, 0.15)
-#' outliers <- detect_outliers_mad(params)
-#' print(outliers$stats$n_outliers) # Number of outliers
-#' clean_params <- params[!outliers$outlier_mask] # Remove outliers
-#' }
 #' @importFrom stats median mad
 #' @keywords internal
 detect_outliers_mad <- function(data, k = 3, take_log=FALSE) {
@@ -869,7 +615,7 @@ detect_outliers_mad <- function(data, k = 3, take_log=FALSE) {
 #' @param x Numeric vector to clean
 #' @param k Numeric threshold for outlier detection (default: 3)
 #' @param take_log Logical. Whether to log transform data before outlier detection (default: FALSE)
-#' @return Numeric vector with outliers replaced by NA
+#' @return A numeric vector of the same length as `x`, where detected outliers have been replaced with `NA`.
 #' @examples
 #' # Clean parameter values
 #' params <- c(0.01, 0.012, 0.011, 0.1, 0.009, 0.011, 0.15)

@@ -28,14 +28,15 @@ prune_distance_network(
 \item{iterations}{Integer maximum pruning iterations (default 100)}
 }
 \value{
-List containing:
-\item{pruned_data}{Data frame of pruned measurements}
-\item{stats}{List of pruning statistics including:
+A list containing two elements:
+\item{pruned_data}{A \code{data.frame} containing only the measurements for the well-connected subset of points.}
+\item{stats}{A \code{list} of pruning statistics including:
 \itemize{
-\item original_points: Number of points before pruning
-\item remaining_points: Number of points after pruning
-\item iterations: Number of pruning iterations performed
-\item min_connections: Minimum connections in final set
+\item \code{original_points}: Number of unique antigens and sera before pruning.
+\item \code{remaining_points}: Number of unique antigens and sera after pruning.
+\item \code{iterations}: Number of pruning iterations performed.
+\item \code{min_connections}: The minimum connection threshold used.
+\item \code{is_connected}: A logical indicating if the final network is fully connected.
 }
 }
 }
@@ -45,14 +46,45 @@ well-connected network subset. The pruning continues until all remaining points 
 at least the specified minimum number of connections.
 }
 \examples{
-\dontrun{
-# Basic pruning keeping points with at least 10 connections
-pruned <- prune_distance_network(hiv_data, 
-                                virus_col = "Virus",
-                                antibody_col = "Antibody", 
-                                min_connections = 10)
+# Create a sparse dataset with 12 viruses and 12 antibodies
+viruses <- paste0("V", 1:12)
+antibodies <- paste0("A", 1:12)
+all_pairs <- expand.grid(Virus = viruses, Antibody = antibodies, stringsAsFactors = FALSE)
+
+# Sample 70 pairs to create a sparse matrix
+set.seed(42)
+assay_data <- all_pairs[sample(nrow(all_pairs), 70), ]
+
+# Ensure some viruses/antibodies are poorly connected for the example
+assay_data <- assay_data[!(assay_data$Virus \%in\% c("V11", "V12")),]
+assay_data <- assay_data[!(assay_data$Antibody \%in\% c("A11", "A12")),]
+
+# Add back single connections for the poorly connected nodes
+poor_connections <- data.frame(
+  Virus = c("V11", "V1", "V12", "V2"),
+  Antibody = c("A1", "A11", "A2", "A12")
+)
+assay_data <- rbind(assay_data, poor_connections)
+
+# View connection counts before pruning
+# Virus V11 and V12, and Antibody A11 and A12 have only 1 connection
+table(assay_data$Virus)
+table(assay_data$Antibody)
+
+# Prune the network to keep only nodes with at least 2 connections
+pruned_result <- prune_distance_network(
+  data = assay_data,
+  virus_col = "Virus",
+  antibody_col = "Antibody",
+  min_connections = 2
+)
                                 
-# Check pruning statistics
-print(pruned$stats)
-}
+# View connection counts after pruning
+# The poorly connected nodes have been removed
+table(pruned_result$pruned_data$Virus)
+table(pruned_result$pruned_data$Antibody)
+
+# Check the summary statistics
+print(pruned_result$stats)
+
 }

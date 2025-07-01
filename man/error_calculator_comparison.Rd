@@ -14,9 +14,9 @@ error_calculator_comparison(p_dist_mat, truth_matrix, input_matrix)
 \item{input_matrix}{Matrix of input distances (may contain NAs and is used to find the NAs' pattern)}
 }
 \value{
-List containing:
-\item{report_df}{Data frame with error metrics per point}
-\item{Completeness}{Numeric Completeness statistic}
+A list containing:
+\item{report_df}{A \code{data.frame} with detailed error metrics for each point-pair, including \code{InSampleError}, \code{OutSampleError}, and their percentage-based counterparts.}
+\item{Completeness}{A single numeric value representing the completeness statistic, which is the fraction of validation points for which a prediction could be made.}
 }
 \description{
 Computes various error metrics including in-sample and out-of-sample errors,

@@ -34,8 +34,8 @@ points. If FALSE, they are treated as distinct sets. Default is FALSE.}
 \item{sort}{Logical. Whether to sort rows/columns by chorder/rorder. Default FALSE.}
 }
 \value{
-A symmetric matrix of distances with row and column names corresponding
-to the unique points in the data.
+A symmetric \code{matrix} of distances with row and column names corresponding
+to the unique points in the data. \code{NA} values represent unmeasured pairs.
 }
 \description{
 Converts a dataset from long format to a symmetric distance matrix. The function
@@ -56,7 +56,6 @@ The 'rc' parameter determines how to handle shared names between references
 and challenges.
 }
 \examples{
-\dontrun{
 data <- data.frame(
   antigen = c("A", "B", "A"),
   serum = c("X", "X", "Y"), 
@@ -78,5 +77,4 @@ mat_sorted <- long_to_matrix(data,
                             rorder = "year",
                             values_column = "distance",
                             sort = TRUE)
-}
 }

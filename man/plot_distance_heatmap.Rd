@@ -6,7 +6,7 @@
 \usage{
 plot_distance_heatmap(
   heatmap_data,
-  scenario_name,
+  output_file = NULL,
   aesthetic_config = new_aesthetic_config(),
   layout_config = new_layout_config()
 )
@@ -14,7 +14,8 @@ plot_distance_heatmap(
 \arguments{
 \item{heatmap_data}{List output from prepare_heatmap_data()}
 
-\item{scenario_name}{Character string for output file naming}
+\item{output_file}{Character. Full path (including filename and extension) where the plot will be saved.
+If NULL, the plot is not saved.}
 
 \item{aesthetic_config}{Plot aesthetic configuration object}
 
@@ -33,21 +34,11 @@ Creates heatmap visualization of distance matrix showing patterns and
 structure in the measurements.
 }
 \examples{
-\dontrun{
-# Basic heatmap
+# Create sample heatmap data
+dist_mat <- matrix(rnorm(100), 10, 10)
 hmap_data <- prepare_heatmap_data(dist_mat)
-p <- plot_distance_heatmap(hmap_data, "scenario1")
 
-# Heatmap with clustering
-hmap_data <- prepare_heatmap_data(dist_mat, cluster_rows = TRUE)
-p2 <- plot_distance_heatmap(hmap_data, "scenario1")
-
-# Custom configuration
-aesthetic_config <- new_aesthetic_config(
-  gradient_colors = list(low = "navy", high = "red")
-)
-p3 <- plot_distance_heatmap(hmap_data, "scenario1",
-                           aesthetic_config = aesthetic_config)
-}
+# Create and display the plot object
+plot_distance_heatmap(hmap_data)
 
 }

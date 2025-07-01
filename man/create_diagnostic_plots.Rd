@@ -8,7 +8,7 @@ create_diagnostic_plots(
   chain_files,
   mutual_size = 2000,
   output_file = "diagnostic_plots.png",
-  output_dir = NULL,
+  output_dir,
   save_plot = TRUE,
   width = 3000,
   height = 3000,
@@ -20,25 +20,33 @@ create_diagnostic_plots(
 
 \item{mutual_size}{Integer number of samples to use from end of each chain}
 
-\item{output_file}{Character path for saving plot}
+\item{output_file}{Character path for saving plot. Required if \code{save_plot} is \code{TRUE}.}
 
-\item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+\item{output_dir}{Character. Directory for output files. Required if \code{save_plot} is \code{TRUE}.}
 
 \item{save_plot}{Logical. Whether to save plots to files. Default: TRUE}
 
 \item{width, height, res}{Plot dimensions and resolution for saving}
 }
 \value{
-Invisible NULL, saves plot to file
+A ggplot object of the combined plots.
 }
 \description{
 Creates trace and density plots for multiple Adaptive Monte Carlo Sampling or optimization chains to assess
 convergence and mixing. Displays parameter trajectories and distributions across chains.
 }
 \examples{
-\dontrun{
-chain_files <- c("chain1.csv", "chain2.csv", "chain3.csv")
-create_diagnostic_plots(chain_files, mutual_size = 2000,
-  output_file = "chain_diagnostics.png")
+# This example uses sample data files included with the package.
+chain_files <- c(
+  system.file("extdata", "diag_chain1.csv", package = "topolow"),
+  system.file("extdata", "diag_chain2.csv", package = "topolow"),
+  system.file("extdata", "diag_chain3.csv", package = "topolow")
+)
+
+# Only run the example if the files are found
+if (all(nzchar(chain_files))) {
+  # Create diagnostic plot without saving to a file
+  create_diagnostic_plots(chain_files, mutual_size = 2, save_plot = FALSE)
 }
+
 }

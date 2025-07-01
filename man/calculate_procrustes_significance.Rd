@@ -12,7 +12,7 @@ calculate_procrustes_significance(map1, map2)
 \item{map2}{Data frame with coordinates from second map (must have X, X.1 columns)}
 }
 \value{
-Numeric p-value from Procrustes permutation test
+A single numeric p-value from the Procrustes permutation test.
 }
 \description{
 Performs Procrustes analysis between two maps and calculates statistical
@@ -21,9 +21,8 @@ data cleaning steps like removing missing values and ensuring comparable
 point sets.
 }
 \examples{
-\dontrun{
-map1 <- read.csv("map1_coords.csv")
-map2 <- read.csv("map2_coords.csv")
+# Create sample map data
+map1 <- data.frame(name = letters[1:10], X = rnorm(10), X.1 = rnorm(10))
+map2 <- data.frame(name = letters[1:10], X = rnorm(10), X.1 = rnorm(10))
 p_val <- calculate_procrustes_significance(map1, map2)
-}
 }

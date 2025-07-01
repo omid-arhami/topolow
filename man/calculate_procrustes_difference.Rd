@@ -12,7 +12,7 @@ calculate_procrustes_difference(map1, map2)
 \item{map2}{Data frame with coordinates from second map (must have X, X.1 columns)}
 }
 \value{
-Numeric sum of squared differences after Procrustes transformation
+A single numeric value representing the sum of squared differences after Procrustes transformation.
 }
 \description{
 Computes the quantitative difference between two maps using Procrustes analysis.
@@ -20,9 +20,8 @@ The difference is calculated as the sum of squared differences after optimal
 rotation and scaling.
 }
 \examples{
-\dontrun{
-map1 <- read.csv("map1_coords.csv")
-map2 <- read.csv("map2_coords.csv")
+# Create sample map data
+map1 <- data.frame(name = letters[1:10], X = rnorm(10), X.1 = rnorm(10))
+map2 <- data.frame(name = letters[1:10], X = rnorm(10), X.1 = rnorm(10))
 diff <- calculate_procrustes_difference(map1, map2)
-}
 }

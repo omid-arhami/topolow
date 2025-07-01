@@ -34,7 +34,6 @@ A decreasing trend approaching zero indicates stable relationships between param
 }
 }
 \examples{
-\dontrun{
 # Example with simulated data
 chain_data <- data.frame(
   log_N = rnorm(1000, mean = 1.5, sd = 0.1),
@@ -49,7 +48,7 @@ plot(results)
 
 # With custom parameter names
 plot(results, param_names = c("Dimensions (log)", "Spring constant (log)"))
-}
+
 }
 \seealso{
 \code{\link{check_gaussian_convergence}} for generating the convergence object

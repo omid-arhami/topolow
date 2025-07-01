@@ -4,12 +4,7 @@
 \alias{save_plot}
 \title{Save Plot to File}
 \usage{
-save_plot(
-  plot,
-  filename,
-  layout_config = new_layout_config(),
-  output_dir = NULL
-)
+save_plot(plot, filename, layout_config = new_layout_config(), output_dir)
 }
 \arguments{
 \item{plot}{ggplot or rgl scene object to save}
@@ -18,10 +13,10 @@ save_plot(
 
 \item{layout_config}{Layout configuration object controlling output parameters}
 
-\item{output_dir}{Character. Directory for output files. If NULL, uses current directory}
+\item{output_dir}{Character. Directory for output files. This argument is required.}
 }
 \value{
-Invisible NULL
+No return value, called for side effects (saves a plot to a file).
 }
 \description{
 Saves a plot (ggplot or rgl scene) to file with specified configuration.
@@ -45,32 +40,34 @@ The function will:
 }
 }
 \examples{
-\dontrun{
-# Create sample plot
+# The sole purpose of save_plot is to write a file, so its example must demonstrate this. 
+# For CRAN tests we wrap the example in \donttest{} to avoid writing files.
+\donttest{
+# Create a temporary directory for saving all plots
+temp_dir <- tempdir()
+
+# --- Example 1: Basic ggplot save ---
+# Create sample data with 3 dimensions to support both 2D and 3D plots
 data <- data.frame(
-  V1 = rnorm(100),
-  V2 = rnorm(100),
-  antigen = rep(c(0,1), 50),
-  antiserum = rep(c(1,0), 50),
-  year = rep(2000:2009, each=10)
+  V1 = rnorm(10), V2 = rnorm(10), V3 = rnorm(10), name=1:10,
+  antigen = rep(c(0,1), 5), antiserum = rep(c(1,0), 5),
+  year = 2000:2009
 )
 p <- plot_temporal_mapping(data, ndim=2)
+save_plot(p, "temporal_plot.png", output_dir = temp_dir)
 
-# Basic save
-save_plot(p, "temporal_plot.png")
-
-# Save with custom layout
+# --- Example 2: Save with custom layout ---
 layout_config <- new_layout_config(
   width = 12,
   height = 8,
   dpi = 600,
   save_format = "pdf"
 )
+save_plot(p, "high_res_plot.pdf", layout_config, output_dir = temp_dir)
 
-save_plot(p, "high_res_plot", layout_config)
-
-# Save 3D plot
-p3d <- plot_3d_mapping(data, ndim=3, interactive=FALSE)
-save_plot(p3d, "3d_plot.png", layout_config)
+# --- Verify files and clean up ---
+list.files(temp_dir)
+unlink(temp_dir, recursive = TRUE)
 }
+
 }

@@ -1,6 +1,4 @@
 # Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
-# License: free of charge access granted to any academic researcher to use this software for non-commercial, academic research purposes **only**.  Nobody may modify, distribute, sublicense, or publicly share the Software or any derivative works, until the paper is published by the original authors.  The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.  In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the Software or the use or other dealings in the Software.
-
 # R/visualization.R
 
 #' Visualization functions for the topolow package
@@ -47,7 +45,8 @@
 #' @param min_segment_length Numeric. Minimum length of connecting segments
 #' @param max_overlaps Numeric. Maximum number of overlaps allowed for annotations
 #' @param outline_size Numeric. Size of the outline for annotations
-#' @return An annotation_config object
+#' @return An S3 object of class \code{annotation_config}, which is a list 
+#'         containing the specified configuration parameters for plot annotations.
 #' @export
 new_annotation_config <- function(
     notable_points = NULL,
@@ -119,7 +118,8 @@ new_annotation_config <- function(
 #' @param legend_position Legend position ("none", "right", "left", "top", "bottom")
 #' @param arrow_head_size Size of the arrow head for velocity arrows (in cm)
 #' @param arrow_alpha Transparency of arrows (0 = invisible, 1 = fully opaque)
-#' @return An aesthetic_config object
+#' @return An S3 object of class \code{aesthetic_config}, which is a list 
+#'         containing the specified configuration parameters for plot aesthetics.
 #' @export
 new_aesthetic_config <- function(
     point_size = 3.5,
@@ -228,13 +228,15 @@ new_aesthetic_config <- function(
 #' @param panel_background_color Panel background color
 #' @param panel_border Show panel border
 #' @param panel_border_color Panel border color
+#' @param save_plot Logical. Whether to save the plot to a file.
 #' @param save_format Plot save format ("png", "pdf", "svg", "eps")
 #' @param reverse_x Numeric multiplier for x-axis direction (1 or -1)
 #' @param reverse_y Numeric multiplier for y-axis direction (1 or -1)
 #' @param x_limits Numeric vector of length 2 specifying c(min, max) for x-axis. If NULL, limits are set automatically.
 #' @param y_limits Numeric vector of length 2 specifying c(min, max) for y-axis. If NULL, limits are set automatically.
 #' @param arrow_plot_threshold Threshold for velocity arrows to be drawn in the same antigenic distance unit (default: 0.10)
-#' @return A layout_config object
+#' @return An S3 object of class \code{layout_config}, which is a list containing 
+#'         the specified configuration parameters for plot layout.
 #' @importFrom ggplot2 margin
 #' @export
 new_layout_config <- function(
@@ -254,6 +256,7 @@ new_layout_config <- function(
   panel_background_color = "white",
   panel_border = TRUE,
   panel_border_color = "black",
+  save_plot = FALSE,
   save_format = "png",
   reverse_x = 1,
   reverse_y = 1,
@@ -278,6 +281,7 @@ new_layout_config <- function(
     panel_background_color = panel_background_color,
     panel_border = panel_border,
     panel_border_color = panel_border_color,
+    save_plot = save_plot,
     save_format = save_format,
     reverse_x = reverse_x,
     reverse_y = reverse_y,
@@ -304,6 +308,7 @@ new_layout_config <- function(
     is.character(panel_background_color),
     is.logical(panel_border),
     is.character(panel_border_color),
+    is.logical(save_plot),
     save_format %in% c("png", "pdf", "svg", "eps"),
     reverse_x %in% c(1, -1),
     reverse_y %in% c(1, -1),
@@ -340,7 +345,8 @@ new_layout_config <- function(
 #' @param tsne_params List of t-SNE-specific parameters
 #' @param compute_loadings Compute and return loadings
 #' @param random_state Random seed for reproducibility
-#' @return A dim_reduction_config object
+#' @return An S3 object of class \code{dim_reduction_config}, which is a list 
+#'         containing the specified configuration parameters for dimensionality reduction.
 #' @export
 new_dim_reduction_config <- function(
     method = "pca",
@@ -643,7 +649,7 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #' @param aesthetic_config Aesthetic configuration object controlling plot appearance
 #' @param layout_config Layout configuration object controlling plot dimensions and style.
 #'        Use x_limits and y_limits in layout_config to set axis limits.
-#' @param output_dir Character. Directory for output files. If NULL, uses current directory
+#' @param output_dir Character. Directory for output files. Required if `layout_config$save_plot` is `TRUE`.
 #' @param show_shape_legend Logical. Whether to show the shape legend (default: TRUE)
 #' @param annotation_config Annotation configuration object for labeling notable points
 #' @param sigma_t Optional; numeric; bandwidth for the Gaussian kernel discounting on time in years or the time unit of the data. If NULL, uses Silverman's rule of thumb.
@@ -660,35 +666,31 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #' Different shapes distinguish between antigens and antisera points, while
 #' color represents temporal progression.
 #'
-#' @return ggplot object containing the temporal mapping visualization
+#' @return A \code{ggplot} object containing the temporal mapping visualization.
 #'
 #' @examples
-#' \dontrun{
 #' # Basic usage with default configurations
 #' data <- data.frame(
-#'   V1 = rnorm(100),
-#'   V2 = rnorm(100),
-#'   V3 = rnorm(100),
-#'   antigen = rep(c(0,1), 50),
-#'   antiserum = rep(c(1,0), 50),
+#'   V1 = rnorm(100), V2 = rnorm(100), V3 = rnorm(100), name = 1:100,
+#'   antigen = rep(c(0,1), 50), antiserum = rep(c(1,0), 50),
 #'   year = rep(2000:2009, each=10)
 #' )
-#' # Default axis limits
+#' # Plot without saving
 #' p1 <- plot_temporal_mapping(data, ndim=3)
 #'
-#' # Custom axis limits via layout configuration
-#' layout_config <- new_layout_config(
-#'   x_limits = c(-10, 10),
-#'   y_limits = c(-8, 8)
-#' )
-#' p2 <- plot_temporal_mapping(data, ndim=3, 
-#'                            layout_config=layout_config)
-#' }
+#' # Save plot to a temporary directory
+#' temp_dir <- tempdir()
+#' layout_config_save <- new_layout_config(save_plot = TRUE,
+#'                        x_limits = c(-10, 10),
+#'                        y_limits = c(-8, 8))
+#' p_saved <- plot_temporal_mapping(data, ndim = 3, layout_config = layout_config_save, 
+#'                                  output_dir = temp_dir)
+#' list.files(temp_dir) # Check that file was created
+#' unlink(temp_dir, recursive = TRUE) # Clean up
 #'
 #' @seealso 
 #' \code{\link{plot_cluster_mapping}} for cluster-based visualization
 #' \code{\link{plot_3d_mapping}} for 3D visualization
-#' \code{\link{plot_combined}} for creating multiple visualizations
 #' \code{\link{new_dim_reduction_config}} for dimension reduction options
 #' \code{\link{new_aesthetic_config}} for aesthetic options
 #' \code{\link{new_layout_config}} for layout options
@@ -704,7 +706,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
                                   aesthetic_config = new_aesthetic_config(),
                                   layout_config = new_layout_config(),
                                   annotation_config = new_annotation_config(),
-                                  output_dir = NULL,
+                                  output_dir,
                                   show_shape_legend = TRUE,
                                   draw_arrows = FALSE,
                                   annotate_arrows = TRUE,
@@ -716,6 +718,10 @@ plot_temporal_mapping <- function(df_coords, ndim,
   # Ensure ggrepel is available
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
     warning("The ggrepel package is required for optimal label placement. Install with: install.packages('ggrepel')")
+  }
+  
+  if (layout_config$save_plot && missing(output_dir)) {
+    stop("An 'output_dir' must be provided when 'layout_config$save_plot' is TRUE.", call. = FALSE)
   }
   
   # Validate input data
@@ -1126,8 +1132,8 @@ plot_temporal_mapping <- function(df_coords, ndim,
     p <- p + coord_fixed(ratio = layout_config$aspect_ratio)
   }
   
-  # Save plot if save format is specified
-  if (!is.null(layout_config$save_format)) {
+  # Save plot if requested
+  if (layout_config$save_plot) {
     if (draw_arrows){
       if (!is.null(phylo_tree)) {
         filename <- sprintf(
@@ -1184,7 +1190,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
 #' @param aesthetic_config Aesthetic configuration object controlling plot appearance
 #' @param layout_config Layout configuration object controlling plot dimensions and style.
 #'        Use x_limits and y_limits in layout_config to set axis limits.
-#' @param output_dir Character. Directory for output files. If NULL, uses current directory
+#' @param output_dir Character. Directory for output files. Required if `layout_config$save_plot` is `TRUE`.
 #' @param show_shape_legend Logical. Whether to show the shape legend (default: TRUE)
 #' @param cluster_legend_title Character. Custom title for the cluster legend (default: "Cluster")
 #' @param annotation_config Annotation configuration object for labeling notable points
@@ -1206,21 +1212,19 @@ plot_temporal_mapping <- function(df_coords, ndim,
 #' color represents cluster assignment. The color palette can be customized
 #' through the aesthetic_config.
 #'
-#' @return ggplot object containing the cluster mapping visualization
+#' @return A \code{ggplot} object containing the cluster mapping visualization.
 #'
 #' @examples
-#' \dontrun{
 #' # Basic usage with default configurations
 #' data <- data.frame(
-#'   V1 = rnorm(100),
-#'   V2 = rnorm(100),
-#'   V3 = rnorm(100),
-#'   antigen = rep(c(0,1), 50),
-#'   antiserum = rep(c(1,0), 50),
+#'   V1 = rnorm(100), V2 = rnorm(100), V3 = rnorm(100), name = 1:100,
+#'   antigen = rep(c(0,1), 50), antiserum = rep(c(1,0), 50),
 #'   cluster = rep(1:5, each=20)
 #' )
 #' p1 <- plot_cluster_mapping(data, ndim=3)
 #'
+#' # Save plot to a temporary directory
+#' temp_dir <- tempdir()
 #' # Custom configurations with specific color palette and axis limits
 #' aesthetic_config <- new_aesthetic_config(
 #'   point_size = 4,
@@ -1230,7 +1234,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
 #'   label_size = 3
 #' )
 #'
-#' layout_config <- new_layout_config(
+#' layout_config_save <- new_layout_config(save_plot = TRUE,
 #'   width = 10,
 #'   height = 8,
 #'   coord_type = "fixed",
@@ -1240,18 +1244,18 @@ plot_temporal_mapping <- function(df_coords, ndim,
 #'   y_limits = c(-8, 8)
 #' )
 #'
-#' p2 <- plot_cluster_mapping(
-#'   data, 
-#'   ndim = 3,
+#' p_saved <- plot_cluster_mapping(data, ndim=3, 
+#'   layout_config = layout_config_save, 
 #'   aesthetic_config = aesthetic_config,
-#'   layout_config = layout_config
+#'   output_dir = temp_dir
 #' )
-#' }
+#' 
+#' list.files(temp_dir)
+#' unlink(temp_dir, recursive = TRUE)
 #'
 #' @seealso 
 #' \code{\link{plot_temporal_mapping}} for temporal visualization
 #' \code{\link{plot_3d_mapping}} for 3D visualization
-#' \code{\link{plot_combined}} for creating multiple visualizations
 #' \code{\link{new_dim_reduction_config}} for dimension reduction options
 #' \code{\link{new_aesthetic_config}} for aesthetic options
 #' \code{\link{new_layout_config}} for layout options
@@ -1268,7 +1272,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
                                  aesthetic_config = new_aesthetic_config(),
                                  layout_config = new_layout_config(),
                                  annotation_config = new_annotation_config(),
-                                 output_dir = NULL,
+                                 output_dir,
                                  show_shape_legend = TRUE,
                                  cluster_legend_title = "Cluster",
                                  draw_arrows = FALSE,
@@ -1283,6 +1287,10 @@ plot_cluster_mapping <- function(df_coords, ndim,
   # Ensure ggrepel is available
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
     warning("The ggrepel package is required for optimal label placement. Install with: install.packages('ggrepel')")
+  }
+  
+  if (layout_config$save_plot && missing(output_dir)) {
+    stop("An 'output_dir' must be provided when 'layout_config$save_plot' is TRUE.", call. = FALSE)
   }
   
   # Validate input data
@@ -1766,8 +1774,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
     p <- p + coord_fixed(ratio = layout_config$aspect_ratio)
   }
   
-  # Save plot if save format is specified
-  if (!is.null(layout_config$save_format)) {
+  # Save plot if requested
+  if (layout_config$save_plot) {
     if (draw_arrows){
       if (!is.null(phylo_tree)) {
         filename <- sprintf(
@@ -1823,7 +1831,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
 #' @param aesthetic_config Aesthetic configuration object
 #' @param layout_config Layout configuration object
 #' @param interactive Logical; whether to create an interactive plot
-#' @param output_dir Character. Directory for output files. If NULL, uses current directory
+#' @param output_dir Character. Directory for output files. Required if `interactive` is `FALSE`.
 #' 
 #' @details
 #' The function supports two main visualization modes:
@@ -1841,27 +1849,27 @@ plot_cluster_mapping <- function(df_coords, ndim,
 #' available, the function will return a 2D plot with a message explaining how to
 #' enable 3D visualization.
 #'
-#' @return Invisibly returns rgl scene ID for further manipulation if rgl is available,
-#'         or a 2D ggplot object as a fallback.
+#' @return Invisibly returns the rgl scene ID for further manipulation if rgl is 
+#'         available, or a 2D ggplot object as a fallback.
 #'
 #' @examples
-#' \dontrun{
 #' # Create sample data
 #' set.seed(123)
 #' data <- data.frame(
-#'   V1 = rnorm(100),
-#'   V2 = rnorm(100),
-#'   V3 = rnorm(100),
-#'   V4 = rnorm(100),
-#'   antigen = rep(c(0,1), 50),
-#'   antiserum = rep(c(1,0), 50),
-#'   cluster = rep(1:5, each=20),
-#'   year = rep(2000:2009, each=10)
+#'   V1 = rnorm(100), V2 = rnorm(100), V3 = rnorm(100), V4 = rnorm(100), name = 1:100,
+#'   antigen = rep(c(0,1), 50), antiserum = rep(c(1,0), 50),
+#'   cluster = rep(1:5, each=20), year = rep(2000:2009, each=10)
 #' )
 #'
-#' # Basic interactive plot
-#' plot_3d_mapping(data, ndim=4)
-#'
+#' # Create a static plot and save to a temporary file
+#' # This example requires an interactive session and the 'rgl' package.
+#' if (interactive() && requireNamespace("rgl", quietly = TRUE)) {
+#'   temp_dir <- tempdir()
+#'   # Basic interactive plot (will open a new window)
+#'   if(interactive()) {
+#'     plot_3d_mapping(data, ndim=4)
+#'   }
+#' 
 #' # Custom configuration for temporal visualization
 #' aesthetic_config <- new_aesthetic_config(
 #'   point_size = 5,
@@ -1878,28 +1886,14 @@ plot_cluster_mapping <- function(df_coords, ndim,
 #'   background_color = "black",
 #'   show_axis = TRUE
 #' )
-#'
-#' # Create customized static plot
+#'   # Create customized static plot and save it
 #' plot_3d_mapping(data, ndim=4,
 #'   aesthetic_config = aesthetic_config,
 #'   layout_config = layout_config,
-#'   interactive = FALSE
+#'   interactive = FALSE, output_dir = temp_dir
 #' )
-#'
-#' # Dimension reduction with UMAP
-#' dim_config <- new_dim_reduction_config(
-#'   method = "umap",
-#'   n_components = 3,
-#'   umap_params = list(
-#'     n_neighbors = 20,
-#'     min_dist = 0.2
-#'   )
-#' )
-#'
-#' plot_3d_mapping(data, ndim=4,
-#'   dim_config = dim_config,
-#'   interactive = TRUE
-#' )
+#'   list.files(temp_dir)
+#'   unlink(temp_dir, recursive = TRUE)
 #' }
 #'
 #' @seealso 
@@ -1914,7 +1908,7 @@ plot_3d_mapping <- function(df, ndim,
                             aesthetic_config = new_aesthetic_config(),
                             layout_config = new_layout_config(),
                             interactive = TRUE,
-                            output_dir = NULL) {
+                            output_dir) {
                               # Check if rgl package is available
   has_rgl <- requireNamespace("rgl", quietly = TRUE)
   
@@ -1924,7 +1918,11 @@ plot_3d_mapping <- function(df, ndim,
     message("Falling back to 2D visualization.")
     
     # Create a 2D plot as fallback
-    return(plot_temporal_mapping(df, ndim, dim_config, aesthetic_config, layout_config, output_dir))
+    return(plot_temporal_mapping(df, ndim, dim_config, aesthetic_config, layout_config, output_dir = if(!missing(output_dir)) output_dir else NULL))
+  }
+
+  if (!interactive && missing(output_dir)) {
+    stop("An 'output_dir' must be provided when 'interactive' is FALSE.", call. = FALSE)
   }
 
   # Validate input data and dimensions
@@ -1951,10 +1949,14 @@ plot_3d_mapping <- function(df, ndim,
   # Set point colors
   if("cluster" %in% names(reduced_df)) {
     n_clusters <- length(unique(reduced_df$cluster))
-    if(aesthetic_config$color_palette == "c25") {
-      colors <- c25[1:n_clusters]
-    } else {
-      colors <- aesthetic_config$color_palette
+    
+    # Use the color palette directly from the aesthetic config, truncating if necessary.
+    colors <- aesthetic_config$color_palette[1:min(n_clusters, length(aesthetic_config$color_palette))]
+    
+    # Handle cases with more clusters than colors by recycling
+    if (n_clusters > length(colors)) {
+        warning("More clusters than available colors. Colors will be recycled.")
+        colors <- rep_len(colors, n_clusters)
     }
     point_colors <- colors[as.numeric(factor(reduced_df$cluster))]
   } else if("year" %in% names(reduced_df)) {
@@ -1987,9 +1989,6 @@ plot_3d_mapping <- function(df, ndim,
   
   # Save if not interactive
   if(!interactive) {
-    if (is.null(output_dir)) {
-      output_dir <- getwd()
-    }
     if (!dir.exists(output_dir)) {
       dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
     }
@@ -1999,7 +1998,7 @@ plot_3d_mapping <- function(df, ndim,
     full_path <- file.path(output_dir, filename)
     
     rgl::rgl.snapshot(filename = full_path)
-    rgl::rgl.close()
+    rgl::close3d()
     return(invisible(full_path))
   }
   
@@ -2017,9 +2016,9 @@ plot_3d_mapping <- function(df, ndim,
 #' @param plot ggplot or rgl scene object to save
 #' @param filename Output filename (with or without extension)
 #' @param layout_config Layout configuration object controlling output parameters
-#' @param output_dir Character. Directory for output files. If NULL, uses current directory
+#' @param output_dir Character. Directory for output files. This argument is required.
 #' 
-#' @return Invisible NULL
+#' @return No return value, called for side effects (saves a plot to a file).
 #' 
 #' @details
 #' Supported file formats:
@@ -2035,43 +2034,45 @@ plot_3d_mapping <- function(df, ndim,
 #' 4. Add file extension if not provided
 #'
 #' @examples
-#' \dontrun{
-#' # Create sample plot
+#' # The sole purpose of save_plot is to write a file, so its example must demonstrate this. 
+#' # For CRAN tests we wrap the example in \donttest{} to avoid writing files.
+#' \donttest{
+#' # Create a temporary directory for saving all plots
+#' temp_dir <- tempdir()
+#' 
+#' # --- Example 1: Basic ggplot save ---
+#' # Create sample data with 3 dimensions to support both 2D and 3D plots
 #' data <- data.frame(
-#'   V1 = rnorm(100),
-#'   V2 = rnorm(100),
-#'   antigen = rep(c(0,1), 50),
-#'   antiserum = rep(c(1,0), 50),
-#'   year = rep(2000:2009, each=10)
+#'   V1 = rnorm(10), V2 = rnorm(10), V3 = rnorm(10), name=1:10,
+#'   antigen = rep(c(0,1), 5), antiserum = rep(c(1,0), 5),
+#'   year = 2000:2009
 #' )
 #' p <- plot_temporal_mapping(data, ndim=2)
+#' save_plot(p, "temporal_plot.png", output_dir = temp_dir)
 #'
-#' # Basic save
-#' save_plot(p, "temporal_plot.png")
-#'
-#' # Save with custom layout
+#' # --- Example 2: Save with custom layout ---
 #' layout_config <- new_layout_config(
 #'   width = 12,
 #'   height = 8,
 #'   dpi = 600,
 #'   save_format = "pdf"
 #' )
-#'
-#' save_plot(p, "high_res_plot", layout_config)
-#'
-#' # Save 3D plot
-#' p3d <- plot_3d_mapping(data, ndim=3, interactive=FALSE)
-#' save_plot(p3d, "3d_plot.png", layout_config)
+#' save_plot(p, "high_res_plot.pdf", layout_config, output_dir = temp_dir)
+#' 
+#' # --- Verify files and clean up ---
+#' list.files(temp_dir)
+#' unlink(temp_dir, recursive = TRUE)
 #' }
+#' 
 #' @importFrom tools file_ext
 #' @importFrom ggplot2 ggsave
 #' @export
 save_plot <- function(plot, filename, layout_config = new_layout_config(),
-                      output_dir = NULL) {
-  # Handle output directory
-  if (is.null(output_dir)) {
-    output_dir <- getwd()
+                      output_dir) {
+  if (missing(output_dir)) {
+    stop("An 'output_dir' must be provided to save the plot.", call. = FALSE)
   }
+  
   if (!dir.exists(output_dir)) {
     dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
   }
@@ -2093,14 +2094,14 @@ save_plot <- function(plot, filename, layout_config = new_layout_config(),
   
   # Save based on plot type
   if(inherits(plot, "ggplot")) {
-    ggsave(filename = full_path,
+    ggsave_white_bg(filename = full_path,
            plot = plot,
            width = layout_config$width,
            height = layout_config$height,
            dpi = layout_config$dpi)
   } else if(inherits(plot, c("arrangement", "grob"))) {
     # For arranged plots from gridExtra
-    ggsave(filename = full_path,
+    ggsave_white_bg(filename = full_path,
            plot = plot,
            width = layout_config$width,
            height = layout_config$height,
@@ -2137,18 +2138,15 @@ save_plot <- function(plot, filename, layout_config = new_layout_config(),
 #' If tooltip_vars is NULL, the function attempts to automatically determine
 #' relevant variables from the plot's mapping.
 #'
-#' @return plotly object with interactive features
+#' @return A \code{plotly} object with interactive features.
 #'
 #' @examples
-#' \dontrun{
+#' if (interactive() && requireNamespace("plotly", quietly = TRUE)) {
 #' # Create sample data and plot
 #' data <- data.frame(
-#'   V1 = rnorm(100),
-#'   V2 = rnorm(100),
-#'   antigen = rep(c(0,1), 50),
-#'   antiserum = rep(c(1,0), 50),
-#'   year = rep(2000:2009, each=10),
-#'   cluster = rep(1:5, each=20)
+#'   V1 = rnorm(100), V2 = rnorm(100), name=1:100,
+#'   antigen = rep(c(0,1), 50), antiserum = rep(c(1,0), 50),
+#'   year = rep(2000:2009, each=10), cluster = rep(1:5, each=20)
 #' )
 #'
 #' # Create temporal plot
@@ -2195,269 +2193,6 @@ make_interactive <- function(plot, tooltip_vars = NULL) {
 }
 
 
-#' Create Combined Visualization
-#'
-#' @description
-#' Creates multiple coordinated visualizations of the same data using different 
-#' methods and arrangements. Supports combining temporal, cluster, and 3D 
-#' visualizations in flexible layouts.
-#'
-#' @param df_coords Data frame containing:
-#'        - V1, V2, ... Vn: Coordinate columns
-#'        - antigen: Binary indicator for antigen points 
-#'        - antiserum: Binary indicator for antiserum points
-#'        - cluster: (Optional) Factor or integer cluster assignments
-#'        - year: (Optional) Numeric year values for temporal coloring
-#' @param ndim Number of dimensions in input coordinates
-#' @param plot_types Vector of plot types to create ("temporal", "cluster", "3d")
-#' @param dim_config Dimension reduction configuration object
-#' @param aesthetic_config Aesthetic configuration object
-#' @param layout_config Layout configuration object
-#' @param arrange How to arrange multiple plots ("grid", "vertical", "horizontal")
-#' @param output_dir Character. Directory for output files. If NULL, uses current directory
-#' 
-#' @details
-#' This function provides a high-level interface for creating multiple coordinated
-#' views of the same data. It supports:
-#' 
-#' Plot Types:
-#' - temporal: Time-based color gradients
-#' - cluster: Cluster-based discrete colors
-#' - 3d: Three-dimensional interactive or static views (requires rgl package)
-#'
-#' Arrangement Options:
-#' - grid: Automatic square-like arrangement
-#' - vertical: Plots stacked vertically
-#' - horizontal: Plots arranged horizontally
-#'
-#' All plots share consistent:
-#' - Color schemes
-#' - Point styles
-#' - Axis scales
-#' - Theme elements
-#'
-#' Note: If "3d" is specified but the rgl package is not available, the function
-#' will skip the 3D plot and display a message.
-#' 
-#' @return Combined plot object (grid arrangement of plots)
-#'
-#' @examples
-#' \dontrun{
-#' # Create sample data
-#' set.seed(123)
-#' data <- data.frame(
-#'   V1 = rnorm(100),
-#'   V2 = rnorm(100),
-#'   V3 = rnorm(100),
-#'   V4 = rnorm(100),
-#'   antigen = rep(c(0,1), 50),
-#'   antiserum = rep(c(1,0), 50),
-#'   cluster = rep(1:5, each=20),
-#'   year = rep(2000:2009, each=10)
-#' )
-#'
-#' # Basic combined plot
-#' p1 <- plot_combined(data, ndim=4,
-#'   plot_types = c("temporal", "cluster")
-#' )
-#'
-#' # Advanced configuration
-#' dim_config <- new_dim_reduction_config(
-#'   method = "umap",
-#'   n_components = 2,
-#'   scale = TRUE,
-#'   umap_params = list(
-#'     n_neighbors = 15,
-#'     min_dist = 0.1
-#'   )
-#' )
-#'
-#' aesthetic_config <- new_aesthetic_config(
-#'   point_size = 3,
-#'   point_alpha = 0.7,
-#'   point_shapes = c(antigen = 17, antiserum = 1),
-#'   gradient_colors = list(
-#'     low = "navy",
-#'     high = "red"
-#'   ),
-#'   show_labels = TRUE,
-#'   label_size = 3
-#' )
-#'
-#' layout_config <- new_layout_config(
-#'   width = 12,
-#'   height = 8,
-#'   aspect_ratio = 1,
-#'   show_grid = TRUE,
-#'   grid_type = "major",
-#'   background_color = "white",
-#'   panel_border = TRUE
-#' )
-#'
-#' # Create comprehensive visualization
-#' p2 <- plot_combined(data, ndim=4,
-#'   plot_types = c("temporal", "cluster", "3d"),
-#'   dim_config = dim_config,
-#'   aesthetic_config = aesthetic_config,
-#'   layout_config = layout_config,
-#'   arrange = "grid"
-#' )
-#'
-#' # Save combined plot
-#' save_plot(p2, "combined_visualization.pdf")
-#'
-#' # Create interactive versions
-#' p3 <- plot_combined(data, ndim=4,
-#'   plot_types = c("temporal", "cluster"),
-#'   arrange = "horizontal"
-#' )
-#'
-#' p3_interactive <- make_interactive(p3,
-#'   tooltip_vars = c("year", "cluster", "antigen")
-#' )
-#'
-#' # Example with different layouts
-#' # Vertical arrangement
-#' p4 <- plot_combined(data, ndim=4,
-#'   plot_types = c("temporal", "cluster", "3d"),
-#'   arrange = "vertical"
-#' )
-#'
-#' # Horizontal arrangement with temporal and cluster only
-#' p5 <- plot_combined(data, ndim=4,
-#'   plot_types = c("temporal", "cluster"),
-#'   arrange = "horizontal"
-#' )
-#'
-#' # Grid arrangement with custom layout
-#' layout_config$width <- 15
-#' layout_config$height <- 15
-#' p6 <- plot_combined(data, ndim=4,
-#'   plot_types = c("temporal", "cluster", "3d"),
-#'   layout_config = layout_config,
-#'   arrange = "grid"
-#' )
-#'
-#' # Example workflow for publication-quality figures
-#' # 1. Create base visualization
-#' p7 <- plot_combined(data, ndim=4,
-#'   plot_types = c("temporal", "cluster")
-#' )
-#'
-#' # 2. Customize for publication
-#' layout_config <- new_layout_config(
-#'   width = 8,
-#'   height = 6,
-#'   dpi = 600,
-#'   save_format = "pdf",
-#'   background_color = "white",
-#'   panel_border = TRUE,
-#'   grid_type = "major"
-#' )
-#'
-#' # 3. Save high-resolution version
-#' save_plot(p7, "publication_figure.pdf", layout_config)
-#' }
-#'
-#' @seealso 
-#' \code{\link{plot_temporal_mapping}} for individual temporal plots
-#' \code{\link{plot_cluster_mapping}} for individual cluster plots
-#' \code{\link{plot_3d_mapping}} for individual 3D plots
-#' \code{\link{make_interactive}} for creating interactive versions
-#' \code{\link{save_plot}} for saving plots to files
-#' @importFrom gridExtra grid.arrange
-#' @export
-plot_combined <- function(df_coords, ndim,
-                          plot_types = c("temporal", "cluster"),
-                          dim_config = new_dim_reduction_config(),
-                          aesthetic_config = new_aesthetic_config(),
-                          layout_config = new_layout_config(),
-                          arrange = "grid",
-                          output_dir = NULL) {
-  
-  # Create requested plots
-  plots <- list()
-  
-  if("temporal" %in% plot_types) {
-    plots$temporal <- plot_temporal_mapping(df_coords, ndim, dim_config,
-                                            aesthetic_config, layout_config)
-  }
-  
-  if("cluster" %in% plot_types) {
-    plots$cluster <- plot_cluster_mapping(df_coords, ndim, dim_config,
-                                          aesthetic_config, layout_config)
-  }
-  
-  if("3d" %in% plot_types && ndim >= 3) {
-    # Check if rgl is available
-    has_rgl <- requireNamespace("rgl", quietly = TRUE)
-    
-    if (has_rgl) {
-      plots$three_d <- plot_3d_mapping(df_coords, ndim, dim_config,
-                                     aesthetic_config, layout_config,
-                                     interactive = FALSE)
-    } else {
-      message("Skipping 3D plot as rgl package is not available.")
-      message("Install rgl with: install.packages('rgl')")
-    }
-  }
-  
-  # Arrange plots
-  if(length(plots) == 1) {
-    return(plots[[1]])
-  } else {
-    if(!requireNamespace("gridExtra", quietly = TRUE)) {
-      stop("gridExtra package is required for combined plots")
-    }
-    
-    n_plots <- length(plots)
-    
-    # Calculate grid dimensions based on arrangement type
-    switch(arrange,
-           "grid" = {
-             ncol <- ceiling(sqrt(n_plots))
-             nrow <- ceiling(n_plots/ncol)
-           },
-           "vertical" = {
-             nrow <- n_plots
-             ncol <- 1
-           },
-           "horizontal" = {
-             nrow <- 1
-             ncol <- n_plots
-           },
-           stop("Invalid arrange value"))
-    
-    # Adjust layout_config dimensions for the arrangement
-    if(arrange == "vertical") {
-      plot_heights <- rep(layout_config$height/n_plots, n_plots)
-      plot_widths <- layout_config$width
-    } else if(arrange == "horizontal") {
-      plot_heights <- layout_config$height
-      plot_widths <- rep(layout_config$width/n_plots, n_plots)
-    } else { # grid
-      plot_heights <- rep(layout_config$height/nrow, nrow)
-      plot_widths <- rep(layout_config$width/ncol, ncol)
-    }
-    
-    combined <- do.call(gridExtra::grid.arrange,
-                        c(plots,
-                          list(nrow = nrow,
-                               ncol = ncol,
-                               widths = plot_widths,
-                               heights = plot_heights)))
-    
-    # Save combined plot if requested
-    if (!is.null(layout_config$save_format)) {
-      filename <- sprintf("combined_mapping_ndim_%d.%s", 
-                          ndim, layout_config$save_format)
-      save_plot(combined, filename, layout_config, output_dir)
-    }
-    
-    return(combined)
-  }
-}
-
 
 #' Create Diagnostic Plots for Multiple Chains
 #'
@@ -2467,17 +2202,25 @@ plot_combined <- function(df_coords, ndim,
 #'
 #' @param chain_files Character vector of paths to CSV files containing chain data
 #' @param mutual_size Integer number of samples to use from end of each chain
-#' @param output_file Character path for saving plot
-#' @param output_dir Character. Directory for output files. If NULL, uses current directory
+#' @param output_file Character path for saving plot. Required if `save_plot` is `TRUE`.
+#' @param output_dir Character. Directory for output files. Required if `save_plot` is `TRUE`.
 #' @param save_plot Logical. Whether to save plots to files. Default: TRUE
 #' @param width,height,res Plot dimensions and resolution for saving
-#' @return Invisible NULL, saves plot to file
+#' @return A ggplot object of the combined plots.
 #' @examples
-#' \dontrun{
-#' chain_files <- c("chain1.csv", "chain2.csv", "chain3.csv")
-#' create_diagnostic_plots(chain_files, mutual_size = 2000,
-#'   output_file = "chain_diagnostics.png")
+#' # This example uses sample data files included with the package.
+#' chain_files <- c(
+#'   system.file("extdata", "diag_chain1.csv", package = "topolow"),
+#'   system.file("extdata", "diag_chain2.csv", package = "topolow"),
+#'   system.file("extdata", "diag_chain3.csv", package = "topolow")
+#' )
+#' 
+#' # Only run the example if the files are found
+#' if (all(nzchar(chain_files))) {
+#'   # Create diagnostic plot without saving to a file
+#'   create_diagnostic_plots(chain_files, mutual_size = 2, save_plot = FALSE)
 #' }
+#' 
 #' @importFrom utils read.csv
 #' @importFrom ggplot2 ggplot aes geom_line geom_density labs theme_minimal theme element_blank element_rect ggsave
 #' @importFrom gridExtra grid.arrange
@@ -2485,9 +2228,13 @@ plot_combined <- function(df_coords, ndim,
 create_diagnostic_plots <- function(chain_files, 
                                   mutual_size = 2000,
                                   output_file = "diagnostic_plots.png",
-                                  output_dir = NULL,
+                                  output_dir,
                                   save_plot = TRUE,
                                   width = 3000, height = 3000, res = 300) {
+  
+  if (save_plot && (missing(output_dir) || missing(output_file))) {
+      stop("`output_dir` and `output_file` must be provided when `save_plot` is TRUE.", call. = FALSE)
+  }
   
   # Read chains
   chains <- lapply(chain_files, read.csv)
@@ -2517,7 +2264,7 @@ create_diagnostic_plots <- function(chain_files,
     
     # Trace plot
     plot_list[[i*2-1]] <- ggplot(trace_data, 
-      aes(x = .data$Iteration, y = .data$Value, color = .data$factor(Chain))) +
+      aes(x = .data$Iteration, y = .data$Value, color = factor(.data$Chain))) +
       geom_line(size = 0.5) +
       labs(title = paste("Trace Plot:", par_names[i]),
            x = "Iteration", y = "Value") +
@@ -2550,12 +2297,9 @@ create_diagnostic_plots <- function(chain_files,
   
   # Optionally save
   if(save_plot) {
-    if (is.null(output_dir)) {
-      output_dir <- getwd()
-    }
-    output_file <- file.path(output_dir, output_file)
+    full_output_path <- file.path(output_dir, output_file)
     
-    ggsave(output_file, combined_plot,
+    ggsave_white_bg(full_output_path, combined_plot,
            width = width/300, height = height/300, 
            dpi = res, limitsize = FALSE)
   }
@@ -2588,7 +2332,6 @@ create_diagnostic_plots <- function(chain_files,
 #' @param ... Additional arguments passed to underlying plot functions (currently not used).
 #' @return A grid of plots showing convergence metrics.
 #' @examples
-#' \dontrun{
 #' # Example with simulated data
 #' chain_data <- data.frame(
 #'   log_N = rnorm(1000, mean = 1.5, sd = 0.1),
@@ -2603,7 +2346,7 @@ create_diagnostic_plots <- function(chain_files,
 #' 
 #' # With custom parameter names
 #' plot(results, param_names = c("Dimensions (log)", "Spring constant (log)"))
-#' }
+#'
 #' @seealso \code{\link{check_gaussian_convergence}} for generating the convergence object
 #' @method plot topolow_convergence
 #' @importFrom ggplot2 ggplot aes geom_line labs theme_minimal theme element_blank element_rect
@@ -2663,6 +2406,7 @@ plot.topolow_convergence <- function(x, param_names = NULL, ...) {
 #'
 #' @param x A topolow_convergence object
 #' @param ... Additional arguments passed to print
+#' @return No return value, called for side effects (prints a summary to the console).
 #' @method print topolow_convergence
 #' @export
 print.topolow_convergence <- function(x, ...) {
@@ -2681,18 +2425,24 @@ print.topolow_convergence <- function(x, ...) {
 #' and mixing.
 #'
 #' @param x A topolow_amcs_diagnostics object
+#' @param output_dir Character. Directory for output files. Required if `save_plot` is `TRUE`.
 #' @param output_file Character path for saving plot 
+#' @param save_plot Logical. Whether to save the plot.
 #' @param width,height,res Plot dimensions and resolution
 #' @param ... Additional arguments passed to plot functions
-#' @return Invisible NULL, saves plot to file
+#' @return A ggplot object of the combined plots.
 #' @method plot topolow_amcs_diagnostics
 #' @export
 plot.topolow_amcs_diagnostics <- function(x, 
+                                        output_dir,
                                         output_file = "mc_diagnostics.png",
+                                        save_plot = FALSE,
                                         width = 3000, height = 3000, 
                                         res = 300, ...) {
   create_diagnostic_plots(x$chains, x$mutual_size, 
                          output_file = output_file,
+                         output_dir = if(!missing(output_dir)) output_dir else NULL,
+                         save_plot = save_plot,
                          width = width, height = height, 
                          res = res, ...)
 }
@@ -2701,6 +2451,7 @@ plot.topolow_amcs_diagnostics <- function(x,
 #'
 #' @param x A topolow_amcs_diagnostics object
 #' @param ... Additional arguments passed to print
+#' @return No return value, called for side effects (prints a summary to the console).
 #' @method print topolow_amcs_diagnostics
 #' @export
 print.topolow_amcs_diagnostics <- function(x, ...) {
@@ -2719,19 +2470,27 @@ print.topolow_amcs_diagnostics <- function(x, ...) {
 #' availability patterns and connectivity.
 #'
 #' @param network_results List output from analyze_network_structure()
-#' @param scenario_name Character string for output file naming
+#' @param output_file Character. Full path (including filename and extension) where the plot will be saved.
+#'        If NULL, the plot is not saved.
 #' @param aesthetic_config Plot aesthetic configuration object
 #' @param layout_config Plot layout configuration object
-#' @return ggplot object
+#' @return A \code{ggplot} object representing the network graph.
 #' @examples
-#' \dontrun{
-#' net_analysis <- analyze_network_structure(dist_mat)
-#' p <- plot_network_structure(net_analysis, "scenario1")
-#' }
+#' # Create sample network data
+#' adj_mat <- matrix(sample(c(0,1), 25, replace=TRUE), 5, 5)
+#' # Add row and column names, which are required by the analysis function
+#' rownames(adj_mat) <- colnames(adj_mat) <- paste0("Point", 1:5)
+#' # Ensure the matrix is symmetric for the analysis
+#' adj_mat[lower.tri(adj_mat)] <- t(adj_mat)[lower.tri(adj_mat)]
+#' diag(adj_mat) <- 0
+#' net_analysis <- analyze_network_structure(adj_mat)
+#' 
+#' # Create plot and return the plot object
+#' plot_network_structure(net_analysis)
 #' @importFrom igraph graph_from_adjacency_matrix layout_with_fr get.edgelist
 #' @importFrom ggplot2 ggplot geom_segment geom_point coord_fixed theme_void theme element_text labs ggsave
 #' @export
-plot_network_structure <- function(network_results, scenario_name,
+plot_network_structure <- function(network_results, output_file = NULL,
                                  aesthetic_config = new_aesthetic_config(),
                                  layout_config = new_layout_config()) {
   # Create graph layout
@@ -2800,20 +2559,16 @@ plot_network_structure <- function(network_results, scenario_name,
       size = "Connections"
     )
   
-  # Save plot
-  filename <- sprintf(
-    "%s_network.%s",
-    scenario_name,
-    layout_config$save_format
-  )
-  
-  ggsave(
-    filename = filename,
+  # Save plot if a file path is provided
+  if (!is.null(output_file)) {
+  ggsave_white_bg(
+        filename = output_file,
     plot = plot,
     width = layout_config$width,
     height = layout_config$height,
     dpi = layout_config$dpi
   )
+  }
   
   return(plot)
 }
@@ -2827,7 +2582,8 @@ plot_network_structure <- function(network_results, scenario_name,
 #' structure in the measurements.
 #'
 #' @param heatmap_data List output from prepare_heatmap_data()
-#' @param scenario_name Character string for output file naming
+#' @param output_file Character. Full path (including filename and extension) where the plot will be saved.
+#'        If NULL, the plot is not saved.
 #' @param aesthetic_config Plot aesthetic configuration object
 #' @param layout_config Plot layout configuration object
 #'
@@ -2837,27 +2593,16 @@ plot_network_structure <- function(network_results, scenario_name,
 #'   - Title showing matrix completeness percentage
 #'
 #' @examples
-#' \dontrun{
-#' # Basic heatmap
+#' # Create sample heatmap data
+#' dist_mat <- matrix(rnorm(100), 10, 10)
 #' hmap_data <- prepare_heatmap_data(dist_mat)
-#' p <- plot_distance_heatmap(hmap_data, "scenario1")
+#' 
+#' # Create and display the plot object
+#' plot_distance_heatmap(hmap_data)
 #'
-#' # Heatmap with clustering
-#' hmap_data <- prepare_heatmap_data(dist_mat, cluster_rows = TRUE)
-#' p2 <- plot_distance_heatmap(hmap_data, "scenario1")
-#'
-#' # Custom configuration
-#' aesthetic_config <- new_aesthetic_config(
-#'   gradient_colors = list(low = "navy", high = "red")
-#' )
-#' p3 <- plot_distance_heatmap(hmap_data, "scenario1",
-#'                            aesthetic_config = aesthetic_config)
-#' }
-#'
-#' @importFrom reshape2 melt
 #' @importFrom ggplot2 ggplot aes geom_tile scale_fill_gradient theme_minimal theme element_text labs ggsave
 #' @export
-plot_distance_heatmap <- function(heatmap_data, scenario_name,
+plot_distance_heatmap <- function(heatmap_data, output_file = NULL,
                                   aesthetic_config = new_aesthetic_config(),
                                   layout_config = new_layout_config()) {
   
@@ -2909,15 +2654,9 @@ plot_distance_heatmap <- function(heatmap_data, scenario_name,
     )
   
   # Save plot if required
-  if (!is.null(scenario_name)) {
-    filename <- sprintf(
-      "%s_heatmap.%s",
-      scenario_name,
-      layout_config$save_format
-    )
-    
-    ggsave(
-      filename = filename,
+  if (!is.null(output_file)) {
+    ggsave_white_bg(
+        filename = output_file,
       plot = plot,
       width = layout_config$width,
       height = layout_config$height,
@@ -2937,31 +2676,37 @@ plot_distance_heatmap <- function(heatmap_data, scenario_name,
 #'
 #' @param distance_matrix Matrix of true distances
 #' @param p_dist_mat Matrix of predicted/fitted distances
-#' @param scenario_name Character string for output file naming
+#' @param scenario_name Character string for output file naming. Used if `save_plot` is TRUE.
 #' @param ndim Integer number of dimensions used in the model
 #' @param confidence_level Numeric confidence level for prediction intervals (default: 0.95)
 #' @param save_plot Logical. Whether to save plots to files. Default: TRUE
-#' @param output_dir Character. Directory for output files. If NULL, uses current directory
-#' @return Invisibly returns NULL, creates two plot files:
-#'   - \{scenario_name\}_prediction_scatter_dim_\{ndim\}.png
-#'   - \{scenario_name\}_residuals_vs_fitted_dim_\{ndim\}.png
+#' @param output_dir Character. Directory for output files. Required if `save_plot` is `TRUE`.
+#' @return A list containing the `scatter_plot` and `residuals_plot` ggplot objects.
 #' @examples
-#' \dontrun{
-#' # Create scatter and residual plots
-#' scatterplot_fitted_vs_true(truth_matrix, predicted_matrix, 
-#'                           scenario_name = "example",
-#'                           ndim = 5)
-#' }
+#' # Create sample data
+#' true_dist <- matrix(runif(100, 1, 10), 10, 10)
+#' pred_dist <- true_dist + rnorm(100)
+#' 
+#' # Create plots without saving
+#' plots <- scatterplot_fitted_vs_true(true_dist, pred_dist, save_plot = FALSE)
+#' 
+#' # You can then display a plot, for instance:
+#' # plots$scatter_plot
+#' 
 #' @importFrom stats na.omit cor lm coef
 #' @importFrom ggplot2 ggplot aes geom_point geom_abline geom_smooth geom_hline scale_y_continuous ggsave
 #' @importFrom ggplot2 annotate labs theme_classic theme element_text element_blank element_rect scale_x_continuous 
 #' @export
-# In visualization.R
 scatterplot_fitted_vs_true <- function(distance_matrix, p_dist_mat, 
-                                       scenario_name = NA, ndim = NA,
-                                       save_plot = TRUE,
-                                       output_dir = NULL,
+                                       scenario_name, ndim,
+                                       save_plot = FALSE,
+                                       output_dir,
                                        confidence_level = 0.95) {
+  
+  if (save_plot && (missing(output_dir) || missing(scenario_name) || missing(ndim))) {
+    stop("`output_dir`, `scenario_name`, and `ndim` must be provided when `save_plot` is TRUE.", call. = FALSE)
+  }
+  
   # Create evaluation data frame with simple numeric conversion to remove NA and thresholded values
   evaldf <- data.frame(
     distance_matrix = suppressWarnings(as.numeric(as.vector(distance_matrix))),
@@ -3038,22 +2783,18 @@ scatterplot_fitted_vs_true <- function(distance_matrix, p_dist_mat,
              color = "blue", size = 3)
   
   # Save plots if requested
-  if(save_plot && !is.na(scenario_name) && !is.na(ndim)) {
-    if (is.null(output_dir)) {
-      output_dir <- getwd()
-    }
-    
+  if(save_plot) {
     # Save scatter plot
     scatter_file <- file.path(output_dir,
                               sprintf("%s_prediction_scatter_dim_%d.png", 
                                       scenario_name, ndim))
-    ggsave(scatter_file, scatter_plot, width = 8, height = 8, dpi = 300)
+    ggsave_white_bg(scatter_file, scatter_plot, width = 8, height = 8, dpi = 300)
     
     # Save residuals plot
     residuals_file <- file.path(output_dir,
                                 sprintf("%s_residuals_vs_fitted_dim_%d.png",
                                         scenario_name, ndim))
-    ggsave(residuals_file, residuals_plot, width = 8, height = 8, dpi = 300)
+    ggsave_white_bg(residuals_file, residuals_plot, width = 8, height = 8, dpi = 300)
   }
   
   # Return both plots

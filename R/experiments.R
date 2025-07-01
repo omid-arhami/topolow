@@ -1,13 +1,11 @@
 # Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
-# License: free of charge access granted to any academic researcher to use this software for non-commercial, academic research purposes **only**.  Nobody may modify, distribute, sublicense, or publicly share the Software or any derivative works, until the paper is published by the original authors.  The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.  In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the Software or the use or other dealings in the Software.
-
 # R/experiments.R
 
 #' Experiment Running Functions
 #' 
 #' @description
 #' Functions for running parameter optimization, comparison experiments,
-#' and other computational experiments either locally or via SLURM.
+#' and other computational experiments.
 #'
 #' @keywords internal
 "_PACKAGE"
@@ -23,14 +21,15 @@
 #' @param no_noise_truth Optional matrix of noise-free distances. If provided, used as truth.
 #' @param n_folds Integer number of folds to create
 #' @param random_seed Integer random seed for reproducibility
-#' @return List of lists, each containing:
-#'   \item{truth}{Truth matrix for this fold} 
-#'   \item{train}{Training matrix with masked validation entries}
+#' @return A list of length `n_folds`. Each element is a list containing two matrices:
+#'   \item{truth}{The truth matrix for that fold.} 
+#'   \item{train}{The training matrix with some values replaced by `NA` for validation.}
 #' @examples
-#' \dontrun{
+#' # Create a sample distance matrix
+#' dist_matrix <- matrix(runif(100), 10, 10)
+#' diag(dist_matrix) <- 0
 #' # Create 5-fold CV splits
 #' folds <- create_cv_folds(dist_matrix, n_folds = 5, random_seed = 123)
-#' }
 #' @export
 create_cv_folds <- function(truth_matrix, no_noise_truth = NULL, 
                           n_folds = 10, random_seed = NULL) {
@@ -116,48 +115,69 @@ create_cv_folds <- function(truth_matrix, no_noise_truth = NULL,
 }
 
 
-
-#' Create and Optimize RACMACS Map
+#' Create and Optimize a RACMACS Map
 #'
 #' @description
-#' Creates and optimizes an antigenic map using RACMACS and keeps the best optimization. 
-#' This function wraps RACMACS functionality to provide a simplified interface for
-#' map creation and optimization.
+#' Creates and optimizes an antigenic map using the RACMACS package and keeps the 
+#' best optimization result. This function wraps common RACMACS functionality to 
+#' provide a simplified interface for map creation and optimization.
 #'
-#' @param titer_table Matrix or data frame of titer measurements
-#' @param dim Integer number of dimensions for the map (default: 2)
-#' @param optimization_number Integer number of optimization runs (default: 400)
-#' @param scenario_name Character string for output file naming
-#' @param num_cores Integer number of cores to use for optimization (default: 1)
-#' @return RACMACS map object containing optimized coordinates
+#' @param titer_table Matrix or data frame of titer measurements.
+#' @param dim Integer number of dimensions for the map (default: 2).
+#' @param optimization_number Integer number of optimization runs (default: 400).
+#' @param output_file Character. An optional, full path (including filename and 
+#'        extension) where the map coordinates will be saved as a CSV file. 
+#'        If NULL (the default), the coordinates are not saved to a file.
+#' @param num_cores Integer number of cores to use for parallel optimization 
+#'        (default: 1).
+#'
+#' @return A `racmap` object from the `Racmacs` package, containing the optimized coordinates and other map data.
+#'
 #' @examples
-#' \dontrun{
-#' # Create and optimize map from titer data
-#' map <- create_and_optimize_RACMACS_map(titer_table)
+#' # Create a dummy titer table for the example
+#' ag_names <- paste("V", 1:5)
+#' sr_names <- paste("S", 1:4)
+#' titer_table <- matrix(
+#'   sample(c(10, 20, 40, 80, 160, 320, 640, 1280, 2560, 5120), 20, replace = TRUE),
+#'   nrow = length(ag_names), ncol = length(sr_names),
+#'   dimnames = list(ag_names, sr_names)
+#' )
 #' 
-#' # Create map with specific settings
-#' map <- create_and_optimize_RACMACS_map(
+#' # Create and optimize map without saving coordinates
+#' map_obj <- create_and_optimize_RACMACS_map(titer_table)
+#' 
+#' # Create map and save coordinates to a temporary file.
+#' # tempfile() creates a path in the session's temporary directory.
+#' temp_coords_file <- tempfile(fileext = ".csv")
+#' map_obj_saved <- create_and_optimize_RACMACS_map(
 #'   titer_table, 
 #'   dim = 3,
-#'   optimization_number = 1000,
-#'   scenario_name = "example_map"
+#'   optimization_number = 100,
+#'   output_file = temp_coords_file
 #' )
-#' }
+#' 
+#' # Check that the file was created
+#' file.exists(temp_coords_file)
+#' 
+#' # Clean up the temporary file
+#' unlink(temp_coords_file)
+#'
 #' @importFrom Racmacs acmap optimizeMap keepBestOptimization save.coords
+#' @importFrom tools file_ext
 #' @export
 create_and_optimize_RACMACS_map <- function(titer_table, 
                                           dim = 2,
                                           optimization_number = 400,
-                                          scenario_name,
-                                          num_cores=1) {
+                                          output_file = NULL,
+                                          num_cores = 1) {
   # Set number of cores for optimization
   options(RacOptimizer.num_cores = num_cores)
   
-  # Create map object
-  map <- acmap(titer_table = titer_table)
+  # Create map object from the titer table
+  map <- Racmacs::acmap(titer_table = titer_table)
   
-  # Optimize map
-  map <- optimizeMap(
+  # Optimize the map
+  map <- Racmacs::optimizeMap(
     options = list(ignore_disconnected = TRUE),
     map = map,
     number_of_dimensions = dim,
@@ -165,16 +185,37 @@ create_and_optimize_RACMACS_map <- function(titer_table,
     minimum_column_basis = "none"
   )
   
-  # Keep best optimization
-  map <- keepBestOptimization(map)
+  # Keep only the best optimization run
+  map <- Racmacs::keepBestOptimization(map)
   
-  # Save coordinates if scenario name provided
-  if(!missing(scenario_name)) {
-    save.coords(map, 
-               filename = paste0(scenario_name, "_RACMACS_coords.csv"),
-               optimization_number = 1,
-               antigens = TRUE, 
-               sera = TRUE)
+  # Save coordinates if an output file path is provided
+  if (!is.null(output_file)) {
+    # Validate that output_file is a single character string
+    if (!is.character(output_file) || length(output_file) != 1) {
+      stop("'output_file' must be a single character string specifying the path.", call. = FALSE)
+    }
+    
+    # Check for a valid file extension
+    if (tools::file_ext(output_file) != "csv") {
+        warning("The 'output_file' should ideally have a .csv extension.")
+    }
+
+    # Extract the directory from the full path
+    output_dir <- dirname(output_file)
+    
+    # Create the output directory if it does not exist
+    if (!dir.exists(output_dir)) {
+        dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+    }
+    
+    # Save the coordinates of the map to the specified file
+    Racmacs::save.coords(
+        map, 
+        filename = output_file,
+        optimization_number = 1,
+        antigens = TRUE, 
+        sera = TRUE
+    )
   }
   
   return(map)
@@ -187,36 +228,41 @@ create_and_optimize_RACMACS_map <- function(titer_table,
 #' @description
 #' Creates synthetic distance matrices with controlled levels of missingness and noise
 #' for testing and validating mapping algorithms. Generates multiple datasets with 
-#' different dimensionalities and missingness patterns.
+#' different dimensionalities and missingness patterns. If `output_dir` is provided,
+#' the generated datasets are saved as RDS files.
 #'
 #' @param n_dims_list Numeric vector of dimensions to generate data for
 #' @param seeds Integer vector of random seeds (same length as n_dims_list)
 #' @param n_points Integer number of points to generate
 #' @param missingness_levels Named list of missingness percentages (default: list(S=0.67, M=0.77, L=0.87))
-#' @param output_dir Character path to directory for saving outputs (optional)
+#' @param output_dir Character path to directory for saving outputs. If NULL (the default), no files are saved.
 #' @param prefix Character string to prefix output files (optional)
-#' @param save_plots Logical whether to save network visualization plots
-#' @return List containing:
-#'   \item{matrices}{List of generated distance matrices}
-#'   \item{panels}{List of generated assay panels}
-#'   \item{metadata}{Data frame with generation parameters}
+#' @param save_plots Logical whether to save network visualization plots. Requires `output_dir` to be set.
+#' @return A list containing the generated synthetic data and metadata:
+#'   \item{matrices}{A list of generated symmetric distance matrices for each dimension.}
+#'   \item{panels}{A list of generated assay panels (non-symmetric matrices) for each dimension.}
+#'   \item{metadata}{A `data.frame` with the generation parameters for each dataset.}
 #' @examples
-#' \dontrun{
-#' # Generate datasets with different dimensions
+#' # Generate datasets without saving to disk
 #' results <- generate_synthetic_datasets(
-#'   n_dims_list = c(2, 5, 10),
-#'   seeds = c(123, 456, 789),
-#'   n_points = 250,
-#'   output_dir = "sim_data"
-#' )
-#' 
-#' # Custom missingness levels
-#' results <- generate_synthetic_datasets(
-#'   n_dims_list = c(2, 5),
+#'   n_dims_list = c(2, 3),
 #'   seeds = c(123, 456),
-#'   n_points = 200,
-#'   missingness_levels = list(low=0.5, high=0.8)
+#'   n_points = 50
 #' )
+#' \donttest{
+#' # Generate datasets and save to a temporary directory
+#' temp_out_dir <- tempdir()
+#' results_saved <- generate_synthetic_datasets(
+#'   n_dims_list = c(2),
+#'   seeds = c(123),
+#'   n_points = 10,
+#'   missingness_levels = list(low=0.5, high=0.8),
+#'   output_dir = temp_out_dir,
+#'   save_plots = TRUE
+#' )
+#' list.files(temp_out_dir)
+#' # Clean up the directory
+#' unlink(temp_out_dir, recursive = TRUE)
 #' }
 #' @importFrom stats dist
 #' @export
@@ -229,6 +275,10 @@ generate_synthetic_datasets <- function(n_dims_list, seeds, n_points,
   # Input validation
   if (length(n_dims_list) != length(seeds)) {
     stop("n_dims_list and seeds must have the same length")
+  }
+  
+  if (save_plots && is.null(output_dir)) {
+    stop("An 'output_dir' must be provided when 'save_plots' is TRUE.", call. = FALSE)
   }
   
   if (!is.null(output_dir)) {
@@ -371,8 +421,8 @@ generate_synthetic_datasets <- function(n_dims_list, seeds, n_points,
         for (level_name in names(missingness_levels)) {
           mat <- matrices[[paste0(level_name, "_missing")]]
           net <- analyze_network_structure(mat)
-          plot_network_structure(net, 
-            paste0(base_name, "_network_", level_name))
+          plot_file_path <- paste0(base_name, "_network_", level_name, ".png")
+          plot_network_structure(net, output_file = plot_file_path)
         }
       }
     }

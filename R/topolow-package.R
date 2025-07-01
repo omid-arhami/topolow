@@ -21,7 +21,7 @@
 #'   \item Interactive visualization of antigenic maps
 #'   \item Cross-validation and error analysis
 #'   \item Network structure analysis
-#'   \item Support for parallel processing and high-performance computing environments
+#'   \item Support for parallel processing
 #' }
 #'
 #' @section Main Functions:
@@ -44,14 +44,16 @@
 #' The following subdirectories may be created:
 #' \itemize{
 #'   \item model_parameters/: Contains optimization results and parameter evaluations
-#'   \item init_param_optimization/: Contains SLURM job files and outputs when using SLURM
+#'   \item init_param_optimization/: Contains files and outputs when using initial_parameter_optimization
 #' }
 #'
 #' @section Citation:
 #' If you use this package, please cite:
-#' Arhami O, Rohani P (2025).
-#' Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assay results.
-#' \emph{bioRxiv}. \doi{10.1101/2025.02.09.637307}.
+#' Omid Arhami, Pejman Rohani, 
+#' Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assays, 
+#' Bioinformatics, 2025;, btaf372,
+#' https://doi.org/10.1093/bioinformatics/btaf372
+#' \doi{10.1093/bioinformatics/btaf372}.
 #'
 #' @keywords internal
 "_PACKAGE"

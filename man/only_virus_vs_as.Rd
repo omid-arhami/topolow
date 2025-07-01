@@ -12,7 +12,7 @@ only_virus_vs_as(dist_matrix, selected_names)
 \item{selected_names}{Names of selected reference points}
 }
 \value{
-Filtered distance matrix
+A \code{matrix} of the same dimensions as the input, but with non-virus-vs-antiserum distances set to \code{NA}.
 }
 \description{
 Filter matrix to only virus vs antiserum distances

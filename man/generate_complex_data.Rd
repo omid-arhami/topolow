@@ -24,7 +24,7 @@ generate_complex_data(
 \item{fig_name}{Character path to save visualization (optional)}
 }
 \value{
-Data frame with generated coordinates in n_dim dimensions. Column names
+A \code{data.frame} with \code{n_points} rows and \code{n_dim} columns. Column names
 are "Dim1" through "DimN" where N is n_dim.
 }
 \description{
@@ -43,14 +43,11 @@ low density areas. The data is useful for testing dimensionality reduction and
 visualization methods.
 }
 \examples{
-\dontrun{
 # Generate basic dataset
 data <- generate_complex_data(n_points = 500, n_dim = 10, 
                              n_clusters = 4, cluster_spread = 1)
                              
-# Generate and visualize dataset
-data <- generate_complex_data(n_points = 500, n_dim = 10,
-                             n_clusters = 4, cluster_spread = 1,
-                             fig_name = "cluster_viz.png")
-}
+# The function returns a data frame, which can be inspected
+head(data)
+
 }
