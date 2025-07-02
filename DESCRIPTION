@@ -23,7 +23,7 @@ Description: An implementation of the TopoLow algorithm, a novel, physics-inspir
     transitions and potential lineage replacements.
     * Broad Applicability: Analyzes data from various pathogens, including influenza, HIV, and Dengue viruses. 
     It can be applied to any continuous and relational phenotype under directional selection pressure.
-    Methods are described in Arhami and Rohani (2025) <https://doi.org/10.1093/bioinformatics/btaf372>.
+    Methods are described in Arhami and Rohani (2025) <doi:10.1093/bioinformatics/btaf372>.
 License: BSD_3_clause + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

@@ -1010,14 +1010,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
     top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
     cat(sprintf("Showing only arrows with magnitude >= %.3f (figure unit)\n", layout_config$arrow_plot_threshold))
     
-    # Calculate the unit vectors for direction
-    top_vel$v1_unit <- top_vel$v1 / top_vel$mag
-    top_vel$v2_unit <- top_vel$v2 / top_vel$mag
-    
-    # Calculate point radius in data units (approximation)
-    # Convert point size to data units
-    point_radius <- aesthetic_config$point_size * 1.7 / 72 * 2.54  # assuming point size is in points, convert to cm
-    
+
     # -- overlay top-velocity points with filled shape + black outline --
     p <- p +
       geom_point(
@@ -1031,16 +1024,15 @@ plot_temporal_mapping <- function(df_coords, ndim,
         alpha       = aesthetic_config$point_alpha
       )
     
-    # add arrow layer with adjusted endpoints
+    # add arrow layer
     p <- p +
       geom_segment(
         data      = top_vel,
         inherit.aes = FALSE,
         aes(x    = .data$V1 - .data$v1,
             y    = .data$V2 - .data$v2,
-            # Adjust endpoints to stop at point border
-            xend = .data$V1 - .data$v1_unit * point_radius,
-            yend = .data$V2 - .data$v2_unit * point_radius),
+            xend = .data$V1,
+            yend = .data$V2),
         arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm")),
         alpha = aesthetic_config$arrow_alpha
       )
@@ -1649,17 +1641,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
     
     top_vel$cluster <- factor(top_vel$cluster, levels = cluster_levels)
     
-    # Calculate the unit vectors for direction
-    top_vel$v1_unit <- top_vel$v1 / top_vel$mag
-    top_vel$v2_unit <- top_vel$v2 / top_vel$mag
-    
     # mark `top_vel` rows in reduced_df as arrows
     reduced_df$is_arrow[match(top_vel$name, reduced_df$name)] <- TRUE
-    
-    # Calculate point radius in data units (approximation)
-    # Convert point size to data units
-    point_radius <- aesthetic_config$point_size * 1.7 / 72 * 2.54  # assuming point size is in points, convert to cm
-    
     
     # -- overlay top-velocity points with filled shape + black outline --
     p <- p +
@@ -1674,16 +1657,15 @@ plot_cluster_mapping <- function(df_coords, ndim,
         alpha       = aesthetic_config$point_alpha
       )
     
-    # add arrow layer with adjusted endpoints
+    # add arrow layer
     p <- p +
       geom_segment(
         data      = top_vel,
         inherit.aes = FALSE,
         aes(x = .data$V1 - .data$v1,
             y = .data$V2 - .data$v2,
-            # Adjust endpoints to stop at point border
-            xend = .data$V1 - .data$v1_unit * point_radius,
-            yend = .data$V2 - .data$v2_unit * point_radius),
+            xend = .data$V1,
+            yend = .data$V2),
         arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm")),
         alpha = aesthetic_config$arrow_alpha
       )
