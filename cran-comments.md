@@ -6,7 +6,8 @@ This is a revised submission of the `topolow` package. Thank you for your carefu
 
 ### Summary of Changes
 
-In response to the previous review, we have made the following changes:
+The one missing `\value` tag in print.parameter_sensitivity.Rd was fixed. 
+Please see the full response to the previous review below, where we have made the following changes:
 
 * **Documentation:** All exported methods now include `\value` documentation describing the output's class, structure, and meaning.
 * **Examples:** Examples for unexported functions have been omitted, and `\dontrun{}` wrappers have been removed5. Slower examples are now wrapped in `\donttest{}` as appropriate.
