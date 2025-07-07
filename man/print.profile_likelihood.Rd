@@ -12,7 +12,7 @@
 \item{...}{Additional arguments passed to print}
 }
 \value{
-The original \code{profile_likelihood} object (invisibly).
+The original \code{profile_likelihood} object (invisibly). Called for side effects (prints a summary to the console).
 }
 \description{
 Print Method for Profile Likelihood Objects

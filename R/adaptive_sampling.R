@@ -1748,7 +1748,8 @@ plot.profile_likelihood <- function(x, LL_max, width = 3.5, height = 3.5,
 #' @param x Profile likelihood object
 #' @param ... Additional arguments passed to print
 #' @method print profile_likelihood
-#' @return The original `profile_likelihood` object (invisibly).
+#' @return The original `profile_likelihood` object (invisibly). Called for side effects (prints a summary to the console).
+
 #' @export
 print.profile_likelihood <- function(x, ...) {
   cat("Profile Likelihood Analysis\n")
@@ -2009,6 +2010,7 @@ plot.parameter_sensitivity <- function(x, width = 3.5, height = 3.5,
 #' @param x A parameter_sensitivity object
 #' @param ... Additional arguments passed to print
 #' @method print parameter_sensitivity
+#' @return No return value, called for side effects (prints a summary to the console).
 #' @export
 print.parameter_sensitivity <- function(x, ...) {
   cat("Parameter Sensitivity Analysis\n")
