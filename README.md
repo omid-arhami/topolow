@@ -15,6 +15,14 @@
 
 ## Installation
 
+### From CRAN (inside R)
+
+Topolow is also published on R's own library manager, CRAN. <https://cran.r-project.org/package=topolow>
+
+``` r
+install.packages("topolow")
+``` 
+
 ### From GitHub
 
 You can install the development version of topolow directly from GitHub:
