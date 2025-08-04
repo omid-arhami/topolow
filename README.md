@@ -50,7 +50,7 @@ Note for macOS users: The `rgl` package requires XQuartz. Download from https://
 
 ## Quick Start
 
-### Simple Example: Embedding 4 Points
+### Simple Example: Embedding 5 Points
 
 Let's embed 4 points with known coordinates to validate the algorithm:
 
