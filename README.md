@@ -79,9 +79,9 @@ result <- euclidean_embedding(
   dissimilarity_matrix = dist_mat,
   ndim = 2,
   mapping_max_iter = 1000,
-  k0 = 7, 
-  cooling_rate = 0.01, 
-  c_repulsion = 0.1,
+  k0 = 5, 
+  cooling_rate = 0.03, 
+  c_repulsion = 0.7,
   verbose = TRUE
 )
 
@@ -105,7 +105,7 @@ result_auto <- Euclidify(
   ndim_range = c(2, 4),
   output_dir = tempdir(),  # Required for optimization files
   n_initial_samples = 50,  # Reduced for quick demo
-  n_adaptive_samples = 100,
+  n_adaptive_samples = 200,
   folds = 4,
   verbose = "standard"
 )
@@ -376,7 +376,7 @@ cat("- Noise level: 5% coefficient of variation\n")
 cat("- Within-cluster connectivity preserved for realism\n")
 
 cat("=== Check the connectivity of the data graph ===\n")
-# Network structure analysis for sparse data insights
+# Network structure analysis to make sure there are no separate islands in the data
 network_analysis <- analyze_network_structure(sparse_matrix)
 network_plot <- plot_network_structure(network_analysis)
 print(network_plot)
@@ -394,6 +394,7 @@ sparse_result <- Euclidify(
   folds = 20,
   verbose = "standard"
 )
+print(sparse_result$optimal_params)
 
 # Evaluate embedding quality by visualizing the results 
 # and coloring by original cluster for validation

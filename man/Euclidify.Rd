@@ -8,8 +8,8 @@ Euclidify(
   dissimilarity_matrix,
   output_dir,
   ndim_range = c(2, 10),
-  k0_range = c(0.1, 15),
-  cooling_rate_range = c(1e-04, 0.07),
+  k0_range = c(0.1, 20),
+  cooling_rate_range = c(1e-04, 0.1),
   c_repulsion_range = c(1e-04, 1),
   n_initial_samples = 50,
   n_adaptive_samples = 150,
@@ -69,7 +69,7 @@ A list containing:
 \item{positions}{Matrix of optimized coordinates}
 \item{est_distances}{Matrix of estimated distances}
 \item{mae}{Mean absolute error}
-\item{optimal_params}{List of optimal parameters found}
+\item{optimal_params}{List of optimal parameters found, including cross-validation MAE during optimization}
 \item{optimization_summary}{Summary of the optimization process}
 \item{data_characteristics}{Summary of input data characteristics}
 \item{runtime}{Total runtime in seconds}

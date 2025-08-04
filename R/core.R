@@ -285,7 +285,7 @@ euclidean_embedding <- function(dissimilarity_matrix,
         new_order <- order(avg_dissim)
 
         # Apply ordering to the original matrix (with NAs and thresholds intact)
-        #dissimilarity_matrix <- dissimilarity_matrix[new_order, new_order]
+        dissimilarity_matrix <- dissimilarity_matrix[new_order, new_order]
         if (verbose) cat("Matrix reordered for spectral pattern (largest values in corners)\n")
       } else {
         if (verbose) cat("Insufficient data for meaningful spectral ordering\n")
@@ -764,7 +764,7 @@ summary.topolow <- function(object, ...) {
 #'   \item{positions}{Matrix of optimized coordinates}
 #'   \item{est_distances}{Matrix of estimated distances}
 #'   \item{mae}{Mean absolute error}
-#'   \item{optimal_params}{List of optimal parameters found}
+#'   \item{optimal_params}{List of optimal parameters found, including cross-validation MAE during optimization}
 #'   \item{optimization_summary}{Summary of the optimization process}
 #'   \item{data_characteristics}{Summary of input data characteristics}
 #'   \item{runtime}{Total runtime in seconds}
@@ -845,8 +845,8 @@ summary.topolow <- function(object, ...) {
 Euclidify <- function(dissimilarity_matrix,
                       output_dir,
                       ndim_range = c(2, 10),
-                      k0_range = c(0.1, 15),
-                      cooling_rate_range = c(0.0001, 0.07),
+                      k0_range = c(0.1, 20),
+                      cooling_rate_range = c(0.0001, 0.1),
                       c_repulsion_range = c(0.0001, 1),
                       n_initial_samples = 50,
                       n_adaptive_samples = 150,
@@ -1078,7 +1078,7 @@ Euclidify <- function(dissimilarity_matrix,
               k0 = exp(final_params$log_k0[best_idx]),
               cooling_rate = exp(final_params$log_cooling_rate[best_idx]),
               c_repulsion = exp(final_params$log_c_repulsion[best_idx]),
-              mae = final_params$Holdout_MAE[best_idx],
+              CV_MAE = final_params$Holdout_MAE[best_idx],
               nll = final_params$NLL[best_idx]
             )
             
@@ -1098,7 +1098,7 @@ Euclidify <- function(dissimilarity_matrix,
                 cat("    - k0:", round(optimal_params$k0, 4), "\n")
                 cat("    - cooling_rate:", round(optimal_params$cooling_rate, 6), "\n")
                 cat("    - c_repulsion:", round(optimal_params$c_repulsion, 6), "\n")
-                cat("    - Cross-validation MAE:", round(optimal_params$mae, 4), "\n")
+                cat("    - Cross-validation MAE:", round(optimal_params$CV_MAE, 4), "\n")
                 cat("  We recommend saving these parameters to set better ranges and \n")
                 cat("  reduced iterations in future runs. It saves time.\n")
 
@@ -1145,7 +1145,7 @@ Euclidify <- function(dissimilarity_matrix,
           k0 = exp(valid_results$log_k0[best_idx]),
           cooling_rate = exp(valid_results$log_cooling_rate[best_idx]),
           c_repulsion = exp(valid_results$log_c_repulsion[best_idx]),
-          mae = valid_results$Holdout_MAE[best_idx]
+          CV_MAE = valid_results$Holdout_MAE[best_idx]
         )
         if (verbose_main) cat("  Using initial optimization results\n")
       }
