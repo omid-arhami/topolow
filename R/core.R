@@ -736,7 +736,7 @@ summary.topolow <- function(object, ...) {
 #' @param dissimilarity_matrix Square symmetric dissimilarity matrix. Can contain
 #'        NA values for missing measurements and threshold indicators (< or >).
 #' @param output_dir Character. Directory for saving optimization files and results.
-#'        Required - no default provided per CRAN guidelines.
+#'        Required - no default.
 #' @param ndim_range Integer vector of length 2. Range for number of dimensions 
 #'        (minimum, maximum). Default: c(2, 10)
 #' @param k0_range Numeric vector of length 2. Range for initial spring constant
@@ -863,7 +863,7 @@ Euclidify <- function(dissimilarity_matrix,
   
   # Input validation
   if (missing(output_dir)) {
-    stop("output_dir must be specified. Per CRAN guidelines, functions should not write to disk without explicit user permission.")
+    stop("output_dir must be specified.")
   }
   
   if (!is.matrix(dissimilarity_matrix)) {

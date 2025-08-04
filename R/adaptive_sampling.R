@@ -918,7 +918,7 @@ weighted_kde <- function(x, weights, n = 512, from = min(x), to = max(x)) {
     sum(weights * dnorm(z, mean = x, sd = bw))
   }
 
-  # --- SAFE PARALLELISM CONTROL (CRAN Compliant) ---
+  # --- SAFE PARALLELISM CONTROL ---
   # In non-interactive sessions (like R CMD check), limit cores to 2.
   num_cores <- if (!interactive()) {
     2L
