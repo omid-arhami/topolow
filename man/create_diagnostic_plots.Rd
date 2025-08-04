@@ -2,7 +2,7 @@
 % Please edit documentation in R/visualization.R
 \name{create_diagnostic_plots}
 \alias{create_diagnostic_plots}
-\title{Create Diagnostic Plots for Multiple Chains}
+\title{Create Diagnostic Plots for Multiple Sampling Chains}
 \usage{
 create_diagnostic_plots(
   chain_files,
@@ -16,27 +16,28 @@ create_diagnostic_plots(
 )
 }
 \arguments{
-\item{chain_files}{Character vector of paths to CSV files containing chain data}
+\item{chain_files}{A character vector of paths to CSV files, where each file contains data for one chain.}
 
-\item{mutual_size}{Integer number of samples to use from end of each chain}
+\item{mutual_size}{Integer. The number of samples to use from the end of each chain for plotting.}
 
-\item{output_file}{Character path for saving plot. Required if \code{save_plot} is \code{TRUE}.}
+\item{output_file}{Character. The path for saving the plot. Required if \code{save_plot} is TRUE.}
 
-\item{output_dir}{Character. Directory for output files. Required if \code{save_plot} is \code{TRUE}.}
+\item{output_dir}{Character. The directory for saving output files. Required if \code{save_plot} is TRUE.}
 
-\item{save_plot}{Logical. Whether to save plots to files. Default: FALSE}
+\item{save_plot}{Logical. If TRUE, saves the plot to a file. Default: FALSE.}
 
-\item{width, height, res}{Plot dimensions and resolution for saving}
+\item{width, height, res}{Numeric. The dimensions and resolution for the saved plot.}
 }
 \value{
-A ggplot object of the combined plots.
+A \code{ggplot} object of the combined plots.
 }
 \description{
-Creates trace and density plots for multiple Adaptive Monte Carlo Sampling or optimization chains to assess
-convergence and mixing. Displays parameter trajectories and distributions across chains.
+Creates trace and density plots for multiple sampling or optimization chains to help
+assess convergence and mixing. It displays parameter trajectories and their
+distributions across all chains.
 }
 \examples{
-# This example uses sample data files included with the package.
+# This example uses sample data files that would be included with the package.
 chain_files <- c(
   system.file("extdata", "diag_chain1.csv", package = "topolow"),
   system.file("extdata", "diag_chain2.csv", package = "topolow"),
@@ -46,7 +47,7 @@ chain_files <- c(
 # Only run the example if the files are found
 if (all(nzchar(chain_files))) {
   # Create diagnostic plot without saving to a file
-  create_diagnostic_plots(chain_files, mutual_size = 2, save_plot = FALSE)
+  create_diagnostic_plots(chain_files, mutual_size = 50, save_plot = FALSE)
 }
 
 }

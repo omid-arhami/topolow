@@ -1,45 +1,45 @@
 # Copyright (c) 2024 Omid Arhami o.arhami@gmail.com
 # License BSD 3-clause https://github.com/omid-arhami/topolow/blob/main/LICENSE
-
 # R/topolow-package.R
-
-#' @title Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assay results
+#' @title Robust Euclidean Embedding of Dissimilarity Data
 #'
 #' @description
-#' An implementation of the TopoLow algorithm for antigenic cartography mapping and analysis. 
-#' The package provides tools for optimizing point configurations in high-dimensional spaces,
-#' handling missing and thresholded measurements, processing antigenic assay data, and 
-#' visualizing antigenic maps.
+#' The `topolow` package provides a robust implementation of the Topolow algorithm. It 
+#' is designed to embed objects into a low-dimensional Euclidean space from a matrix of
+#' pairwise dissimilarities, even when the data do not satisfy metric or Euclidean 
+#' axioms. The package is particularly well-suited for sparse or incomplete datasets 
+#' and includes methods for handling censored (thresholded) data. The package provides 
+#' tools for processing antigenic assay data, and visualizing antigenic maps.
+#'
 #'
 #' @details
-#' The package implements a physics-inspired approach combining spring forces and repulsive
-#' interactions to find optimal point configurations. Key features include:
+#' The core of the package is a physics-inspired, gradient-free optimization framework.
+#' It models objects as particles in a physical system, where observed dissimilarities
+#' define spring rest lengths and unobserved pairs exert repulsive forces. Key features include:
 #' \itemize{
-#'   \item Optimization of point configurations in high-dimensional spaces
-#'   \item Handling of missing and thresholded measurements
-#'   \item Processing of antigenic assay data
-#'   \item Interactive visualization of antigenic maps
-#'   \item Cross-validation and error analysis
-#'   \item Network structure analysis
+#'   \item Quantitative reconstruction of metric space from non-metric data.
+#'   \item Robustness against local optima, especially for sparse data, due to a
+#'     stochastic pairwise optimization scheme.
+#'   \item A statistically grounded approach based on maximizing the likelihood under a
+#'     Laplace error model.
+#'   \item Tools for parameter optimization, cross-validation, and convergence diagnostics.
 #'   \item Support for parallel processing
+#'   \item Cross-validation and error analysis
+#'   \item A comprehensive suite of visualization functions for network analysis and results.
+#'   \item Processing and visualization of antigenic maps
 #' }
 #'
 #' @section Main Functions:
 #' \itemize{
-#'   \item \code{\link{create_topolow_map}}: Core optimization algorithm
-#'   \item \code{\link{process_antigenic_data}}: Process raw antigenic data
-#'   \item \code{\link{initial_parameter_optimization}}: Optimize algorithm parameters
-#'   \item \code{\link{plot_temporal_mapping}}: Create temporal visualizations
-#'   \item \code{\link{plot_cluster_mapping}}: Create cluster-based visualizations
+#'   \item \code{\link{Euclidify}}: Wizard function to run all steps of the Topolow algorithm automatically
+#'   \item \code{\link{euclidean_embedding}}: Core embedding algorithm
+#'   \item \code{\link{initial_parameter_optimization}}: Find optimal parameters using Latin Hypercube Sampling.
+#'   \item \code{\link{run_adaptive_sampling}}: Refine parameter estimates with adaptive Monte Carlo sampling.
 #' }
 #'
 #' @section Output Files:
 #' Functions that generate output files (like parameter optimization results) will 
-#' create subdirectories in either:
-#' \itemize{
-#'   \item The current working directory (if output_dir = NULL)
-#'   \item A user-specified directory (via output_dir parameter)
-#' }
+#' create subdirectories in a user-specified directory (via output_dir parameter)
 #'
 #' The following subdirectories may be created:
 #' \itemize{
@@ -54,6 +54,16 @@
 #' Bioinformatics, 2025;, btaf372,
 #' https://doi.org/10.1093/bioinformatics/btaf372
 #' \doi{10.1093/bioinformatics/btaf372}.
+#' 
+#' `bibtex` entry:
+#'  title={Topolow: a mapping algorithm for antigenic cross-reactivity and binding affinity assays},
+#'  author={Arhami, Omid and Rohani, Pejman},
+#'  journal={Bioinformatics},
+#'  volume={41},
+#'  number={7},
+#'  pages={btaf372},
+#'  year={2025},
+#'  publisher={Oxford University Press}
 #'
 #' @keywords internal
 "_PACKAGE"
@@ -72,18 +82,21 @@
     )
   }
 }
-
-#' @importFrom data.table data.table setDT fread
-#' @importFrom dplyr %>% select filter mutate group_by summarise ungroup
+#' @importFrom stats qchisq setNames
+#' @importFrom rlang .data
+#' @importFrom future availableCores
 #' @importFrom reshape2 melt
-#' @import ggplot2
-#' @importFrom parallel mclapply detectCores
-#' @importFrom coda mcmc mcmc.list gelman.diag effectiveSize
-#' @importFrom stats median sd var aggregate approx bw.nrd bw.nrd0 bw.ucv bw.bcv bw.SJ coef complete.cases cor cov dist lm na.omit qt residuals setNames mad
-#' @importFrom utils read.csv write.csv write.table tail globalVariables
-#' @importFrom grDevices colorRampPalette colors
-#' @importFrom graphics hist
-#' @importFrom vegan protest procrustes
-#' @importFrom ape is.rooted unroot dist.nodes nodepath extract.clade
-#' @importFrom Racmacs save.coords
+#' @importFrom dplyr %>% select filter mutate group_by summarise ungroup
+#' @importFrom filelock lock unlock
+#' @importFrom ggplot2 ggplot aes geom_point theme_minimal coord_fixed ggsave theme element_text margin geom_line geom_density labs element_blank element_rect
+#' @importFrom lhs maximinLHS
+#' @importFrom parallel mclapply detectCores makeCluster clusterExport clusterEvalQ parLapply stopCluster
+#' @importFrom reshape2 melt
+#' @importFrom rlang sym
+#' @importFrom stats dist na.omit sd qunif complete.cases aggregate bw.nrd0 approx dnorm cov hclust lm coef qt
+#' @importFrom utils read.csv write.csv write.table tail
+#' @importFrom data.table setDT
+## usethis namespace: start
+#' @importFrom lifecycle deprecated
+## usethis namespace: end
 NULL

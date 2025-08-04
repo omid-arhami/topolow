@@ -2,39 +2,39 @@
 % Please edit documentation in R/diagnostics.R
 \name{check_gaussian_convergence}
 \alias{check_gaussian_convergence}
-\title{Check Multivariate Gaussian Convergence}
+\title{Model Diagnostics and Convergence Testing
+Check Multivariate Gaussian Convergence}
 \usage{
 check_gaussian_convergence(data, window_size = 300, tolerance = 0.01)
 }
 \arguments{
-\item{data}{Matrix or data frame of samples where columns are parameters}
+\item{data}{Matrix or Data Frame. A matrix of samples where columns are parameters.}
 
-\item{window_size}{Integer size of sliding window for statistics}
+\item{window_size}{Integer. The size of the sliding window used to compute statistics.}
 
-\item{tolerance}{Numeric convergence threshold for relative changes}
+\item{tolerance}{Numeric. The convergence threshold for the relative change in the
+mean and covariance.}
 }
 \value{
-An object of class \code{topolow_convergence} containing diagnostics about the convergence of the multivariate samples. This list includes:
-\item{converged}{A logical flag, \code{TRUE} if both mean and covariance have converged.}
-\item{mean_converged}{A logical flag, \code{TRUE} if the mean vector has converged.}
-\item{cov_converged}{A logical flag, \code{TRUE} if the covariance matrix has converged.}
-\item{final_mean}{The mean vector calculated from the last \code{window_size} samples.}
-\item{final_cov}{The covariance matrix calculated from the last \code{window_size} samples.}
-\item{mean_history}{A matrix tracking the history of the running mean of each parameter.}
-\item{cov_changes}{A numeric vector of the relative changes in the Frobenius norm of the covariance matrix.}
-\item{param_names}{The names of the parameters (columns) from the input data.}
+An object of class \code{topolow_convergence} containing diagnostics about the
+convergence of the multivariate samples. This list includes logical flags for
+convergence (\code{converged}, \code{mean_converged}, \code{cov_converged}) and the history
+of the mean and covariance changes.
 }
 \description{
-Assesses convergence of multivariate samples by monitoring changes in mean
-vector and covariance matrix over a sliding window. Useful for checking
-stability of parameter distributions in optimization or sampling.
+Assesses the convergence of multivariate samples by monitoring the stability of the
+mean vector and covariance matrix over a sliding window. This is useful for checking
+if a set of parameter samples has stabilized.
 }
 \examples{
-# Assuming 'chain_data' is a data frame with samples
+# Create sample data for the example
 chain_data <- as.data.frame(matrix(rnorm(500 * 4), ncol = 4))
-colnames(chain_data) <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
+colnames(chain_data) <- c("param1", "param2", "param3", "param4")
+
+# Run the convergence check
 conv_results <- check_gaussian_convergence(chain_data)
-print(conv_results)  # Shows summary
-# The plot method for this object would create convergence plots.
+print(conv_results)
+
+# The plot method for this object can be used to create convergence plots.
 # plot(conv_results)
 }

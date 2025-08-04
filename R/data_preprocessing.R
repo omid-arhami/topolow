@@ -1,33 +1,423 @@
 # Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
 # R/data_preprocessing.R
 
-#' Antigenic Data Preprocessing Functions
-#' 
-#' @description
-#' Functions for standardizing and preprocessing antigenic assay data from various 
-#' sources into consistent formats. Handles titer and IC50 measurements, threshold
-#' values, and produces both long and matrix formats suitable for mapping.
+#' topolow Data Preprocessing Functions
 #'
-#' @keywords internal
-"_PACKAGE"
+
+# New
+#' Convert List Format Data to Dissimilarity Matrix
+#'
+#' @description
+#' Converts data from long/list format (one measurement per row) to a symmetric
+#' dissimilarity matrix. The function handles both similarity and dissimilarity
+#' data, with optional conversion from similarity to dissimilarity.
+#'
+#' @param data Data frame in long format with columns for objects, references, and values.
+#' @param object_col Character. Name of the column containing object identifiers.
+#' @param reference_col Character. Name of the column containing reference identifiers.
+#' @param value_col Character. Name of the column containing measurement values.
+#' @param is_similarity Logical. Whether values are similarities (TRUE) or dissimilarities (FALSE).
+#'   If TRUE, similarities will be converted to dissimilarities by subtracting from the
+#'   maximum value per reference. Default: FALSE.
+#'
+#' @details
+#' The function expects data in long format with at least three columns:
+#' - A column for object names
+#' - A column for reference names
+#' - A column containing the (dis)similarity values
+#'
+#' When `is_similarity = TRUE`, the function converts similarities to dissimilarities
+#' by subtracting each similarity value from the maximum similarity value within
+#' each reference group. Threshold indicators (< or >) are handled appropriately
+#' and inverted during similarity-to-dissimilarity conversion.
+#'
+#' @return A symmetric matrix of dissimilarities with row and column names corresponding
+#'         to the union of unique objects and references in the data. NA values represent
+#'         unmeasured pairs, and the diagonal is set to 0.
+#'
+#' @examples
+#' # Example with dissimilarity data
+#' data_dissim <- data.frame(
+#'   object = c("A", "B", "A", "C"),
+#'   reference = c("X", "X", "Y", "Y"),
+#'   dissimilarity = c(2.5, 1.8, 3.0, 4.2)
+#' )
+#'
+#' mat_dissim <- list_to_matrix(
+#'   data = data_dissim,
+#'   object_col = "object",
+#'   reference_col = "reference",
+#'   value_col = "dissimilarity",
+#'   is_similarity = FALSE
+#' )
+#'
+#' # Example with similarity data (will be converted to dissimilarity)
+#' data_sim <- data.frame(
+#'   object = c("A", "B", "A", "C"),
+#'   reference = c("X", "X", "Y", "Y"),
+#'   similarity = c(7.5, 8.2, 7.0, 5.8)
+#' )
+#'
+#' mat_from_sim <- list_to_matrix(
+#'   data = data_sim,
+#'   object_col = "object",
+#'   reference_col = "reference",
+#'   value_col = "similarity",
+#'   is_similarity = TRUE
+#' )
+#'
+#' @importFrom data.table setDT
+#' @importFrom dplyr %>% group_by mutate ungroup summarise
+#' @importFrom rlang sym .data
+#' @importFrom stats na.omit
+#' @export
+list_to_matrix <- function(data, object_col, reference_col, value_col,
+                           is_similarity = FALSE) {
+
+  # ===== INPUT VALIDATION =====
+  if (!is.data.frame(data)) {
+    stop("'data' must be a data frame")
+  }
+
+  required_cols <- c(object_col, reference_col, value_col)
+  if (!all(required_cols %in% names(data))) {
+    missing <- setdiff(required_cols, names(data))
+    stop("Missing required columns: ", paste(missing, collapse = ", "))
+  }
+
+  # Validate numeric/character columns
+  if (!is.character(data[[object_col]]) && !is.factor(data[[object_col]])) {
+    stop("Object names column must be character or factor")
+  }
+
+  if (!is.character(data[[reference_col]]) && !is.factor(data[[reference_col]])) {
+    stop("Reference names column must be character or factor")
+  }
+
+  if (!is.numeric(data[[value_col]]) &&
+      !all(grepl("^[0-9<>]", stats::na.omit(data[[value_col]])))) {
+    stop("Values column must be numeric or contain valid threshold indicators (< or >)")
+  }
+
+  if (!is.logical(is_similarity)) {
+    stop("is_similarity must be logical")
+  }
+
+  # ===== DATA CLEANING =====
+  # Clean invalid values
+  data <- data[!is.na(data[[value_col]]), ]  # Remove NA values
+  data <- data[data[[value_col]] != "", ]    # Remove empty strings
+
+  # Keep only rows where value starts with a number or < or >
+  data <- data[grepl("^[0-9<>]", data[[value_col]]), ]
+
+  if (nrow(data) == 0) {
+    stop("No valid measurements remaining after cleaning")
+  }
+
+  # ===== HELPER FUNCTIONS =====
+  remove_sign <- function(x) {
+    as.numeric(gsub("[<>]", "", x))
+  }
+
+  reapply_sign <- function(values, avg) {
+    if (any(grepl("[<>]", values))) {
+      sign <- ifelse(any(grepl("<", values)), "<", ">")
+      return(paste0(sign, avg))
+    } else {
+      return(as.character(avg))
+    }
+  }
+
+  # ===== SIMILARITY TO DISSIMILARITY CONVERSION =====
+  if (is_similarity) {
+    # Convert similarity to dissimilarity 
+    # Step 1: Convert character values to numeric, preserving threshold signs
+    data$signed_value <- sapply(data[[value_col]], function(x) {
+      if (grepl("^<", x)) {
+        paste0("<", as.numeric(sub("<", "", x)))
+      } else if(grepl("^>", x)){
+        paste0(">", as.numeric(sub(">", "", x)))
+      } else if (is.numeric(as.numeric(x))) {
+        as.numeric(x)
+      } else {
+        NA
+      }
+    })
+
+    # Step 2: Get raw numeric value for calculations
+    data$processed_value <- sapply(data$signed_value, remove_sign)
+
+    # Step 3: Calculate dissimilarity per reference by subtracting from max similarity
+    data <- data %>%
+      dplyr::group_by(!!rlang::sym(reference_col)) %>%
+      dplyr::mutate(
+        max_value = max(.data$processed_value, na.rm = TRUE),
+        dissimilarity = .data$max_value - .data$processed_value
+      ) %>%
+      dplyr::ungroup()
+
+    # Step 4: Re-apply threshold signs, inverting them for dissimilarity
+    data$final_value <- sapply(1:nrow(data), function(i) {
+      if (grepl("^<", data$signed_value[i])) {
+        paste0(">", data$dissimilarity[i])
+      } else if (grepl("^>", data$signed_value[i])) {
+        paste0("<", data$dissimilarity[i])
+      } else {
+        data$dissimilarity[i]
+      }
+    })
+
+  } else {
+    # If data is already dissimilarity, just format it correctly
+    data$final_value <- sapply(data[[value_col]], function(x) {
+      if (grepl("^<", x) || grepl("^>", x)) {
+        paste0(substr(x, 1, 1), remove_sign(x))
+      } else if (is.numeric(as.numeric(x))) {
+        as.numeric(x)
+      } else {
+        NA
+      }
+    })
+  }
+
+  # ===== COMBINE REPEATED MEASUREMENTS =====
+  long_data <- data %>%
+    dplyr::group_by(!!rlang::sym(object_col), !!rlang::sym(reference_col)) %>%
+    dplyr::summarise(
+      dissimilarity = reapply_sign(final_value,
+                                   mean(remove_sign(final_value), na.rm = TRUE)),
+      .groups = 'drop'
+    )
+
+  # Remove rows with NAs that might have been introduced
+  long_data <- stats::na.omit(long_data)
+
+  # ===== MATRIX CREATION (from titers_list_to_matrix logic) =====
+
+  # Convert to data.table for efficiency
+  data.table::setDT(long_data)
+
+  # Get unique point names
+  all_points <- unique(c(long_data[[object_col]], long_data[[reference_col]]))
+
+  # Create square matrix with NA values
+  n <- length(all_points)
+  dissimilarity_matrix <- matrix(NA, nrow = n, ncol = n)
+  rownames(dissimilarity_matrix) <- all_points
+  colnames(dissimilarity_matrix) <- all_points
+
+  # ===== FILL IN THE DISSIMILARITIES =====
+  for (i in seq_len(nrow(long_data))) {
+    r   <- long_data[i, get(object_col)]
+    c   <- long_data[i, get(reference_col)]
+    val <- long_data[i, get("dissimilarity")]
+
+    # Set both matrix elements for symmetry
+    dissimilarity_matrix[r, c] <- val
+    dissimilarity_matrix[c, r] <- val
+  }
+
+  # Set diagonal to 0
+  diag(dissimilarity_matrix) <- 0
+
+  return(dissimilarity_matrix)
+}
+
+
+# New
+#' Convert Table Format Data to Dissimilarity Matrix
+#'
+#' @description
+#' Converts data from table/matrix format (objects as rows, references as columns)
+#' to a symmetric dissimilarity matrix. The function creates a matrix where both
+#' rows and columns contain the union of all object and reference names.
+#'
+#' @param data Matrix or data frame where rownames represent objects, columnnames represent
+#'   references, and cells contain (dis)similarity values.
+#' @param is_similarity Logical. Whether values are similarities (TRUE) or dissimilarities (FALSE).
+#'   If TRUE, similarities will be converted to dissimilarities by subtracting from the
+#'   maximum value per column (reference). Default: FALSE.
+#'
+#' @details
+#' The function takes a table where:
+#' - Rows represent objects
+#' - Columns represent references
+#' - Values represent (dis)similarities
+#'
+#' It creates a symmetric matrix where both rows and columns contain the union of
+#' all object names (row names) and reference names (column names). The original
+#' measurements are preserved, and the matrix is made symmetric by filling both
+#' (i,j) and (j,i) positions with the same value.
+#'
+#' When `is_similarity = TRUE`, similarities are converted to dissimilarities by
+#' subtracting each value from the maximum value in its respective column (reference).
+#' Threshold indicators (< or >) are handled and inverted during conversion.
+#'
+#' @return A symmetric matrix of dissimilarities with row and column names
+#'         corresponding to the union of all object and reference names.
+#'         NA values represent unmeasured pairs, and the diagonal is set to 0.
+#'
+#' @examples
+#' # Example with dissimilarity data in table format
+#' dissim_table <- matrix(c(1.2, 2.1, 3.4, 1.8, 2.9, 4.1),
+#'                       nrow = 2, ncol = 3,
+#'                       dimnames = list(c("Obj1", "Obj2"),
+#'                                     c("Ref1", "Ref2", "Ref3")))
+#'
+#' mat_dissim <- table_to_matrix(dissim_table, is_similarity = FALSE)
+#'
+#' # Example with similarity data (will be converted to dissimilarity)
+#' sim_table <- matrix(c(8.8, 7.9, 6.6, 8.2, 7.1, 5.9),
+#'                    nrow = 2, ncol = 3,
+#'                    dimnames = list(c("Obj1", "Obj2"),
+#'                                  c("Ref1", "Ref2", "Ref3")))
+#'
+#' mat_from_sim <- table_to_matrix(sim_table, is_similarity = TRUE)
+#'
+#' @importFrom stats na.omit
+#' @export
+table_to_matrix <- function(data, is_similarity = FALSE) {
+
+  # ===== INPUT VALIDATION =====
+  if (!is.matrix(data) && !is.data.frame(data)) {
+    stop("'data' must be a matrix or data frame")
+  }
+
+  if (!is.logical(is_similarity)) {
+    stop("is_similarity must be logical")
+  }
+
+  # Convert to matrix if data frame
+  if (is.data.frame(data)) {
+    data <- as.matrix(data)
+  }
+
+  # Validate that data contains valid values
+  if (nrow(data) == 0 || ncol(data) == 0) {
+    stop("Input data must have at least one row and one column")
+  }
+
+  # ===== GET ROW AND COLUMN NAMES =====
+  object_names <- rownames(data)
+  reference_names <- colnames(data)
+
+  if (is.null(object_names)) {
+    object_names <- paste0("Obj", 1:nrow(data))
+    rownames(data) <- object_names
+  }
+
+  if (is.null(reference_names)) {
+    reference_names <- paste0("Ref", 1:ncol(data))
+    colnames(data) <- reference_names
+  }
+
+  # ===== HELPER FUNCTIONS =====
+  remove_sign <- function(x) {
+    as.numeric(gsub("[<>]", "", x))
+  }
+
+  extract_numeric <- function(x) {
+    if (is.character(x)) {
+      if (grepl("^<", x) || grepl("^>", x)) {
+        as.numeric(gsub("[<>]", "", x))
+      } else {
+        as.numeric(x)
+      }
+    } else {
+      as.numeric(x)
+    }
+  }
+
+  # ===== SIMILARITY TO DISSIMILARITY CONVERSION =====
+  if (is_similarity) {
+    processed_data <- data
+
+    for (j in 1:ncol(data)) {
+      col_vals <- data[, j]
+
+      # Extract numeric values for finding maximum
+      numeric_vals <- sapply(col_vals, extract_numeric)
+
+      # Find maximum for this reference (column), ignoring NA values
+      max_val <- max(numeric_vals, na.rm = TRUE)
+
+      # Convert similarities to dissimilarities for this column
+      for (i in 1:nrow(data)) {
+        val <- data[i, j]
+        if (is.na(val)) {
+          processed_data[i, j] <- NA
+        } else if (is.character(val)) {
+          if (grepl("^<", val)) {
+            # < becomes > after conversion
+            numeric_part <- as.numeric(gsub("<", "", val))
+            processed_data[i, j] <- paste0(">", max_val - numeric_part)
+          } else if (grepl("^>", val)) {
+            # > becomes < after conversion
+            numeric_part <- as.numeric(gsub(">", "", val))
+            processed_data[i, j] <- paste0("<", max_val - numeric_part)
+          } else {
+            # Regular numeric value
+            processed_data[i, j] <- max_val - as.numeric(val)
+          }
+        } else {
+          # Numeric value
+          processed_data[i, j] <- max_val - as.numeric(val)
+        }
+      }
+    }
+
+    data <- processed_data
+  }
+
+  # ===== CREATE SYMMETRIC MATRIX =====
+  # Create union of all names
+  all_names <- unique(c(object_names, reference_names))
+  n <- length(all_names)
+
+  # Create symmetric matrix filled with NA
+  symmetric_matrix <- matrix(NA, nrow = n, ncol = n)
+  rownames(symmetric_matrix) <- all_names
+  colnames(symmetric_matrix) <- all_names
+
+  # ===== FILL IN VALUES FROM ORIGINAL TABLE =====
+  for (i in 1:nrow(data)) {
+    for (j in 1:ncol(data)) {
+      obj_name <- object_names[i]
+      ref_name <- reference_names[j]
+      value <- data[i, j]
+
+      # Set both symmetric positions
+      symmetric_matrix[obj_name, ref_name] <- value
+      symmetric_matrix[ref_name, obj_name] <- value
+    }
+  }
+
+  # Set diagonal to 0
+  diag(symmetric_matrix) <- 0
+
+  return(symmetric_matrix)
+}
+
 
 #' Process Raw Antigenic Assay Data
 #'
 #' @description
-#' Processes raw antigenic assay data from CSV files into standardized long and matrix
-#' formats. Handles both titer data (which needs conversion to distances) and direct
-#' distance measurements like IC50. Preserves threshold indicators (<, >) and handles
-#' repeated measurements by averaging.
+#' Processes raw antigenic assay data from data frames into standardized long and matrix
+#' formats. Handles both similarity data (like titers, which need conversion to distances) 
+#' and direct dissimilarity measurements like IC50. Preserves threshold indicators (<, >) 
+#' and handles repeated measurements by averaging.
 #'
-#' @param file_path Character. Path to CSV file containing raw data.
+#' @param data Data frame containing raw data.
 #' @param antigen_col Character. Name of column containing virus/antigen identifiers.
 #' @param serum_col Character. Name of column containing serum/antibody identifiers.
 #' @param value_col Character. Name of column containing measurements (titers or distances).
-#' @param is_titer Logical. Whether values are titers (TRUE) or distances like IC50 (FALSE).
+#' @param is_similarity Logical. Whether values are measures of similarity such as titers 
+#'        or binding affinities (TRUE) or dissimilarities like IC50 (FALSE). Default: FALSE.
 #' @param metadata_cols Character vector. Names of additional columns to preserve.
-#' @param id_prefix Logical. Whether to prefix IDs with V/ and S/ (default: TRUE).
-#' @param base Numeric. Base for logarithm transformation (default: 2 for titers, e for IC50).
-#' @param scale_factor Numeric. Scale factor for titers (default: 10).
+#' @param base Numeric. Base for logarithm transformation (default: 2 for similarities, e for dissimilarities).
+#' @param scale_factor Numeric. Scale factor for similarities. This is the base value that all other 
+#'        dilutions are multiples of. E.g., 10 for HI assay where titers are 10, 20, 40,... Default: 1.
 #'
 #' @return A list containing two elements:
 #'   \item{long}{A `data.frame` in long format with standardized columns, including the original identifiers, processed values, and calculated distances. Any specified metadata is also included.}
@@ -35,63 +425,79 @@
 #'
 #' @details
 #' The function handles these key steps:
-#' 1. Reads and validates input data
+#' 1. Validates input data and required columns
 #' 2. Transforms values to log scale
-#' 3. Converts titers to distances if needed
+#' 3. Converts similarities to distances using Smith's method if needed
 #' 4. Averages repeated measurements
 #' 5. Creates standardized long format
-#' 6. Creates distance matrix
+#' 6. Creates symmetric distance matrix
 #' 7. Preserves metadata and threshold indicators
 #' 8. Preserves virusYear and serumYear columns if present
 #' 
 #' Input requirements and constraints:
-#' * CSV file must contain required columns
-#' * Column names must match specified parameters in the function input
+#' * Data frame must contain required columns
+#' * Column names must match specified parameters
 #' * Values can include threshold indicators (< or >)
 #' * Metadata columns must exist if specified
 #' * Allowed Year-related column names are "virusYear" and "serumYear"
 #'
 #' @examples
-#' # Locate the example data file included in the package
-#' file_path <- system.file("extdata", "example_titer_data.csv", package = "topolow")
+#' # Example 1: Processing HI titer data (similarities)
+#' antigen_data <- data.frame(
+#'   virus = c("A/H1N1/2009", "A/H1N1/2010", "A/H1N1/2011", "A/H1N1/2009", "A/H1N1/2010"),
+#'   serum = c("anti-2009", "anti-2009", "anti-2009", "anti-2010", "anti-2010"),
+#'   titer = c(1280, 640, "<40", 2560, 1280),  # Some below detection limit
+#'   cluster = c("A", "A", "B", "A", "A"),
+#'   color = c("red", "red", "blue", "red", "red")
+#' )
 #' 
-#' # Check if the file exists before running the example
-#' if (file.exists(file_path)) {
-#'   # Process the example titer data
-#'   results <- process_antigenic_data(
-#'     file_path,
-#'     antigen_col = "virusStrain",
-#'     serum_col = "serumStrain", 
-#'     value_col = "titer",
-#'     is_titer = TRUE,
-#'     metadata_cols = c("cluster", "color")
-#'   )
+#' # Process HI titer data (similarities -> distances)
+#' results <- process_antigenic_data(
+#'   data = antigen_data,
+#'   antigen_col = "virus",
+#'   serum_col = "serum", 
+#'   value_col = "titer",
+#'   is_similarity = TRUE,  # Titers are similarities
+#'   metadata_cols = c("cluster", "color"),
+#'   scale_factor = 10  # Base dilution factor
+#' )
 #' 
-#'   # View the long format data
-#'   print(results$long)
-#'   # View the distance matrix
-#'   print(results$matrix)
-#' }
-#' @importFrom utils read.csv
-#' @importFrom dplyr %>% group_by mutate ungroup summarise select distinct left_join
+#' # View the long format data
+#' print(results$long)
+#' # View the distance matrix
+#' print(results$matrix)
+#' 
+#' # Example 2: Processing IC50 data (already dissimilarities)
+#' ic50_data <- data.frame(
+#'   virus = c("HIV-1", "HIV-2", "HIV-3"),
+#'   antibody = c("mAb1", "mAb1", "mAb2"),
+#'   ic50 = c(0.05, ">10", 0.2)
+#' )
+#' 
+#' results_ic50 <- process_antigenic_data(
+#'   data = ic50_data,
+#'   antigen_col = "virus",
+#'   serum_col = "antibody",
+#'   value_col = "ic50",
+#'   is_similarity = FALSE  # IC50 values are dissimilarities
+#' )
+#'
+#' @importFrom dplyr %>% group_by mutate ungroup summarise select distinct left_join any_of
 #' @importFrom rlang sym
 #' @importFrom stats na.omit
 #' @export
-process_antigenic_data <- function(file_path, antigen_col, serum_col, 
+process_antigenic_data <- function(data, antigen_col, serum_col, 
                                    value_col,
-                                   is_titer = TRUE, 
+                                   is_similarity = FALSE, 
                                    metadata_cols = NULL,
-                                   id_prefix = FALSE,
                                    base = NULL, 
-                                   scale_factor = 10) {
-  # Input validation
-  if (!file.exists(file_path)) {
-    stop("File not found: ", file_path)
+                                   scale_factor = 1) {
+  
+  # Validate inputs 
+  if (!is.data.frame(data)) {
+    stop("'data' must be a data frame")
   }
-  
-  # Read data
-  data <- utils::read.csv(file_path)
-  
+
   # Validate required columns
   req_cols <- c(antigen_col, serum_col, value_col)
   if (!all(req_cols %in% names(data))) {
@@ -126,9 +532,8 @@ process_antigenic_data <- function(file_path, antigen_col, serum_col,
     }
   }
   
-  
-  if (!is.logical(is_titer)) {
-    stop("is_titer must be logical")
+  if (!is.logical(is_similarity)) {
+    stop("is_similarity must be logical")
   }
   
   if (!is.null(base) && (!is.numeric(base) || base <= 0)) {
@@ -141,10 +546,10 @@ process_antigenic_data <- function(file_path, antigen_col, serum_col,
 
   # Set default base if not provided
   if (is.null(base)) {
-    base <- if(is_titer) 2 else exp(1)
+    base <- if(is_similarity) 2 else exp(1)
   }
 
-  # Helper function definitions from your code
+  # Helper function definitions
   remove_sign <- function(x) {
     as.numeric(gsub("[<>]", "", x))
   }
@@ -159,8 +564,8 @@ process_antigenic_data <- function(file_path, antigen_col, serum_col,
   }
 
   # Process values
-  if (is_titer) {
-    # Convert titers to log scale
+  if (is_similarity) {
+    # Convert similarities to log scale
     data$log_value <- sapply(data[[value_col]], function(x) {
       if (grepl("^<", x)) {
         paste0("<", log(as.numeric(sub("<", "", x)) / scale_factor, base = base))
@@ -205,7 +610,7 @@ process_antigenic_data <- function(file_path, antigen_col, serum_col,
     })
     
   } else {
-    # For IC50, calculate log directly
+    # For dissimilarity, calculate log directly
     data$distance <- sapply(data[[value_col]], function(x) {
       if (grepl("^<", x)) {
         x_num <- as.numeric(sub("<", "", x))
@@ -222,24 +627,27 @@ process_antigenic_data <- function(file_path, antigen_col, serum_col,
   }
 
   # Combine repeated measurements
+  # Create a column name for the original values to use in reapply_sign
+  data$original_values <- data[[value_col]]
+  
   long_data <- data %>%
     dplyr::group_by(!!sym(antigen_col), !!sym(serum_col)) %>%
     dplyr::summarise(
-      raw_value = reapply_sign(!!sym(value_col), 
-                               if(is_titer) {
-                                 scale_factor * base^(mean(log(remove_sign(!!sym(value_col))/scale_factor, 
+      raw_value = reapply_sign(.data$original_values, 
+                               if(is_similarity) {
+                                 scale_factor * base^(mean(log(remove_sign(.data$original_values)/scale_factor, 
                                                                base = base), na.rm = TRUE))
                                } else {
-                                 exp(mean(log(remove_sign(!!sym(value_col))), na.rm = TRUE))
+                                 exp(mean(log(1 + remove_sign(.data$original_values)), na.rm = TRUE)) - 1
                                }),
-      distance = reapply_sign(distance, 
-                              mean(remove_sign(distance), na.rm = TRUE)),
+      distance = reapply_sign(.data$distance, 
+                              mean(remove_sign(.data$distance), na.rm = TRUE)),
       .groups = 'drop'
     )
   
   # Add back metadata columns if specified
   if (!is.null(metadata_cols)) {
-    # Get combined distinct metadata for antigens
+    # Get combined distinct metadata for antigens and sera
     metadata <- data %>%
       dplyr::select(!!sym(antigen_col), !!sym(serum_col), dplyr::any_of(metadata_cols)) %>%
       dplyr::distinct()
@@ -252,23 +660,13 @@ process_antigenic_data <- function(file_path, antigen_col, serum_col,
   # Remove the non complete rows
   long_data <- na.omit(long_data)
   
-  # sort by year to conform with our assumptions used at various places
+  # Sort by year to conform with our assumptions used at various places
   if("virusYear" %in% names(long_data)) {
     long_data <- long_data[order(long_data$virusYear), ]
   }
-
-  # # Add prefixes if requested
-  # if (id_prefix) {
-  #   long_data[[antigen_col]] <- paste0("V/", long_data[[antigen_col]])
-  #   long_data[[serum_col]] <- paste0("S/", long_data[[serum_col]])
-  # }
   
-  # Create matrix using long_to_matrix function
-  # Determine ordering columns
-  virus_year_col <- "virusYear"
-  serum_year_col <- "serumYear"
-  
-  distance_matrix <- long_to_matrix(
+  # Create matrix using titers_list_to_matrix function
+  distance_matrix <- titers_list_to_matrix(
     long_data,
     chnames = antigen_col,
     chorder = if("virusYear" %in% names(long_data)) "virusYear" else NULL,
@@ -287,244 +685,254 @@ process_antigenic_data <- function(file_path, antigen_col, serum_col,
 }
 
 
-
-#' Validate Antigenic Dataset
+#' Convert Long Format Data to Distance Matrix
 #'
 #' @description
-#' Validates the structure and content of an antigenic assay dataset.
-#' Checks for required columns, data types, and valid measurements.
+#' Converts a dataset from long format to a symmetric distance matrix. The function
+#' handles antigenic cartography data where measurements may exist between antigens
+#' and antisera points. Row and column names can be optionally sorted by a time 
+#' variable.
 #'
-#' @param data Data frame to validate
-#' @param antigen_col Character. Name of antigen column
-#' @param serum_col Character. Name of serum column
-#' @param value_col Character. Name of value column
-#' @param metadata_cols Character vector. Optional metadata column names
-#' @return Invisibly returns TRUE if validation passes, otherwise stops with error
-#' @keywords internal
-validate_antigenic_data <- function(data, antigen_col, serum_col, value_col, 
-                                  metadata_cols = NULL) {
-  # Check column existence
-  req_cols <- c(antigen_col, serum_col, value_col)
-  if (!all(req_cols %in% names(data))) {
-    missing <- setdiff(req_cols, names(data))
+#' @param data Data frame in long format
+#' @param chnames Character. Name of column holding the challenge point names.
+#' @param chorder Character. Optional name of column for challenge point ordering.
+#' @param rnames Character. Name of column holding reference point names.
+#' @param rorder Character. Optional name of column for reference point ordering.
+#' @param values_column Character. Name of column containing distance/difference values. It should be from the nature of "distance" (e.g., antigenic distance or IC50), not "similarity" (e.g., HI Titer.)
+#' @param rc Logical. If TRUE, reference points are treated as a subset of challenge
+#'        points. If FALSE, they are treated as distinct sets. Default is FALSE.
+#' @param sort Logical. Whether to sort rows/columns by chorder/rorder. Default FALSE.
+#' 
+#' @details
+#' The function expects data in long format with at least three columns:
+#' - A column for challenge point names
+#' - A column for reference point names  
+#' - A column containing the distance/difference values
+#' 
+#' Optionally, ordering columns can be provided to sort the output matrix.
+#' The 'rc' parameter determines how to handle shared names between references
+#' and challenges.
+#'
+#' @return A symmetric `matrix` of distances with row and column names corresponding 
+#'         to the unique points in the data. `NA` values represent unmeasured pairs.
+#'
+#' @examples
+#' data <- data.frame(
+#'   antigen = c("A", "B", "A"),
+#'   serum = c("X", "X", "Y"), 
+#'   distance = c(2.5, 1.8, 3.0),
+#'   year = c(2000, 2001, 2000)
+#' )
+#' 
+#' # Basic conversion
+#' mat <- titers_list_to_matrix(data, 
+#'                      chnames = "antigen",
+#'                      rnames = "serum",
+#'                      values_column = "distance")
+#'                      
+#' # With sorting by year
+#' mat_sorted <- titers_list_to_matrix(data,
+#'                             chnames = "antigen",
+#'                             chorder = "year",
+#'                             rnames = "serum", 
+#'                             rorder = "year",
+#'                             values_column = "distance",
+#'                             sort = TRUE)
+#' @importFrom data.table setDT
+#' @importFrom stats na.omit
+#' @export
+titers_list_to_matrix <- function(data, chnames, chorder = NULL, 
+                          rnames, rorder = NULL, values_column, 
+                          rc = FALSE, sort = FALSE) {
+  
+  # Validate inputs 
+  if (!is.data.frame(data)) {
+    stop("'data' must be a data frame")
+  }
+  
+  required_cols <- c(chnames, rnames, values_column)
+  if (!all(required_cols %in% names(data))) {
+    missing <- setdiff(required_cols, names(data))
     stop("Missing required columns: ", paste(missing, collapse = ", "))
   }
   
-  # Check metadata columns if specified
-  if (!is.null(metadata_cols)) {
-    missing_meta <- setdiff(metadata_cols, names(data))
-    if (length(missing_meta) > 0) {
-      stop("Missing metadata columns: ", paste(missing_meta, collapse = ", "))
+  # Validate order columns if specified
+  if (!is.null(chorder) && !(chorder %in% names(data))) {
+    stop("chorder column '", chorder, "' not found in data")
+  }
+  
+  if (!is.null(rorder) && !(rorder %in% names(data))) {
+    stop("rorder column '", rorder, "' not found in data") 
+  }
+  
+  # Validate numeric/character columns
+  if (!is.character(data[[chnames]]) && !is.factor(data[[chnames]])) {
+    stop("Challenge names column must be character or factor")
+  }
+  
+  if (!is.character(data[[rnames]]) && !is.factor(data[[rnames]])) {
+    stop("Reference names column must be character or factor")
+  }
+  
+  if (!is.numeric(data[[values_column]]) && 
+      !all(grepl("^[0-9<>]", na.omit(data[[values_column]])))) {
+    stop("Values column must be numeric or contain valid threshold indicators (< or >)")
+  }
+  
+  # Convert to data.table for efficiency
+  data.table::setDT(data)
+  
+  if (rc == FALSE) {
+    # Mark antigens and antisera
+    data[, (chnames) := paste0("V/", get(chnames))]
+    data[, (rnames) := paste0("S/", get(rnames))]
+  }
+  
+  # Get unique point names
+  #all_points <- sort(unique(unlist(data[, .(get(chnames), get(rnames))])))
+  all_points <- sort(unique(c(data[[chnames]], data[[rnames]])))
+
+  # Create square matrix with NA values
+  n <- length(all_points)
+  distance_matrix <- matrix(NA, nrow = n, ncol = n)
+  rownames(distance_matrix) <- all_points
+  colnames(distance_matrix) <- all_points
+
+  if (sort == TRUE) {
+    # Get one rank per name
+    ranks <- numeric(length(all_points))
+    for (i in seq_along(all_points)) {
+      name <- all_points[i]
+      yr <- 0
+      
+      # Try to get rank from challenge order
+      if (!is.null(chorder)) {
+        name_rank <- unique(data[get(chnames) == name, get(chorder)])
+        if (length(name_rank) > 0) yr <- min(name_rank)
+      }
+      
+      # If not found, try reference order
+      if (yr == 0 && !is.null(rorder)) {
+        name_rank <- unique(data[get(rnames) == name, get(rorder)])
+        if (length(name_rank) > 0) yr <- min(name_rank)
+      }
+      
+      ranks[i] <- yr
     }
+    
+    ranks <- as.numeric(ranks)
+    
+    # Reorder matrix by ranks
+    idx <- order(ranks)
+    distance_matrix <- distance_matrix[idx, idx]
+  }
+
+  # Fill in the distances
+  for (i in seq_len(nrow(data))) {
+    r   <- data[i, get(chnames)]
+    c   <- data[i, get(rnames)]
+    val <- data[i, get(values_column)]
+
+    # Set both matrix elements for symmetry
+    distance_matrix[r, c] <- val
+    distance_matrix[c, r] <- val
   }
   
-  # Check for empty/invalid values
-  if (any(data[[antigen_col]] == "" | is.na(data[[antigen_col]]))) {
-    stop("Empty or NA values found in antigen column")
-  }
-  if (any(data[[serum_col]] == "" | is.na(data[[serum_col]]))) {
-    stop("Empty or NA values found in serum column")
-  }
+  # Set diagonal to 0
+  diag(distance_matrix) <- 0
   
-  # Validate measurements
-  values <- data[[value_col]]
-  clean_values <- gsub("^[<>]", "", values)
-  numeric_values <- suppressWarnings(as.numeric(clean_values))
-  
-  if (all(is.na(numeric_values))) {
-    stop("No valid numeric measurements found")
-  }
-  
-  if (any(numeric_values < 0, na.rm = TRUE)) {
-    stop("Negative values found in measurements")
-  }
-  
-  # Validate threshold indicators
-  invalid_thresh <- values[!is.na(values) & !grepl("^[0-9<>]", values)]
-  if (length(invalid_thresh) > 0) {
-    stop("Invalid threshold indicators found: ", 
-         paste(unique(invalid_thresh)[1:5], collapse = ", "), 
-         if(length(invalid_thresh) > 5) "...")
-  }
-  
-  invisible(TRUE)
+  return(distance_matrix)
 }
 
 
-#' Prune Distance Data for Network Quality
+# Newed
+#' Clean Data by Removing MAD-based Outliers
 #'
 #' @description
-#' Iteratively removes viruses and antibodies with insufficient connections to create a 
-#' well-connected network subset. The pruning continues until all remaining points have
-#' at least the specified minimum number of connections.
+#' Removes outliers from numeric data using the Median Absolute Deviation (MAD) method.
+#' Outliers are replaced with NA values.
 #'
-#' @param data Data frame in long format containing:
-#'        - Column for viruses/antigens
-#'        - Column for antibodies/antisera
-#'        - Distance measurements (can contain NAs)
-#'        - Optional metadata columns
-#' @param virus_col Character name of virus/antigen column
-#' @param antibody_col Character name of antibody/antiserum column 
-#' @param min_connections Integer minimum required connections per point
-#' @param iterations Integer maximum pruning iterations (default 100)
-#' @return A list containing two elements:
-#'   \item{pruned_data}{A `data.frame` containing only the measurements for the well-connected subset of points.}
-#'   \item{stats}{A `list` of pruning statistics including:
-#'     \itemize{
-#'       \item `original_points`: Number of unique antigens and sera before pruning.
-#'       \item `remaining_points`: Number of unique antigens and sera after pruning.
-#'       \item `iterations`: Number of pruning iterations performed.
-#'       \item `min_connections`: The minimum connection threshold used.
-#'       \item `is_connected`: A logical indicating if the final network is fully connected.
-#'     }
-#'   }
+#' @param x Numeric vector to clean.
+#' @param k Numeric threshold for outlier detection (default: 3).
+#' @param take_log Logical. Deprecated parameter. Log transformation should be done before calling this function.
+#' @return A numeric vector of the same length as `x`, where detected outliers have been replaced with `NA`.
 #' @examples
-#' # Create a sparse dataset with 12 viruses and 12 antibodies
-#' viruses <- paste0("V", 1:12)
-#' antibodies <- paste0("A", 1:12)
-#' all_pairs <- expand.grid(Virus = viruses, Antibody = antibodies, stringsAsFactors = FALSE)
-#' 
-#' # Sample 70 pairs to create a sparse matrix
-#' set.seed(42)
-#' assay_data <- all_pairs[sample(nrow(all_pairs), 70), ]
-#' 
-#' # Ensure some viruses/antibodies are poorly connected for the example
-#' assay_data <- assay_data[!(assay_data$Virus %in% c("V11", "V12")),]
-#' assay_data <- assay_data[!(assay_data$Antibody %in% c("A11", "A12")),]
-#' 
-#' # Add back single connections for the poorly connected nodes
-#' poor_connections <- data.frame(
-#'   Virus = c("V11", "V1", "V12", "V2"),
-#'   Antibody = c("A1", "A11", "A2", "A12")
-#' )
-#' assay_data <- rbind(assay_data, poor_connections)
-#' 
-#' # View connection counts before pruning
-#' # Virus V11 and V12, and Antibody A11 and A12 have only 1 connection
-#' table(assay_data$Virus)
-#' table(assay_data$Antibody)
-#' 
-#' # Prune the network to keep only nodes with at least 2 connections
-#' pruned_result <- prune_distance_network(
-#'   data = assay_data,
-#'   virus_col = "Virus",
-#'   antibody_col = "Antibody",
-#'   min_connections = 2
-#' )
-#'                                 
-#' # View connection counts after pruning
-#' # The poorly connected nodes have been removed
-#' table(pruned_result$pruned_data$Virus)
-#' table(pruned_result$pruned_data$Antibody)
-#' 
-#' # Check the summary statistics
-#' print(pruned_result$stats)
-#' 
-#' @importFrom dplyr %>% filter
-#' @importFrom rlang sym
-#' @importFrom igraph graph_from_data_frame is_connected components
+#' # Clean parameter values
+#' params <- c(0.01, 0.012, 0.011, 0.1, 0.009, 0.011, 0.15)
+#' clean_params <- clean_data(params)
+#'
+#' @seealso `detect_outliers_mad` for the underlying outlier detection.
 #' @export
-prune_distance_network <- function(data, virus_col, antibody_col,
-                                   min_connections, iterations = 100) {
-  
-  # Input validation
-  if (!is.data.frame(data)) {
-    stop("data must be a data frame")
-  }
-  
-  if (!all(c(virus_col, antibody_col) %in% names(data))) {
-    stop("Specified virus and antibody columns must exist in data")
-  }
-  
-  if (!is.numeric(min_connections) || min_connections < 1) {
-    stop("min_connections must be a positive integer")
-  }
-  
-  if (!is.numeric(iterations) || iterations < 1) {
-    stop("iterations must be a positive integer")
-  }
-  
-  # Keep track of original data size
-  n_original <- length(unique(c(data[[virus_col]], data[[antibody_col]])))
-  
-  # Initialize pruned data
-  pruned_data <- data
-  iteration <- 0
-  continue_pruning <- TRUE
-  
-  while(continue_pruning && iteration < iterations) {
-    iteration <- iteration + 1
-    
-    # Count connections per point
-    virus_counts <- table(pruned_data[[virus_col]])
-    antibody_counts <- table(pruned_data[[antibody_col]])
-    
-    # Identify points to remove
-    low_virus <- names(virus_counts)[virus_counts < min_connections]
-    low_antibody <- names(antibody_counts)[antibody_counts < min_connections]
-    
-    if(length(low_virus) == 0 && length(low_antibody) == 0) {
-      continue_pruning <- FALSE
-    } else {
-      # Remove measurements involving points with too few connections
-      pruned_data <- pruned_data %>%
-        filter(!(!!sym(virus_col) %in% low_virus) & 
-                 !(!!sym(antibody_col) %in% low_antibody))
-      
-      # Check if we've removed all data
-      if(nrow(pruned_data) == 0) {
-        stop("No data remains after pruning. Try reducing min_connections.")
-      }
-    }
-  }
-  
-  # Calculate final statistics
-  n_remaining <- length(unique(c(pruned_data[[virus_col]], 
-                                 pruned_data[[antibody_col]])))
-  
-  final_stats <- list(
-    original_points = n_original,
-    remaining_points = n_remaining,
-    iterations = iteration,
-    min_connections = min_connections
-  )
-  
-  # Verify network connectivity
-  check_connectivity <- function(data, virus_col, antibody_col) {
-    # Create adjacency list representation
-    edges <- data.frame(
-      from = data[[virus_col]],
-      to = data[[antibody_col]]
+clean_data <- function(x, k = 3, take_log = FALSE) {
+  if (take_log) {
+    lifecycle::deprecate_warn(
+      "2.1.0",
+      "clean_data(take_log)",
+      details = "Log transformation should be done before calling this function."
     )
-    
-    # Create graph
-    g <- igraph::graph_from_data_frame(edges, directed = FALSE)
-    
-    # Check if graph is connected
-    is_connected <- igraph::is_connected(g)
-    
-    if(!is_connected) {
-      # Get number of components
-      components <- igraph::components(g)
-      warning(sprintf(
-        "Network has %d disconnected components. Consider increasing min_connections.",
-        components$no
-      ))
-    }
-    
-    return(is_connected)
   }
-  
-  # Add connectivity check to stats
-  final_stats$is_connected <- check_connectivity(pruned_data, virus_col, antibody_col)
-  
-  return(list(
-    pruned_data = pruned_data,
-    stats = final_stats
-  ))
+  if (!is.numeric(k) || k <= 0) {
+    stop("k must be a positive number")
+  }
+
+  outlier_results <- detect_outliers_mad(x, k = k)
+  x[outlier_results$outlier_mask] <- NA
+  return(x)
 }
 
 
+#' Convert distance matrix to assay panel format
+#'
+#' @param dist_matrix Distance matrix
+#' @param selected_names Names of reference points
+#' @return A non-symmetric `matrix` in assay panel format, where rows are test antigens and columns are reference antigens.
+#' @export
+symmetric_to_nonsymmetric_matrix <- function(dist_matrix, selected_names) {
+  if (!is.matrix(dist_matrix)) {
+    stop("dist_matrix must be a matrix")
+  }
+  if (!is.character(selected_names)) {
+    stop("selected_names must be a character vector") 
+  }
+  
+  # Subset matrix keeping only virus rows and selected sera columns
+  panel <- dist_matrix[!rownames(dist_matrix) %in% selected_names, selected_names, drop = FALSE]
+  return(panel)
+}
+
+
+# Newed
+#' Convert Coordinates to a Distance Matrix
+#'
+#' @description
+#' Calculates pairwise Euclidean distances between points in a coordinate space.
+#' @param positions Matrix or Data Frame of coordinates where rows are points and
+#'        columns are dimensions.
+#' @return A symmetric `matrix` of pairwise Euclidean distances between points.
+#' @importFrom stats dist
+#' @export
+coordinates_to_matrix <- function(positions) {
+  if (!is.matrix(positions) && !is.data.frame(positions)) {
+    stop("positions must be a matrix or a data frame")
+  }
+  if (is.data.frame(positions)) {
+    positions <- as.matrix(positions)
+  }
+
+  p_dist_mat <- as.matrix(stats::dist(positions))
+
+  # Set row and column names if they exist
+  if (!is.null(rownames(positions))) {
+    rownames(p_dist_mat) <- rownames(positions)
+    colnames(p_dist_mat) <- rownames(positions)
+  }
+
+  return(p_dist_mat)
+}
+
+
+
+# Newed
 #' Detect Outliers Using Median Absolute Deviation
 #'
 #' @description
@@ -533,20 +941,11 @@ prune_distance_network <- function(data, virus_col, antibody_col,
 #' and works well for non-normally distributed data.
 #'
 #' @details
-#' The function:
-#' 1. Calculates median and MAD of the data
-#' 2. Uses scaled MAD (constant = 1.4826) for normal distribution consistency
-#' 3. Identifies points > k MADs from median as outliers 
-#' 4. Returns both outlier mask and summary statistics
-#'
-#' MAD scaling constant 1.4826 is calculated as 1/Phi^(-1)(3/4), where Phi is the 
-#' standard normal CDF. This makes MAD consistent with standard deviation for
-#' normal distributions.
+#' The function calculates the median and MAD of the data and identifies points
+#' that are more than `k` MADs from the median as outliers.
 #'
 #' @param data Numeric vector of values to analyze
-#' @param k Numeric threshold for outlier detection (default: 3). Points more than
-#'        k MADs from median are considered outliers.
-#' @param take_log Logical. Whether to log transform data before (and only for) outlier detection (default: FALSE)
+#' @param k Numeric threshold for outlier detection (default: 3).
 #' @return A list containing:
 #'   \item{outlier_mask}{Logical vector indicating outliers}
 #'   \item{stats}{List containing:
@@ -555,17 +954,16 @@ prune_distance_network <- function(data, virus_col, antibody_col,
 #'       \item mad: Median absolute deviation
 #'       \item n_outliers: Number of outliers detected
 #'     }
-#'   }
-#' @importFrom stats median mad
+#'   }#' @importFrom stats median mad
 #' @keywords internal
-detect_outliers_mad <- function(data, k = 3, take_log=FALSE) {
-  # Extract numeric values and handle thresholds
+detect_outliers_mad <- function(data, k = 3) {
+  # Helper to extract numeric values from character strings with thresholds
   process_value <- function(x) {
     if (is.character(x)) {
       if (grepl("^<", x)) {
         as.numeric(sub("<", "", x))
       } else if (grepl("^>", x)) {
-        as.numeric(sub(">", "", x)) 
+        as.numeric(sub(">", "", x))
       } else {
         as.numeric(x)
       }
@@ -573,70 +971,162 @@ detect_outliers_mad <- function(data, k = 3, take_log=FALSE) {
       as.numeric(x)
     }
   }
-  
+
   if (!is.numeric(data)) {
-    # Convert to numeric
+    # Convert to numeric if not already
     data <- sapply(data, process_value)
   }
   if (!is.numeric(k) || k <= 0) {
     stop("k must be a positive number")
   }
-  
-  if(take_log) {
-    data <- log(data, base=2)
-  }
-  
+
   # Calculate robust statistics
   med <- median(data, na.rm = TRUE)
   mad_val <- stats::mad(data, constant = 1.4826, na.rm = TRUE)
-  
+
   # Identify outliers
   is_outlier <- abs(data - med) > k * mad_val
-  
+
   # Return results
   list(
     outlier_mask = is_outlier,
     stats = list(
       median = med,
       mad = mad_val,
-      n_outliers = sum(is_outlier)
+      n_outliers = sum(is_outlier, na.rm = TRUE)
     )
   )
 }
 
 
-#' Clean Data by Removing MAD-based Outliers
+#' Log Transform Parameter Samples
 #'
 #' @description
-#' Removes outliers from numeric data using the Median Absolute Deviation method.
-#' Outliers are replaced with NA values. This function is particularly useful
-#' for cleaning parameter tables where each column may contain outliers.
+#' Reads parameter samples from a CSV file and applies a log transformation to
+#' specified parameter columns (e.g., N, k0, cooling_rate, c_repulsion).
 #'
-#' @param x Numeric vector to clean
-#' @param k Numeric threshold for outlier detection (default: 3)
-#' @param take_log Logical. Whether to log transform data before outlier detection (default: FALSE)
-#' @return A numeric vector of the same length as `x`, where detected outliers have been replaced with `NA`.
+#' **Note**: As of version 2.0.0, this function is primarily for backward compatibility
+#' with existing parameter files. The `initial_parameter_optimization()` function now
+#' returns log-transformed parameters directly, eliminating the need for this separate
+#' transformation step in the normal workflow.
+#'
+#' @details
+#' This function is maintained for users who have existing parameter files from
+#' older versions of the package or who need to work with parameter files that
+#' contain original-scale parameters. In the current workflow:
+#' 
+#' - `initial_parameter_optimization()` --> returns log-transformed parameters directly
+#' - `run_adaptive_sampling()` --> works with log-transformed parameters
+#' - `euclidean_embedding()` --> works with original-scale parameters
+#' 
+#' If you are working with the current workflow (using `Euclidify()` or calling
+#' `initial_parameter_optimization()` directly), you typically do not need to call
+#' this function.
+#'
+#' @param samples_file Character. Path to the CSV file containing the parameter samples.
+#' @param output_file Character. Optional path to save the transformed data as a new CSV file.
+#' @return A `data.frame` with the log-transformed parameters. If `output_file` is
+#'         specified, the data frame is also written to a file and returned invisibly.
 #' @examples
-#' # Clean parameter values
-#' params <- c(0.01, 0.012, 0.011, 0.1, 0.009, 0.011, 0.15)
-#' clean_params <- clean_data(params)
+#' # This example uses a sample file included with the package.
+#' sample_file <- system.file("extdata", "sample_params.csv", package = "topolow")
 #'
-#' # Clean multiple parameter columns
-#' param_table <- data.frame(
-#'   k0 = runif(100),
-#'   cooling_rate = runif(100),
-#'   c_repulsion = runif(100)
-#' )
-#' clean_table <- as.data.frame(lapply(param_table, clean_data))
+#' # Ensure the file exists before running the example
+#' if (nzchar(sample_file)) {
+#'   # Transform the data from the sample file and return as a data frame
+#'   transformed_data <- log_transform_parameters(sample_file, output_file = NULL)
 #'
-#' @seealso \code{\link{detect_outliers_mad}} for the underlying outlier detection
+#'   # Display the first few rows of the transformed data
+#'   print(head(transformed_data))
+#' }
+#'
+#' @note 
+#' **Backward Compatibility Note**: This function is maintained for compatibility
+#' with existing workflows and parameter files. For new workflows, consider using
+#' `initial_parameter_optimization()` which returns log-transformed parameters directly.
+#'
+#' @importFrom utils read.csv write.csv
+#' @importFrom stats na.omit
 #' @export
-clean_data <- function(x, k = 3, take_log = FALSE) {
-  if (!is.numeric(k) || k <= 0) {
-    stop("k must be a positive number")
+log_transform_parameters <- function(samples_file, output_file = NULL) {
+  # Validate input file
+  if (!file.exists(samples_file)) {
+    stop("Input file not found: ", samples_file)
   }
+
+  # Read samples
+  samples <- tryCatch({
+    utils::read.csv(samples_file, stringsAsFactors = FALSE)
+  }, error = function(e) {
+    stop("Error reading file: ", e$message)
+  })
+
+  # Remove rows with NA values
+  samples <- stats::na.omit(samples)
+
+  # Check which parameters exist to be transformed
+  params_to_transform <- c("N", "k0", "cooling_rate", "c_repulsion")
+  existing_params <- intersect(names(samples), params_to_transform)
+
+  if (length(existing_params) == 0) {
+    message("No parameters found to transform or all parameters are already transformed.")
+    return(samples)
+  }
+
+  # Validate that parameter columns are numeric and positive
+  for (param in existing_params) {
+    if (!is.numeric(samples[[param]])) {
+      samples[[param]] <- suppressWarnings(as.numeric(samples[[param]]))
+      if (any(is.na(samples[[param]]))) {
+        stop("Non-numeric values found in column: ", param)
+      }
+    }
+    if (any(samples[[param]] <= 0, na.rm = TRUE)) {
+      stop("Non-positive values found in column: ", param,
+           ". Log transform requires positive values.")
+    }
+  }
+
+  # Create log-transformed columns
+  for (param in existing_params) {
+    log_param <- paste0("log_", param)
+    samples[[log_param]] <- log(samples[[param]])
+  }
+
+  # Remove original columns
+  samples <- samples[, !names(samples) %in% existing_params, drop = FALSE]
+
+  # Attempt to reorder to a standard format if columns exist
+  desired_order <- c(
+    "log_N",
+    "log_k0",
+    "log_cooling_rate",
+    "log_c_repulsion",
+    "Holdout_MAE",
+    "NLL"
+  )
   
-  outlier_results <- detect_outliers_mad(x, k = k, take_log)
-  x[outlier_results$outlier_mask] <- NA
-  return(x)
+  # Only reorder if all desired columns are present
+  if(all(desired_order %in% names(samples))) {
+      samples <- samples[, desired_order, drop = FALSE]
+  }
+
+
+  # Write output if a path is provided
+  if (!is.null(output_file)) {
+      if (!is.character(output_file) || length(output_file) != 1) {
+          stop("'output_file' must be a single character string path.", call. = FALSE)
+      }
+      tryCatch({
+        utils::write.csv(samples, file = output_file, row.names = FALSE)
+        message("Log transformed parameters: ", paste(existing_params, collapse = ", "))
+        message("Output saved to: ", output_file)
+      }, error = function(e) {
+        stop("Error writing output file: ", e$message)
+      })
+      return(invisible(samples))
+  }
+
+  # Return the transformed data frame if not writing to file
+  return(samples)
 }

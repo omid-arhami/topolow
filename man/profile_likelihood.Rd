@@ -15,13 +15,13 @@ profile_likelihood(
 )
 }
 \arguments{
-\item{param}{Character name of parameter to analyze}
+\item{param}{The character name of the parameter to analyze (e.g., "log_N").}
 
-\item{samples}{Data frame containing parameter samples and log-likelihoods}
+\item{samples}{A data frame containing parameter samples and a log-likelihoods column named "NLL".}
 
-\item{grid_size}{Integer number of grid points (default: 48)}
+\item{grid_size}{The integer number of grid points for the analysis.}
 
-\item{bandwidth_factor}{Numeric factor for local sample window (default: 0.03)}
+\item{bandwidth_factor}{A numeric factor for the local sample window size.}
 
 \item{start_factor, end_factor}{Numeric range multipliers for parameter grid (default: 0.5, 1.2)}
 
@@ -36,23 +36,21 @@ Object of class "profile_likelihood" containing:
 \item{sample_counts}{Number of samples per estimate}
 }
 \description{
-Calculates profile likelihood for a parameter by evaluating conditional maximum
-likelihood across a grid of parameter values. Uses local sample windowing to
-estimate conditional likelihoods. This implementation is not a classical profile likelihood
-calculation, but rather an "empirical profile likelihood" which estimates the profile
-likelihood at each point based on the many observations previously sampled in Monte Carlo simulations.
+Calculates the profile likelihood for a given parameter by evaluating the conditional
+maximum likelihood across a grid of parameter values. This "empirical profile
+likelihood" estimates the likelihood surface based on samples from Monte Carlo
+simulations.
 }
 \details{
 For each value in the parameter grid, the function:
 \enumerate{
-\item Identifies nearby samples using bandwidth window
-\item Calculates conditional maximum likelihood from these samples
-\item Tracks sample counts to assess estimate reliability
-\item Handles boundary conditions and sparse regions
+\item Identifies nearby samples using a bandwidth window.
+\item Calculates the conditional maximum likelihood from these samples.
+\item Tracks sample counts to assess the reliability of the estimate.
 }
 }
 \examples{
-# Create a sample data frame of MCMC samples
+# Create a sample data frame of parameter samples
 mcmc_samples <- data.frame(
   log_N = log(runif(50, 2, 10)),
   log_k0 = log(runif(50, 1, 5)),
@@ -61,15 +59,15 @@ mcmc_samples <- data.frame(
   NLL = runif(50, 20, 100)
 )
 
-# Calculate profile likelihood for parameter "log_N"
-pl <- profile_likelihood("log_N", mcmc_samples, 
-                        grid_size = 10, # Smaller grid for a quick example
-                        bandwidth_factor = 0.05)
-                        
+# Calculate profile likelihood for the "log_N" parameter
+pl <- profile_likelihood("log_N", mcmc_samples,
+                         grid_size = 10, # Smaller grid for a quick example
+                         bandwidth_factor = 0.05)
+
 # Print the results
 print(pl)
 
 }
 \seealso{
-\code{\link{plot.profile_likelihood}} for visualization
+The S3 methods \code{print.profile_likelihood} and \code{summary.profile_likelihood} for viewing results.
 }

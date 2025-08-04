@@ -2,13 +2,12 @@
 % Please edit documentation in R/adaptive_sampling.R
 \name{adaptive_MC_sampling}
 \alias{adaptive_MC_sampling}
-\title{Perform Adaptive Monte Carlo Sampling}
+\title{Perform Adaptive Monte Carlo Sampling (Internal)}
 \usage{
 adaptive_MC_sampling(
   samples_file,
-  distance_matrix,
+  dissimilarity_matrix,
   iterations = 1,
-  batch_size = 1,
   mapping_max_iter,
   relative_epsilon,
   folds = 20,
@@ -18,25 +17,23 @@ adaptive_MC_sampling(
 )
 }
 \arguments{
-\item{samples_file}{Path to CSV with initial samples for this job.}
+\item{samples_file}{Path to the CSV file with samples for the current job.}
 
-\item{distance_matrix}{Distance matrix to fit}
+\item{dissimilarity_matrix}{The dissimilarity matrix to be fitted.}
 
-\item{iterations}{Number of sampling iterations per job}
+\item{iterations}{Number of sampling iterations per job.}
 
-\item{batch_size}{Samples per iteration (fixed to 1)}
+\item{mapping_max_iter}{Maximum optimization iterations for the embedding.}
 
-\item{mapping_max_iter}{Maximum map optimization iterations}
+\item{relative_epsilon}{Convergence threshold for the optimization.}
 
-\item{relative_epsilon}{Convergence threshold}
+\item{folds}{Number of cross-validation folds.}
 
-\item{folds}{Number of CV folds}
+\item{num_cores}{Number of cores for parallel processing.}
 
-\item{num_cores}{Number of cores for parallel processing}
+\item{scenario_name}{Name for output files, used for context.}
 
-\item{scenario_name}{Name for output files}
-
-\item{verbose}{Logical. Whether to print progress messages. Default: FALSE}
+\item{verbose}{Logical. If TRUE, prints progress messages.}
 }
 \value{
 A \code{data.frame} containing all samples (initial and newly generated)
@@ -45,7 +42,9 @@ columns for the log-transformed parameters, \code{Holdout_MAE}, and \code{NLL}.
 Returns \code{NULL} if the results file was not created.
 }
 \description{
-Main function implementing adaptive Monte Carlo sampling to explore parameter space.
-Updates sampling distribution based on evaluated likelihoods. This is an internal
-function called by \code{run_adaptive_sampling}.
+Core implementation of the adaptive Monte Carlo sampling algorithm. This internal
+function explores the parameter space by updating the sampling distribution
+based on evaluated likelihoods. It is called by the main \code{run_adaptive_sampling}
+function.
 }
+\keyword{internal}

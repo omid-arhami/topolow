@@ -7,20 +7,19 @@
 weighted_kde(x, weights, n = 512, from = min(x), to = max(x))
 }
 \arguments{
-\item{x}{Numeric vector of samples}
+\item{x}{A numeric vector of samples.}
 
-\item{weights}{Numeric vector of weights}
+\item{weights}{A numeric vector of weights corresponding to each sample in x.}
 
-\item{n}{Integer number of evaluation points}
+\item{n}{The integer number of points at which to evaluate the density.}
 
-\item{from, to}{Numeric range for evaluation points}
+\item{from, to}{The range over which to evaluate the density.}
 }
 \value{
-List containing:
-\item{x}{Vector of evaluation points}
-\item{y}{Vector of density estimates}
+A list containing the evaluation points (\code{x}) and the estimated density values (\code{y}).
 }
 \description{
-Performs weighted kernel density estimation for univariate data. Uses parallel processing
-for efficiency. Useful for analyzing parameter distributions with importance weights.
+Performs weighted kernel density estimation for univariate data. This is useful for
+analyzing parameter distributions where each sample has an associated importance
+weight (e.g., a likelihood).
 }

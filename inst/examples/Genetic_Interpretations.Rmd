@@ -827,7 +827,7 @@ ggsave_white_bg(file.path( "amino_acid_discrimination_power.pdf"),
    - **`read.dna(..., format="fasta")`** gives a `DNAbin` object suitable for nucleotide distances.  
 
 ```{r}
-#’ Clean, filter, and deduplicate HA‐DNA sequences in “HA_DNA_68_03.fa”
+#’ Clean, filter, and deduplicate HA-DNA sequences in “HA_DNA_68_03.fa”
 #’
 #’ @param dna_set A DNAStringSet as returned by readDNAStringSet()
 #’ @return A data.frame with columns:
@@ -858,13 +858,13 @@ cleaner_sequences_DNA <- function(dna_set) {
   seq_vec     <- seq_vec[keep]
   strain      <- strain[keep]
   
-  # 5. Parse accession = first whitespace‐delimited token after ‘>’
+  # 5. Parse accession = first whitespace-delimited token after ‘>’
   accession <- sub("^>([^ ]+).*", "\\1", raw_headers)
   
-  # 6. Normalize strain name (upper‐case, remove stray underscores)
+  # 6. Normalize strain name (upper-case, remove stray underscores)
   name <- toupper(gsub("[-_\\\\]+", "", strain))
   
-  # 7. Extract 4‐digit year
+  # 7. Extract 4-digit year
   year <- as.integer(sub(".*/(\\d{4})$", "\\1", strain))
   
   # 8. Compute sequence lengths
@@ -929,7 +929,7 @@ writeXStringSet(
 )
 ```
 
-At this point, perform a multiple‐sequence alignment externally (e.g. MAFFT or MUSCLE), writing to
+At this point, perform a multiple-sequence alignment externally (e.g. MAFFT or MUSCLE), writing to
 "data_files/HA_DNA_68_03_aligned.fasta"
 
 We used MAFFT/7.520-GCC-12.3.0-with-extensions.
@@ -996,13 +996,13 @@ write.tree(
 
 1. imports `"matched_sequences_alignment.fasta"`.  
 2. calculates the pairwise distance matrix.  
-3. builds a neighbour‐joining tree from that matrix.  
+3. builds a neighbour-joining tree from that matrix.  
 4. drops all branch lengths, because we only need groupings to use in calculating antigenic velocity. (i.e. save the nested Newick topology).  
 5. exports the grouping in standard Newick format.
 
 ```{r phylo-groupings, echo=TRUE, message=FALSE, warning=FALSE}
 # install.packages("ape")
-#–– build grouping‐only phylogeny from amino‐acid alignment and root on oldest sample ––
+#–– build grouping-only phylogeny from amino-acid alignment and root on oldest sample ––
 # library(ape)
 # library(phangorn)
 # 
@@ -1014,7 +1014,7 @@ write.tree(
 # # compute pairwise Hamming distances
 # dist_matrix <- dist.hamming(alignment_aa)
 # 
-# # neighbor‐joining tree
+# # neighbor-joining tree
 # tree_nj <- NJ(dist_matrix)
 # 
 # # identify oldest sample by extracting 4-digit year from sequence names
@@ -1025,10 +1025,10 @@ write.tree(
 # # root the tree on that oldest tip
 # tree_rooted <- root(tree_nj, outgroup = oldest_tip, resolve.root = TRUE)
 # 
-# # strip out branch lengths → keep only grouping/topology
+# # strip out branch lengths --> keep only grouping/topology
 # tree_rooted$edge.length <- NULL
 # 
-# # write topology‐only, rooted tree in Newick (no “:length” entries)
+# # write topology-only, rooted tree in Newick (no “:length” entries)
 # write.tree(tree_rooted, file = "phylo_groupings_rooted.nwk")
 ```
 
@@ -1070,7 +1070,7 @@ writeLines(valid_accessions, con = "data_files/HIV1BC_accessions.txt")
 ```
 
 
-At this point, perform a multiple‐sequence alignment externally (e.g. MAFFT or MUSCLE), writing to
+At this point, perform a multiple-sequence alignment externally (e.g. MAFFT or MUSCLE), writing to
 "data_files/HIV1BC_sequence_aligned_named.fasta"
 
 We used MAFFT/7.520-GCC-12.3.0-with-extensions.

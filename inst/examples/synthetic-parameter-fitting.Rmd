@@ -19,6 +19,568 @@ knitr::opts_chunk$set(
  message = TRUE,    # Show messages
   error = TRUE      # Continue on error
 )
+
+
+
+#' Filter matrix to only virus vs antiserum distances
+#'
+#' @param dist_matrix Distance matrix
+#' @param selected_names Names of selected reference points
+#' @return A `matrix` of the same dimensions as the input, but with non-virus-vs-antiserum distances set to `NA`.
+only_virus_vs_as <- function(dist_matrix, selected_names) {
+  if (!is.matrix(dist_matrix)) {
+    stop("dist_matrix must be a matrix")
+  }
+  if (!is.character(selected_names)) {
+    stop("selected_names must be a character vector")
+  }
+  
+  # Make values NA for non-selected columns
+  dist_matrix[, !colnames(dist_matrix) %in% selected_names] <- NA
+  
+  # Update symmetric values
+  dist_matrix[rownames(dist_matrix) %in% selected_names, ] <- 
+    t(dist_matrix[, colnames(dist_matrix) %in% selected_names])
+  
+  return(dist_matrix)
+}
+
+
+#' Generate unique string identifiers with year suffix
+#'
+#' @param n Number of strings to generate
+#' @param length Length of random part of string (default: 8)
+#' @param lower_bound Lower bound for year suffix (default: 1)
+#' @param upper_bound Upper bound for year suffix (default: 20)
+#' @return A character vector of unique strings with year suffixes
+generate_unique_string <- function(n, length = 8, lower_bound = 1, upper_bound = 20) {
+  if (n <= 0) stop("n must be positive")
+  if (length <= 0) stop("length must be positive")
+  if (lower_bound > upper_bound) {
+    stop("lower_bound must be less than or equal to upper_bound")
+  }
+  
+  # Validate numeric parameters
+  if (!all(sapply(list(n, length, lower_bound, upper_bound), is.numeric))) {
+    stop("All numeric parameters must be numeric")
+  }
+  
+  if (!all(sapply(list(n, length), function(x) x == round(x)))) {
+    stop("n and length must be integers")
+  }
+
+  # Generate base strings
+  base_strings <- sapply(1:n, function(x) {
+    paste0(sample(c(LETTERS, 0:9), length, replace = TRUE), collapse = "")
+  })
+  
+  # Calculate strings per year
+  num_per_group <- n / (upper_bound - lower_bound + 1)
+  
+  # Generate year suffixes
+  suffixes <- rep(lower_bound:upper_bound, each = ceiling(num_per_group))[1:n]
+  
+  # Combine strings with suffixes
+  unique_strings <- paste0(base_strings, "/", suffixes)
+  
+  return(unique_strings)
+}
+
+
+
+#' Generate Synthetic Distance Matrices with Missing Data
+#'
+#' @description
+#' Creates synthetic distance matrices with controlled levels of missingness and noise
+#' for testing and validating mapping algorithms. Generates multiple datasets with 
+#' different dimensionalities and missingness patterns. If `output_dir` is provided,
+#' the generated datasets are saved as RDS files.
+#'
+#' @param n_dims_list Numeric vector of dimensions to generate data for
+#' @param seeds Integer vector of random seeds (same length as n_dims_list)
+#' @param n_points Integer number of points to generate
+#' @param missingness_levels Named list of missingness percentages (default: list(S=0.67, M=0.77, L=0.87))
+#' @param output_dir Character path to directory for saving outputs. If NULL (the default), no files are saved.
+#' @param prefix Character string to prefix output files (optional)
+#' @param save_plots Logical whether to save network visualization plots. Requires `output_dir` to be set.
+#' @return A list containing the generated synthetic data and metadata:
+#'   \item{matrices}{A list of generated symmetric distance matrices for each dimension.}
+#'   \item{panels}{A list of generated assay panels (non-symmetric matrices) for each dimension.}
+#'   \item{metadata}{A `data.frame` with the generation parameters for each dataset.}
+#' @examples
+#' # Generate datasets without saving to disk
+#' results <- generate_synthetic_datasets(
+#'   n_dims_list = c(2, 3),
+#'   seeds = c(123, 456),
+#'   n_points = 50
+#' )
+#' \donttest{
+#' # Generate datasets and save to a temporary directory
+#' temp_out_dir <- tempdir()
+#' results_saved <- generate_synthetic_datasets(
+#'   n_dims_list = c(2),
+#'   seeds = c(123),
+#'   n_points = 10,
+#'   missingness_levels = list(low=0.5, high=0.8),
+#'   output_dir = temp_out_dir,
+#'   save_plots = TRUE
+#' )
+#' list.files(temp_out_dir)
+#' # Clean up the directory
+#' unlink(temp_out_dir, recursive = TRUE)
+#' }
+#' @importFrom stats dist
+generate_synthetic_datasets <- function(n_dims_list, seeds, n_points,
+                                     missingness_levels = list(S=0.67, M=0.77, L=0.87),
+                                     output_dir = NULL,
+                                     prefix = "sim",
+                                     save_plots = FALSE) {
+  
+  # Input validation
+  if (length(n_dims_list) != length(seeds)) {
+    stop("n_dims_list and seeds must have the same length")
+  }
+  
+  if (save_plots && is.null(output_dir)) {
+    stop("An 'output_dir' must be provided when 'save_plots' is TRUE.", call. = FALSE)
+  }
+  
+  if (!is.null(output_dir)) {
+    if (!dir.exists(output_dir)) {
+      dir.create(output_dir, recursive = TRUE)
+    }
+  }
+  
+  # Validate dimensions
+  if (!is.numeric(n_dims_list) || any(n_dims_list < 1) || 
+      any(n_dims_list != round(n_dims_list))) {
+    stop("All dimensions must be positive integers")
+  }
+  
+  # Validate seeds
+  if (!is.numeric(seeds) || any(seeds != round(seeds))) {
+    stop("All seeds must be integers")
+  }
+  
+  # Validate n_points
+  if (!is.numeric(n_points) || n_points < 2 || n_points != round(n_points)) {
+    stop("n_points must be an integer >= 2")
+  }
+  
+  # Validate missingness levels
+  if (!is.list(missingness_levels)) {
+    stop("missingness_levels must be a list")
+  }
+  
+  if (!all(unlist(missingness_levels) > 0 & unlist(missingness_levels) < 1)) {
+    stop("All missingness levels must be between 0 and 1")
+  }
+  
+  # Initialize return lists
+  coordinates_list <- list()
+  matrices_list <- list()
+  panels_list <- list()
+  metadata <- data.frame()
+  
+  # Process each dimension
+  for (i in seq_along(n_dims_list)) {
+    set.seed(seeds[i])
+    n_dims <- n_dims_list[i]
+    
+    # Generate base dataset
+    dataset <- generate_complex_data(n_points, n_dims, 
+                                   n_clusters = 5, 
+                                   cluster_spread = 0.1)
+    
+    # Add unique IDs
+    dataset$unique_id <- generate_unique_string(nrow(dataset))
+    
+    # Generate distance matrix
+    dist_matrix <- as.matrix(dist(dataset[, 1:n_dims]))
+    rownames(dist_matrix) <- dataset$unique_id
+    colnames(dist_matrix) <- dataset$unique_id
+    
+    # Select references
+    n_ref <- floor(0.4 * n_points)
+    selected_indices <- floor(seq(1, nrow(dataset), length.out = n_ref + 1))
+    selected_indices <- selected_indices[1:n_ref]
+    selected_names <- dataset$unique_id[selected_indices]
+    
+    # Label references and viruses
+    virus_mask <- !(rownames(dist_matrix) %in% selected_names)
+    dataset$unique_id[virus_mask] <- paste0("V/", dataset$unique_id[virus_mask])
+    rownames(dist_matrix)[virus_mask] <- paste0("V/", rownames(dist_matrix)[virus_mask])
+    colnames(dist_matrix)[virus_mask] <- paste0("V/", colnames(dist_matrix)[virus_mask])
+    
+    serum_mask <- rownames(dist_matrix) %in% selected_names
+    dataset$unique_id[serum_mask] <- paste0("S/", dataset$unique_id[serum_mask])
+    rownames(dist_matrix)[serum_mask] <- paste0("S/", rownames(dist_matrix)[serum_mask])
+    colnames(dist_matrix)[serum_mask] <- paste0("S/", colnames(dist_matrix)[serum_mask])
+    
+    selected_names <- paste0("S/", selected_names)
+    
+    # Save the coordinates to return
+    coordinates_list[[i]] <- dataset
+    
+    # Create base matrices
+    matrices <- list()
+    matrices$complete <- dist_matrix
+    matrices$labelled <- only_virus_vs_as(dist_matrix, selected_names)
+    
+    # Generate matrices with different missingness levels
+    for (level_name in names(missingness_levels)) {
+      level_pct <- missingness_levels[[level_name]]
+      missing_mat <- increase_na_percentage(matrices$labelled, level_pct)
+      matrices[[paste0(level_name, "_missing")]] <- missing_mat
+      
+      # Add noise variations
+      noisy <- add_noise_bias(missing_mat)
+      matrices[[paste0(level_name, "_noise1")]] <- noisy$n1
+      matrices[[paste0(level_name, "_noise2")]] <- noisy$n2
+      matrices[[paste0(level_name, "_noise_bias")]] <- noisy$nb
+    }
+    
+    # Generate panels
+    panels <- list()
+    panels$full <- symmetric_to_nonsymmetric_matrix(matrices$labelled, selected_names)
+    
+    for (level_name in names(missingness_levels)) {
+      missing_mat <- matrices[[paste0(level_name, "_missing")]]
+      panel <- symmetric_to_nonsymmetric_matrix(missing_mat, selected_names)
+      panel <- panel[rowSums(!is.na(panel)) > 0, ]
+      panels[[level_name]] <- panel
+    }
+    
+    # Store results
+    matrices_list[[i]] <- matrices
+    panels_list[[i]] <- panels
+    
+    # Record metadata
+    metadata <- rbind(metadata, data.frame(
+      dimension = n_dims,
+      seed = seeds[i],
+      n_points = n_points,
+      n_references = n_ref
+    ))
+    
+    # Save files if output directory provided
+    if (!is.null(output_dir)) {
+      base_name <- file.path(output_dir, 
+                            sprintf("%s_dim%d", prefix, n_dims))
+      
+      # Save matrices
+      for (mat_name in names(matrices)) {
+        saveRDS(matrices[[mat_name]], 
+                paste0(base_name, "_", mat_name, ".rds"))
+      }
+      
+      # Save panels
+      for (panel_name in names(panels)) {
+        saveRDS(panels[[panel_name]], 
+                paste0(base_name, "_panel_", panel_name, ".rds"))
+      }
+      
+      # Create network plots if requested
+      if (save_plots) {
+        for (level_name in names(missingness_levels)) {
+          mat <- matrices[[paste0(level_name, "_missing")]]
+          net <- analyze_network_structure(mat)
+          plot_file_path <- paste0(base_name, "_network_", level_name, ".png")
+          plot_network_structure(net, output_file = plot_file_path)
+        }
+      }
+    }
+  }
+  
+  # Return results
+  return(list(
+    coordinates = coordinates_list,
+    matrices = matrices_list,
+    panels = panels_list,
+    metadata = metadata
+  ))
+}
+
+
+
+#' Generate Complex High-Dimensional Data for Testing
+#'
+#' @description 
+#' Generates synthetic high-dimensional data with clusters and trends for testing 
+#' dimensionality reduction methods. Creates data with specified properties:
+#' - Multiple clusters along a trend line
+#' - Variable density regions 
+#' - Controllable noise levels
+#' - Optional visualization
+#'
+#' The function generates cluster centers along a trend line, adds points around those
+#' centers with specified spread, and incorporates random noise to create high and 
+#' low density areas. The data is useful for testing dimensionality reduction and
+#' visualization methods.
+#'
+#' @param n_points Integer number of points to generate
+#' @param n_dim Integer number of dimensions 
+#' @param n_clusters Integer number of clusters
+#' @param cluster_spread Numeric controlling cluster variance
+#' @param fig_name Character path to save visualization (optional)
+#' @return A `data.frame` with `n_points` rows and `n_dim` columns. Column names 
+#'         are "Dim1" through "DimN" where N is n_dim.
+#' @examples
+#' # Generate basic dataset
+#' data <- generate_complex_data(n_points = 500, n_dim = 10, 
+#'                              n_clusters = 4, cluster_spread = 1)
+#'                              
+#' # The function returns a data frame, which can be inspected
+#' head(data)
+#'
+#' @importFrom MASS mvrnorm
+#' @importFrom stats runif rnorm prcomp
+#' @importFrom ggplot2 ggplot aes geom_point theme_minimal labs coord_fixed ggsave
+generate_complex_data <- function(n_points = 500, n_dim = 10, n_clusters = 4, 
+                                cluster_spread = 1, fig_name = NA) {
+  # Input validation
+  if (!is.numeric(n_points) || n_points <= 0 || n_points %% 1 != 0) {
+    stop("n_points must be a positive integer")
+  }
+  if (!is.numeric(n_dim) || n_dim <= 0 || n_dim %% 1 != 0) {
+    stop("n_dim must be a positive integer")
+  }
+  if (!is.numeric(n_clusters) || n_clusters <= 0 || n_clusters %% 1 != 0) {
+    stop("n_clusters must be a positive integer")
+  }
+  if (!is.numeric(cluster_spread) || cluster_spread <= 0) {
+    stop("cluster_spread must be a positive number")
+  }
+  if (!is.na(fig_name) && !is.character(fig_name)) {
+    stop("fig_name must be NA or a character string ending in .png")
+  }
+  
+  if (n_clusters > n_points) {
+    stop("Number of clusters cannot exceed number of points")
+  }
+  
+  # Generate a trend vector
+  trend <- seq(-10, 10, length.out = n_points)
+  
+  # Generate cluster centers along the trend
+  cluster_centers <- matrix(0, nrow = n_clusters, ncol = n_dim)
+  for (i in 1:n_clusters) {
+    cluster_centers[i, ] <- 0.5 * runif(n_dim, min = -10, max = 10) + 
+      trend[floor(i * n_points / n_clusters)]
+  }
+  
+  # Generate points around each cluster center
+  points_per_cluster <- floor(n_points / n_clusters)
+  data <- do.call(rbind, lapply(1:n_clusters, function(i) {
+    mvrnorm(n = points_per_cluster, 
+            mu = cluster_centers[i, ], 
+            Sigma = diag(cluster_spread, n_dim))
+  }))
+  
+  # Add random noise to create high and low density areas
+  noise <- matrix(rnorm(nrow(data) * n_dim, mean = 0, sd = 3.3), 
+                 ncol = n_dim)
+  data <- data + noise
+  
+  # Add trend to multiple dimensions
+  for (j in 1:n_dim) {
+    data[, j] <- data[, j] + trend[1:nrow(data)]
+  }
+  
+  # Convert to data frame with proper column names
+  data <- as.data.frame(data)
+  colnames(data) <- paste0("Dim", 1:n_dim)
+  
+  # Create visualization if requested
+  if (!is.na(fig_name)) {
+    # Perform PCA for visualization
+    pca_result <- prcomp(data, scale. = FALSE)
+    pca_data <- as.data.frame(pca_result$x[, 1:2])
+    colnames(pca_data) <- c("PC1", "PC2")
+    
+    # Create plot
+    p <- ggplot(pca_data, aes(x = .data$PC1, y = .data$PC2)) +
+      geom_point(alpha = 0.5) +
+      theme_minimal() +
+      labs(title = "PCA of Simulated High-Dimensional Data",
+           x = "PC 1", y = "PC 2") +
+      coord_fixed()
+    
+    # ENSURE DIRECTORY EXISTS
+    output_dir <- dirname(fig_name)
+    if (!dir.exists(output_dir)) {
+        dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+    }
+
+    # Save plot
+    ggsave_white_bg(filename = fig_name, plot = p, dpi = 300)
+  }
+  
+  return(data)
+}
+
+
+
+#' Increase Missing Values in a Matrix
+#'
+#' @description
+#' Strategically introduces NA values into a distance matrix while maintaining symmetry.
+#' New NA values are added preferentially farther from the diagonal to simulate real-world 
+#' measurement patterns where distant pairs are more likely to be unmeasured.
+#'
+#' @details
+#' The function:
+#' 1. Calculates needed additional NAs to reach target percentage
+#' 2. Creates probability matrix favoring off-diagonal elements
+#' 3. Randomly selects positions weighted by distance from diagonal
+#' 4. Maintains matrix symmetry by mirroring NAs
+#'
+#' @param mat Matrix to modify
+#' @param target_na_percentage Numeric between 0 and 1 specifying desired proportion of NAs
+#' @return A `matrix` with an increased number of `NA` values, maintaining symmetry.
+#' @examples
+#' # Create sample distance matrix
+#' dist_mat <- matrix(runif(100), 10, 10)
+#' dist_mat[lower.tri(dist_mat)] <- t(dist_mat)[lower.tri(dist_mat)]
+#' diag(dist_mat) <- 0
+#' 
+#' # Increase NAs to 70%
+#' sparse_mat <- increase_na_percentage(dist_mat, 0.7)
+increase_na_percentage <- function(mat, target_na_percentage) {
+  # Input validation
+  if (!is.matrix(mat)) {
+    stop("Input must be a matrix")
+  }
+  if (!is.numeric(target_na_percentage) || 
+      target_na_percentage <= 0 || 
+      target_na_percentage >= 1) {
+    stop("target_na_percentage must be between 0 and 1")
+  }
+  
+  # Calculate current and target NA counts
+  total_elements <- length(mat)
+  current_na_count <- sum(is.na(mat))
+  target_na_count <- ceiling(target_na_percentage * total_elements)
+  additional_na_count <- target_na_count - current_na_count
+  
+  if (additional_na_count <= 0) {
+    warning("The matrix already has more NA values than the target percentage.")
+    return(mat)
+  }
+  
+  # Get indices of non-NA elements
+  non_na_indices <- which(!is.na(mat))
+  
+  # Calculate distance from diagonal for each element
+  n <- nrow(mat)
+  distances <- outer(1:n, 1:n, FUN = function(i, j) abs(i - j))
+  
+  # Create probability matrix favoring off-diagonal elements
+  max_distance <- max(distances)
+  # Add padding to avoid strictly diagonal matrix
+  distances <- distances + 0.15 * max_distance
+  
+  # Normalize probabilities
+  prob_matrix <- distances / max_distance
+  prob_vector <- as.vector(prob_matrix)
+  prob_vector <- prob_vector / sum(prob_vector)
+  
+  # Randomly sample indices based on probability vector
+  random_indices <- sample(non_na_indices, 
+                         size = additional_na_count,
+                         prob = prob_vector[non_na_indices], 
+                         replace = FALSE)
+  
+  # Replace selected elements with NA while maintaining symmetry
+  for (index in random_indices) {
+    row <- (index - 1) %/% nrow(mat) + 1
+    col <- (index - 1) %% ncol(mat) + 1
+    if (row != col && !is.na(mat[row, col])) {
+      mat[row, col] <- NA
+      mat[col, row] <- NA
+    }
+  }
+  
+  return(mat)
+}
+
+
+#' Add Noise and Bias to Matrix Data
+#'
+#' @description
+#' Creates noisy versions of a distance matrix by adding random noise and/or systematic bias.
+#' Useful for testing robustness of algorithms to measurement errors and systematic biases.
+#'
+#' @details
+#' The function generates three variants of the input matrix:
+#' 1. n1: Matrix with random Gaussian noise
+#' 2. n2: Different realization of random noise
+#' 3. nb: Matrix with both random noise and systematic negative bias
+#'
+#' The noise level is scaled relative to the data mean to maintain realistic error magnitudes.
+#'
+#' @param matrix_data Numeric matrix to add noise to
+#' @return A `list` containing three noisy `matrix` objects:
+#'   \item{n1}{Matrix with the first realization of random Gaussian noise.}
+#'   \item{n2}{Matrix with a second, different realization of random Gaussian noise.}
+#'   \item{nb}{Matrix with both random noise and a systematic negative bias.}
+#' @examples
+#' # Create sample distance matrix
+#' dist_mat <- matrix(runif(100), 10, 10)
+#' dist_mat[lower.tri(dist_mat)] <- t(dist_mat)[lower.tri(dist_mat)]
+#' diag(dist_mat) <- 0
+#'
+#' # Generate noisy versions
+#' noisy_variants <- add_noise_bias(dist_mat)
+#' @importFrom stats rnorm
+add_noise_bias <- function(matrix_data) {
+  # Input validation
+  if (!is.matrix(matrix_data) || !is.numeric(matrix_data)) {
+    stop("Input must be a numeric matrix")
+  }
+  
+  # Calculate noise scale based on data mean
+  data_mean <- mean(matrix_data, na.rm = TRUE)
+  measurement_er <- 0.05 * data_mean
+  
+  # Generate first noisy variant
+  noise1 <- matrix(rnorm(length(matrix_data), 
+                        mean = 0, 
+                        sd = measurement_er), 
+                  nrow = nrow(matrix_data), 
+                  ncol = ncol(matrix_data))
+  noisy_matrix1 <- matrix_data + noise1
+  
+  # Enforce non-negative values and zero diagonal
+  noisy_matrix1[noisy_matrix1 < 0] <- 0
+  diag(noisy_matrix1) <- 0
+  
+  # Generate second noisy variant
+  noise2 <- matrix(rnorm(length(matrix_data), 
+                        mean = 0, 
+                        sd = measurement_er),
+                  nrow = nrow(matrix_data), 
+                  ncol = ncol(matrix_data))
+  noisy_matrix2 <- matrix_data + noise2
+  noisy_matrix2[noisy_matrix2 < 0] <- 0
+  diag(noisy_matrix2) <- 0
+  
+  # Generate biased variant
+  bias <- matrix(measurement_er, 
+                nrow = nrow(matrix_data), 
+                ncol = ncol(matrix_data))
+  noisy_biased_matrix <- matrix_data + noise2 - bias
+  noisy_biased_matrix[noisy_biased_matrix < 0] <- 0
+  diag(noisy_biased_matrix) <- 0
+
+  # Return all variants
+  return(list(
+    n1 = noisy_matrix1,
+    n2 = noisy_matrix2,
+    nb = noisy_biased_matrix
+  ))
+}
+
 ```
 
 ## Introduction
@@ -111,7 +673,7 @@ for(i in seq_along(results$matrices)) {
     
     # Run optimization
     opt_result <- initial_parameter_optimization(
-      distance_matrix = distance_matrix,
+      dissimilarity_matrix = distance_matrix,
       mapping_max_iter = opt_params$mapping_max_iter,
       relative_epsilon = 1e-4,
       convergence_counter = 5,
@@ -169,7 +731,6 @@ You can check the console outputs, warnings, or errors in .out and .err files in
 ```{r eval=FALSE}
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_parallel_jobs = 200,  # For local execution: Number of CPU cores available; 
   num_samples = 200,        # Number of new samples to add to the parameter distribution through AMC (for refinement.)
   mapping_max_iter = 1000,    # Maximum iterations per map optimization
   relative_epsilon = 1e-4
@@ -204,10 +765,9 @@ for(ndim in results$metadata$dimension) { #
     # Run adaptive sampling for current scenario (K-fold cross-validation happens inside) 
     run_adaptive_sampling(
       initial_samples_file = result_file,
-      distance_matrix = distance_matrix,
+      dissimilarity_matrix = distance_matrix,
       mapping_max_iter = amc_params$mapping_max_iter,
       scenario_name = amc_scenario,
-      num_parallel_jobs = amc_params$num_parallel_jobs,
       num_samples = amc_params$num_samples,
       max_cores = opt_params$folds+1, # Each job on SLURM can work with 20 cores for a 20-fold CV
       relative_epsilon = amc_params$relative_epsilon,

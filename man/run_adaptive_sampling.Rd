@@ -2,13 +2,12 @@
 % Please edit documentation in R/adaptive_sampling.R
 \name{run_adaptive_sampling}
 \alias{run_adaptive_sampling}
-\title{Run Adaptive Monte Carlo Sampling}
+\title{Performs adaptive Monte Carlo sampling}
 \usage{
 run_adaptive_sampling(
   initial_samples_file,
   scenario_name,
-  distance_matrix,
-  num_parallel_jobs = 5,
+  dissimilarity_matrix,
   max_cores = NULL,
   num_samples = 10,
   mapping_max_iter = 1000,
@@ -19,48 +18,42 @@ run_adaptive_sampling(
 )
 }
 \arguments{
-\item{initial_samples_file}{Character. Path to CSV file containing initial samples.
-Must contain columns: log_N, log_k0, log_cooling_rate, log_c_repulsion, NLL}
+\item{initial_samples_file}{Character. Path to a CSV file containing initial samples.}
 
-\item{scenario_name}{Character. Name for output files.}
+\item{scenario_name}{Character. Name for the output files.}
 
-\item{distance_matrix}{Matrix. Distance matrix of the input data.}
+\item{dissimilarity_matrix}{Matrix. The input dissimilarity matrix.}
 
-\item{num_parallel_jobs}{Integer. Number of parallel local jobs (chains) to run.}
+\item{max_cores}{Integer. Number of cores to use for parallel execution. If NULL, uses all available cores minus 1.}
 
-\item{max_cores}{Integer. Maximum number of cores to use for parallel processing across all jobs.
-If NULL, uses all available cores minus 1 (default: NULL).}
+\item{num_samples}{Integer. Number of new samples to generate via adaptive
+sampling.}
 
-\item{num_samples}{Integer. Number of new samples to be added to the CSV file containing initial samples
-through Adaptive Monte Carlo sampling (default: 10).}
+\item{mapping_max_iter}{Integer. Maximum number of map optimization iterations.}
 
-\item{mapping_max_iter}{Integer. Maximum iterations per map optimization.}
+\item{relative_epsilon}{Numeric. Convergence threshold for relative change in error. Default is 1e-4.}
 
-\item{relative_epsilon}{Numeric. Convergence threshold.}
+\item{folds}{Integer. Number of cross-validation folds.}
 
-\item{folds}{Integer. Number of CV folds (default: 20).}
+\item{output_dir}{Character. Required directory for output files.}
 
-\item{output_dir}{Character. Directory for output job files. The project's working directory is a
-straightforward example. This argument is required.}
-
-\item{verbose}{Logical. Whether to print progress messages. Default: FALSE.}
+\item{verbose}{Logical. Whether to print progress messages. Default is FALSE.}
 }
 \value{
-No return value, called for side effects. The function writes the
-results of the adaptive sampling to a CSV file within the specified \code{output_dir}.
+No return value. Called for its side effect of writing results to a CSV file in \code{output_dir}.
 }
 \description{
-Performs adaptive Monte Carlo sampling to explore parameter space, running locally
-in parallel. Samples are drawn adaptively based on previous evaluations
-to focus sampling in high-likelihood regions. Results from all parallel jobs
-accumulate in a single output file. This function always writes to the file system
-and therefore requires the \code{output_dir} argument.
+Performs adaptive Monte Carlo sampling to explore and refine the parameter space,
+running locally in parallel. Samples are drawn adaptively based on previously
+evaluated likelihoods to focus sampling in high-likelihood regions. Results from all
+parallel jobs accumulate in a single output file.
 }
 \examples{
 \donttest{
 # 1. Locate the example initial samples file included with the package
+# In a real scenario, this file would be from an 'initial_parameter_optimization' run.
 initial_file <- system.file(
-  "extdata", "initial_samples_example.csv", 
+  "extdata", "initial_samples_example.csv",
   package = "topolow"
 )
 
@@ -68,26 +61,26 @@ initial_file <- system.file(
 # This function requires a writable directory for its results.
 temp_out_dir <- tempdir()
 
-# 3. Create a sample distance matrix for the function to use
-dist_mat <- matrix(runif(100, 1, 10), 10, 10)
-diag(dist_mat) <- 0
+# 3. Create a sample dissimilarity matrix for the function to use
+dissim_mat <- matrix(runif(100, 1, 10), 10, 10)
+diag(dissim_mat) <- 0
 
 # 4. Run the adaptive sampling only if the example file is found
 if (nzchar(initial_file)) {
   run_adaptive_sampling(
     initial_samples_file = initial_file,
     scenario_name = "adaptive_test_example",
-    distance_matrix = dist_mat,
+    dissimilarity_matrix = dissim_mat,
     output_dir = temp_out_dir,
-    num_parallel_jobs = 2, # Use small values for a quick example
+    max_cores = 2, # Use 2 cores for a quick example
     num_samples = 2,
     verbose = FALSE
   )
-  
+
   # 5. Verify output files were created
   print("Output files from adaptive sampling:")
   print(list.files(temp_out_dir, recursive = TRUE))
-  
+
   # 6. Clean up the temporary directory
   unlink(temp_out_dir, recursive = TRUE)
 }

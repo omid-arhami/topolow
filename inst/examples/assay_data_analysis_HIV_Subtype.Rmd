@@ -19,6 +19,278 @@ knitr::opts_chunk$set(
  message = TRUE,    # Show messages
   error = TRUE      # Continue on error
 )
+
+
+#' Prune Dissimilarity Network
+#'
+#' @description
+#' Iteratively removes points with fewer connections than a specified minimum to create a
+#' well-connected network subset.
+#'
+#' @param data Data frame in long format containing object and reference identifiers.
+#' @param object_col Character name of the object column.
+#' @param reference_col Character name of the reference column.
+#' @param min_connections Integer minimum required connections per point.
+#' @param iterations Integer maximum pruning iterations (default 100).
+#' @return A list containing two elements:
+#'   \item{pruned_data}{A `data.frame` containing only the measurements for the well-connected subset of points.}
+#'   \item{stats}{A `list` of pruning statistics including:
+#'     \itemize{
+#'       \item `original_points`: Number of unique antigens and sera before pruning.
+#'       \item `remaining_points`: Number of unique antigens and sera after pruning.
+#'       \item `iterations`: Number of pruning iterations performed.
+#'       \item `min_connections`: The minimum connection threshold used.
+#'       \item `is_connected`: A logical indicating if the final network is fully connected.
+#'     }
+#'   }
+#'
+#' @importFrom dplyr %>% filter
+#' @importFrom rlang sym
+prune_dissimilarity_network <- function(data, object_col, reference_col,
+                                   min_connections, iterations = 100) {
+  # Check required packages
+  if (!requireNamespace("dplyr", quietly = TRUE)) {
+    stop("dplyr package is required for this function. Please install it.")
+  }
+  if (!requireNamespace("rlang", quietly = TRUE)) {
+    stop("rlang package is required for this function. Please install it.")
+  }
+  if (!requireNamespace("igraph", quietly = TRUE)) {
+    stop("igraph package is required for this function. Please install it.")
+  }
+  # Input validation
+  if (!is.data.frame(data)) {
+    stop("data must be a data frame")
+  }
+
+  if (!all(c(object_col, reference_col) %in% names(data))) {
+    stop("Specified object and reference columns must exist in data")
+  }
+
+  if (!is.numeric(min_connections) || min_connections < 1) {
+    stop("min_connections must be a positive integer")
+  }
+
+  if (!is.numeric(iterations) || iterations < 1) {
+    stop("iterations must be a positive integer")
+  }
+
+  # Keep track of original data size
+  n_original <- length(unique(c(data[[object_col]], data[[reference_col]])))
+
+  # Initialize pruned data
+  pruned_data <- data
+  iteration <- 0
+  continue_pruning <- TRUE
+
+  while(continue_pruning && iteration < iterations) {
+    iteration <- iteration + 1
+
+    # Count connections per point
+    object_counts <- table(pruned_data[[object_col]])
+    reference_counts <- table(pruned_data[[reference_col]])
+
+    # Identify points to remove
+    low_object <- names(object_counts)[object_counts < min_connections]
+    low_reference <- names(reference_counts)[reference_counts < min_connections]
+
+    if(length(low_object) == 0 && length(low_reference) == 0) {
+      continue_pruning <- FALSE
+    } else {
+      # Remove measurements involving points with too few connections
+      pruned_data <- pruned_data %>%
+        filter(!(!!sym(object_col) %in% low_object) &
+                 !(!!sym(reference_col) %in% low_reference))
+
+      # Check if we've removed all data
+      if(nrow(pruned_data) == 0) {
+        stop("No data remains after pruning. Try reducing min_connections.")
+      }
+    }
+  }
+
+  # Calculate final statistics
+  n_remaining <- length(unique(c(pruned_data[[object_col]],
+                                 pruned_data[[reference_col]])))
+
+  final_stats <- list(
+    original_points = n_original,
+    remaining_points = n_remaining,
+    iterations = iteration,
+    min_connections = min_connections
+  )
+
+  # Verify network connectivity
+  check_connectivity <- function(data, object_col, reference_col) {
+    # Create adjacency list representation
+    edges <- data.frame(
+      from = data[[object_col]],
+      to = data[[reference_col]]
+    )
+
+    # Create graph
+    g <- igraph::graph_from_data_frame(edges, directed = FALSE)
+
+    # Check if graph is connected
+    is_connected <- igraph::is_connected(g)
+
+    if(!is_connected) {
+      # Get number of components
+      components <- igraph::components(g)
+      warning(sprintf(
+        "Network has %d disconnected components. Consider increasing min_connections.",
+        components$no
+      ))
+    }
+
+    return(is_connected)
+  }
+
+  # Add connectivity check to stats
+  final_stats$is_connected <- check_connectivity(pruned_data, object_col, reference_col)
+
+  return(list(
+    pruned_data = pruned_data,
+    stats = final_stats
+  ))
+}
+
+
+#' Prepare Data for Dissimilarity Heatmap
+#'
+#' @description
+#' Prepares a dissimilarity matrix for heatmap visualization by handling missing values,
+#' optionally clustering, and calculating relevant statistics.
+#'
+#' @param dissimilarity_matrix Square symmetric matrix of dissimilarities.
+#' @param cluster_rows Logical; whether to hierarchically cluster rows.
+#' @param cluster_cols Logical; whether to hierarchically cluster columns.
+#' @return A list of data prepared for generating a heatmap:
+#'   \item{matrix_data}{The dissimilarity `matrix`, potentially reordered by clustering.}
+#'   \item{row_order}{An integer vector of the row indices after clustering.}
+#'   \item{col_order}{An integer vector of the column indices after clustering.}
+#'   \item{stats}{A list of summary statistics for the matrix.}
+#' @examples
+#' # Create a sample dissimilarity matrix
+#' dist_mat <- matrix(runif(25), 5, 5)
+#'
+#' # Prepare data for a heatmap
+#' heatmap_data <- prepare_heatmap_data(dist_mat)
+#' print(heatmap_data$stats$completeness)
+prepare_heatmap_data <- function(dissimilarity_matrix,
+                                cluster_rows = FALSE,
+                                cluster_cols = FALSE) {
+  if (!is.matrix(dissimilarity_matrix) || nrow(dissimilarity_matrix) != ncol(dissimilarity_matrix)) {
+    stop("Input must be a square matrix")
+  }
+  if (nrow(dissimilarity_matrix) < 2) {
+    stop("Matrix must have at least 2 rows/columns")
+  }
+
+  # Calculate basic statistics
+  stats <- list(
+    mean = mean(dissimilarity_matrix, na.rm = TRUE),
+    sd = stats::sd(dissimilarity_matrix, na.rm = TRUE),
+    min = min(dissimilarity_matrix, na.rm = TRUE),
+    max = max(dissimilarity_matrix, na.rm = TRUE),
+    completeness = sum(!is.na(dissimilarity_matrix)) / length(dissimilarity_matrix)
+  )
+
+  # Handle clustering if requested
+  row_order <- seq_len(nrow(dissimilarity_matrix))
+  col_order <- seq_len(ncol(dissimilarity_matrix))
+
+  if (cluster_rows) {
+    row_order <- stats::hclust(stats::dist(dissimilarity_matrix))$order
+  }
+  if (cluster_cols) {
+    col_order <- stats::hclust(stats::dist(t(dissimilarity_matrix)))$order
+  }
+
+  # Reorder the original matrix with NAs for the final output
+  matrix_data <- dissimilarity_matrix[row_order, col_order]
+
+  return(list(
+    matrix_data = matrix_data,
+    row_order = row_order,
+    col_order = col_order,
+    stats = stats
+  ))
+}
+
+
+#' Plot Dissimilarity Matrix Heatmap
+#'
+#' @description
+#' Creates a heatmap visualization of a dissimilarity matrix to show patterns and
+#' structure in the measurements.
+#'
+#' @param heatmap_data The list output from `prepare_heatmap_data()`.
+#' @param output_file Character. An optional full path to save the plot. If NULL, the plot is not saved.
+#' @param width Numeric. Width in pixels for saved plot (default: 3000).
+#' @param height Numeric. Height in pixels for saved plot (default: 3000).
+#' @param dpi Numeric. Resolution in dots per inch (default: 300).
+#'
+#' @return A `ggplot` object containing the heatmap visualization.
+#'
+#' @examples
+#' # Create a sample dissimilarity matrix
+#' dist_mat <- matrix(rnorm(100), 10, 10)
+#' hmap_data <- prepare_heatmap_data(dist_mat)
+#'
+#' # Create and display the plot object
+#' plot_distance_heatmap(hmap_data)
+#'
+#' @importFrom ggplot2 ggplot aes geom_tile scale_fill_gradient theme_minimal theme element_text labs ggsave
+#' @importFrom reshape2 melt
+plot_distance_heatmap <- function(heatmap_data, output_file = NULL,
+                                  width = 3000, height = 3000, dpi = 300) {
+
+  # Prepare data for plotting by melting the matrix into a long format
+  plot_data <- reshape2::melt(heatmap_data$matrix_data, varnames = c("Var1", "Var2"), value.name = "value")
+  plot_data$value <- as.numeric(as.character(plot_data$value))
+
+  # Remove any NA or non-finite values
+  plot_data <- plot_data[!is.na(plot_data$value) & is.finite(plot_data$value),]
+
+  # Create the plot with fixed aesthetic values
+  p <- ggplot2::ggplot(plot_data, ggplot2::aes(.data$Var1, .data$Var2, fill = .data$value)) +
+    ggplot2::geom_tile() +
+    ggplot2::scale_fill_gradient(
+      low = "white",           # Fixed value instead of aesthetic_config$gradient_colors$low
+      high = "darkred",        # Fixed value instead of aesthetic_config$gradient_colors$high
+      na.value = "grey80",
+      name = "Dissimilarity"
+    ) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(size = 14, hjust = 0.5),  # Fixed title size
+      axis.text.x = ggplot2::element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8),  # Fixed axis text size
+      axis.text.y = ggplot2::element_text(size = 8),  # Fixed axis text size
+      plot.margin = ggplot2::margin(10, 10, 10, 10),
+      axis.title = ggplot2::element_blank()
+    ) +
+    ggplot2::labs(
+      title = sprintf(
+        "Dissimilarity Matrix (%.1f%% Complete)",
+        heatmap_data$stats$completeness * 100
+      )
+    )
+
+  # Save the plot if an output file path is provided
+  if (!is.null(output_file)) {
+    ggsave_white_bg(
+      filename = output_file,
+      plot = p,
+      width = width / dpi,
+      height = height / dpi,
+      dpi = dpi
+    )
+  }
+
+  return(p)
+}
+
 ```
 
 ## Introduction
@@ -112,7 +384,7 @@ print(summary_by_subtype, n = Inf)
 ```{r}
 hiv_titers <- hiv_titers %>% dplyr::filter(Subtype %in% c("B", "C")) #, "01_AE", "A1", "G", "07_BC", "02_AG", "D", "A1D", "02A1"
 
-hiv_titers$IC50 <- clean_data(hiv_titers$IC50, k=2, take_log=TRUE)
+hiv_titers$IC50 <- clean_data(hiv_titers$IC50, k=2)
 hiv_titers <- na.omit(hiv_titers)
 ```
 
@@ -127,11 +399,11 @@ write.csv(hiv_titers, "data_files/hiv_assay_full.csv")
 
 # Load and process HIV data
 hiv_results <- process_antigenic_data(
-  file_path = "data_files/hiv_assay_full.csv",
+  hiv_titers,
   antigen_col = "Virus",
   serum_col = "Antibody", 
   value_col = "IC50",
-  is_titer = FALSE,
+  is_similarity = FALSE,
   base = 2,
   scale_factor = 1,
   metadata_cols = c("Subtype", "Country")
@@ -459,7 +731,7 @@ Now that we have prepared our virus panel, we can create the distance matrix for
 
 ```{r}
 # Create distance matrix
-hiv_distance_matrix <- long_to_matrix(
+hiv_distance_matrix <- titers_list_to_matrix(
   filtered_data,
   chnames = "Virus",
   chorder = "virusYear", 
@@ -520,7 +792,7 @@ start_time <- Sys.time()
 
 # Run initial parameter optimization
 results <- initial_parameter_optimization(
-  distance_matrix = hiv_distance_matrix,
+  dissimilarity_matrix = hiv_distance_matrix,
   mapping_max_iter = opt_params$mapping_max_iter,
   relative_epsilon = 1e-4,
   convergence_counter = 5,
@@ -573,8 +845,7 @@ samples <- log_transform_parameters(samples_file)
 
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_samples = 500, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
-  num_parallel_jobs = parallel::detectCores()-1,  # For local execution: Number of CPU cores available (Can try parallel::detectCores() ); For SLURM: Number of jobs to submit
+  num_samples = 500, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) 
   mapping_max_iter = 1000, # Maximum iterations per map optimization
   relative_epsilon = 1e-4,
   folds = 20 # Number of CV folds
@@ -585,9 +856,8 @@ start_time <- Sys.time()
 
 run_adaptive_sampling(
   initial_samples_file = samples_file,
-  distance_matrix = hiv_distance_matrix,
+  dissimilarity_matrix = hiv_distance_matrix,
   num_samples = amc_params$num_samples,
-  num_parallel_jobs = amc_params$num_parallel_jobs,
   mapping_max_iter = amc_params$mapping_max_iter,
   scenario_name = scenario_name,
   relative_epsilon = amc_params$relative_epsilon,
@@ -743,8 +1013,8 @@ Finally, let's validate our optimal parameters:
 
 ```{r}
 # Run topolow with optimal parameters
-result <- create_topolow_map(
-  distance_matrix = hiv_distance_matrix,
+result <- euclidean_embedding(
+  dissimilarity_matrix =  hiv_distance_matrix,
   ndim = optimal_params$N,
   mapping_max_iter = 200,
   k0 = optimal_params$k0,
@@ -1044,7 +1314,7 @@ print(plot_subtypes)
 ```{r}
 #set.seed(2209345) # for reproducibility
 
-# Create and display temporal mapping
+# Create and display temporal mapping. -  Install umap package if not installed
 umap_config <- new_dim_reduction_config(
   method = "umap",
   n_components = 2,

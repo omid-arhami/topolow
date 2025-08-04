@@ -14,41 +14,40 @@ parameter_sensitivity_analysis(
 )
 }
 \arguments{
-\item{param}{Character name of parameter to analyze}
+\item{param}{The character name of the parameter to analyze.}
 
-\item{samples}{Data frame containing parameter samples and performance metrics}
+\item{samples}{A data frame containing parameter samples and performance metrics.}
 
-\item{bins}{Integer number of bins for parameter range (default: 40)}
+\item{bins}{The integer number of bins to divide the parameter range into.}
 
-\item{mae_col}{Character name of column containing MAE values (default: "Holdout_MAE")}
+\item{mae_col}{The character name of the column containing the Mean Absolute Error (MAE) values.}
 
-\item{threshold_pct}{Numeric percentage above minimum for threshold calculation (default: 5)}
+\item{threshold_pct}{A numeric percentage above the minimum MAE to define an acceptable performance threshold.}
 
-\item{min_samples}{Integer minimum number of samples required in a bin (default: 1)}
+\item{min_samples}{The integer minimum number of samples required in a bin for it to be included in the analysis.}
 }
 \value{
-Object of class "parameter_sensitivity" containing:
+An object of class "parameter_sensitivity" containing:
 \item{param_values}{Vector of parameter bin midpoints}
 \item{min_mae}{Vector of minimum MAE values per bin}
 \item{param_name}{Name of analyzed parameter}
-\item{threshold}{Threshold value (default: Topolow min. +5\%)}
+\item{threshold}{Threshold value (default: min. +5\%)}
 \item{min_value}{Minimum MAE value across all bins}
 \item{sample_counts}{Number of samples per bin}
 }
 \description{
-Analyzes the sensitivity of model performance (MAE) to changes in a parameter.
-Uses binning to identify the minimum MAE across parameter ranges and calculates
-thresholds for acceptable parameter values.
+Analyzes the sensitivity of the model performance (measured by MAE) to changes
+in a single parameter. This function bins the parameter range to identify the
+minimum MAE for each bin, helping to understand how robust the model is to
+parameter choices.
 }
 \details{
 The function performs these steps:
 \enumerate{
-\item Cleans the input data using MAD-based outlier detection
-\item Bins the parameter values into equal-width bins
-\item Calculates the minimum MAE within each bin. Analogous to "poorman's likelihood" approach,
-minimum MAE within each bin is an empirical estimate of the performance surface at this parameter
-value when other parameters are at their optimal values.
-\item Identifies a threshold of acceptable performance (default: Topolow min. +5\% MAE)
-\item Returns an object for visualization and further analysis
+\item Cleans the input data using Median Absolute Deviation (MAD) to remove outliers.
+\item Bins the parameter values into equal-width bins.
+\item Calculates the minimum MAE within each bin to create an empirical performance curve.
+\item Identifies a performance threshold based on a percentage above the global minimum MAE.
+\item Returns an S3 object for plotting and further analysis.
 }
 }

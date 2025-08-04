@@ -9,9 +9,9 @@
 # 
 # # Install required dependencies
 # required_packages <- c(
-#   "ggplot2", "dplyr", "data.table", "reshape2", "plotly", "rgl", 
-#   "Racmacs", "parallel", "coda", "MASS", "vegan", "igraph", 
-#   "lhs", "umap", "gridExtra", "scales", "filelock"
+#   "ggplot2", "dplyr", "data.table", "reshape2",
+#   "parallel",  "MASS", 
+#   "lhs",  "filelock"
 # )
 # 
 # for(pkg in required_packages) {

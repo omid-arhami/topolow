@@ -2,11 +2,11 @@
 % Please edit documentation in R/visualization.R
 \name{scatterplot_fitted_vs_true}
 \alias{scatterplot_fitted_vs_true}
-\title{Plot Fitted vs True Distances}
+\title{Plot Fitted vs. True Dissimilarities}
 \usage{
 scatterplot_fitted_vs_true(
-  distance_matrix,
-  p_dist_mat,
+  dissimilarity_matrix,
+  p_dissimilarity_mat,
   scenario_name,
   ndim,
   save_plot = FALSE,
@@ -15,26 +15,27 @@ scatterplot_fitted_vs_true(
 )
 }
 \arguments{
-\item{distance_matrix}{Matrix of true distances}
+\item{dissimilarity_matrix}{Matrix of true dissimilarities.}
 
-\item{p_dist_mat}{Matrix of predicted/fitted distances}
+\item{p_dissimilarity_mat}{Matrix of predicted/fitted dissimilarities.}
 
 \item{scenario_name}{Character string for output file naming. Used if \code{save_plot} is TRUE.}
 
-\item{ndim}{Integer number of dimensions used in the model}
+\item{ndim}{Integer number of dimensions used in the model.}
 
-\item{save_plot}{Logical. Whether to save plots to files. Default: TRUE}
+\item{save_plot}{Logical. Whether to save plots to files. Default: FALSE.}
 
-\item{output_dir}{Character. Directory for output files. Required if \code{save_plot} is \code{TRUE}.}
+\item{output_dir}{Character. Directory for output files. Required if \code{save_plot} is TRUE.}
 
-\item{confidence_level}{Numeric confidence level for prediction intervals (default: 0.95)}
+\item{confidence_level}{Numeric confidence level for prediction intervals (default: 0.95).}
 }
 \value{
 A list containing the \code{scatter_plot} and \code{residuals_plot} ggplot objects.
 }
 \description{
-Creates diagnostic plots comparing fitted distances from a model against true distances.
-Generates both a scatter plot with prediction intervals and a residuals plot.
+Creates diagnostic plots comparing fitted dissimilarities from a model against the true
+dissimilarities. It generates both a scatter plot with an identity line and
+prediction intervals, and a residuals plot.
 }
 \examples{
 # Create sample data
@@ -42,7 +43,11 @@ true_dist <- matrix(runif(100, 1, 10), 10, 10)
 pred_dist <- true_dist + rnorm(100)
 
 # Create plots without saving
-plots <- scatterplot_fitted_vs_true(true_dist, pred_dist, save_plot = FALSE)
+plots <- scatterplot_fitted_vs_true(
+  dissimilarity_matrix = true_dist,
+  p_dissimilarity_mat = pred_dist,
+  save_plot = FALSE
+ )
 
 # You can then display a plot, for instance:
 # plots$scatter_plot

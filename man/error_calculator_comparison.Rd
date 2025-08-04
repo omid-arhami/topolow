@@ -2,16 +2,23 @@
 % Please edit documentation in R/error_metrics.R
 \name{error_calculator_comparison}
 \alias{error_calculator_comparison}
-\title{Calculate comprehensive error metrics between predicted and true distances}
+\title{Error calculation and validation metrics for topolow
+Calculate Comprehensive Error Metrics}
 \usage{
-error_calculator_comparison(p_dist_mat, truth_matrix, input_matrix)
+error_calculator_comparison(
+  predicted_dissimilarities,
+  true_dissimilarities,
+  input_dissimilarities = NULL
+)
 }
 \arguments{
-\item{p_dist_mat}{Matrix of predicted distances}
+\item{predicted_dissimilarities}{Matrix of predicted dissimilarities from the model.}
 
-\item{truth_matrix}{Matrix of true distances}
+\item{true_dissimilarities}{Matrix of true, ground-truth dissimilarities.}
 
-\item{input_matrix}{Matrix of input distances (may contain NAs and is used to find the NAs' pattern)}
+\item{input_dissimilarities}{Matrix of input dissimilarities, which may contain NAs
+and is used to identify the pattern of missing values for out-of-sample error calculation.
+Optional - if not provided, defaults to \code{true_dissimilarities} (no holdout set).}
 }
 \value{
 A list containing:
@@ -19,15 +26,41 @@ A list containing:
 \item{Completeness}{A single numeric value representing the completeness statistic, which is the fraction of validation points for which a prediction could be made.}
 }
 \description{
-Computes various error metrics including in-sample and out-of-sample errors,
-and Completeness statistics for model evaluation.
+Computes a comprehensive set of error metrics (in-sample, out-of-sample, completeness)
+between predicted and true dissimilarities for model evaluation.
 }
 \details{
 Input requirements and constraints:
 \itemize{
-\item Matrices must have matching dimensions
-\item Row and column names must be consistent between matrices
-\item NAs are allowed and handled appropriately
-\item Threshold indicators (< or >) in input matrix are processed correctly
+\item All input matrices must have matching dimensions.
+\item Row and column names must be consistent across matrices.
+\item NAs are allowed and handled appropriately.
+\item Threshold indicators (< or >) in the input matrix are processed correctly.
 }
+
+When \code{input_dissimilarities} is provided, it represents the training data where some
+values have been set to NA to create a holdout set. This allows calculation of:
+\itemize{
+\item In-sample errors: for data available during training
+\item Out-of-sample errors: for data held out during training
+}
+
+When \code{input_dissimilarities} is NULL (default), all errors are treated as in-sample
+since no data was held out.
+}
+\examples{
+# Example 1: Normal evaluation (no cross-validation)
+true_mat <- matrix(c(0, 1, 2, 1, 0, 3, 2, 3, 0), 3, 3)
+pred_mat <- true_mat + rnorm(9, 0, 0.1)  # Add some noise
+
+# Evaluate all predictions (input_dissimilarities defaults to true_dissimilarities)
+errors1 <- error_calculator_comparison(pred_mat, true_mat)
+
+# Example 2: Cross-validation evaluation
+input_mat <- true_mat
+input_mat[1, 3] <- input_mat[3, 1] <- NA  # Create holdout set
+
+# Evaluate with train/test split
+errors2 <- error_calculator_comparison(pred_mat, true_mat, input_mat)
+
 }

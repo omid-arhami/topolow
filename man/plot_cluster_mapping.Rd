@@ -69,7 +69,7 @@ provide a list with that order here; e.g., c("cluster 2", "cluster 1")}
 A \code{ggplot} object containing the cluster mapping visualization.
 }
 \description{
-Creates a visualization of points colored by cluster assignment using dimension
+Antigenic Mapping and Antigenic Velocity Function. Creates a visualization of points colored by cluster assignment using dimension
 reduction, with optional antigenic velocity arrows. Points are colored by cluster with different shapes for antigens and
 antisera.
 }

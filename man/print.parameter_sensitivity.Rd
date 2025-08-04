@@ -7,13 +7,16 @@
 \method{print}{parameter_sensitivity}(x, ...)
 }
 \arguments{
-\item{x}{A parameter_sensitivity object}
+\item{x}{A \code{parameter_sensitivity} object.}
 
-\item{...}{Additional arguments passed to print}
+\item{...}{Additional arguments passed to the print function (not currently used).}
 }
 \value{
-No return value, called for side effects (prints a summary to the console).
+Invisibly returns the original object. Called for its side effect of
+printing a summary to the console.
 }
 \description{
-Print Method for Parameter Sensitivity Objects
+The S3 print method for \code{parameter_sensitivity} objects. It displays a concise
+summary of the analysis results, including the parameter analyzed, the minimum
+error found, and the performance threshold.
 }

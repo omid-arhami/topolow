@@ -2,381 +2,160 @@
 # R/utils.R
 
 #' Utility functions for the topolow package
-#' 
-#' @description
-#' This file contains utility functions used throughout the topolow package.
-#' Functions include data manipulation, and format conversion.
-#'
-#' @keywords internal
-"_PACKAGE"
 
-
-#' Convert 2-digit to 4-digit year
-#'
-#' @param dataframe Data frame containing year column
-#' @param column_name Name of year column
-#' @return Data frame with converted year column
-#' @keywords internal
-yy_to_yyyy <- function(dataframe, column_name) {
-  if (!is.data.frame(dataframe)) {
-    stop("First argument must be a data frame")
-  }
-  if (!column_name %in% names(dataframe)) {
-    stop(paste("Column", column_name, "not found in data frame"))
-  }
- 
-  # Validate year values
-  years <- dataframe[[column_name]]
-  if (!is.numeric(years)) {
-    stop("Year column must be numeric")
-  }
-  
-  if (any(years < 0, na.rm = TRUE)) {
-    stop("Year values cannot be negative")
-  }
-  
-  dataframe[[column_name]] <- sapply(dataframe[[column_name]], function(x) {
-    year <- as.integer(x)
-    if (year < 25) {
-      return(year + 2000)
-    } else if (year < 100) {
-      return(year + 1900) 
-    }
-    return(year)
-  })
-  
-  return(dataframe)
-}
-
-
-#' Generate unique string identifiers with year suffix
-#'
-#' @param n Number of strings to generate
-#' @param length Length of random part of string (default: 8)
-#' @param lower_bound Lower bound for year suffix (default: 1)
-#' @param upper_bound Upper bound for year suffix (default: 20)
-#' @return A character vector of unique strings with year suffixes
-#' @export
-generate_unique_string <- function(n, length = 8, lower_bound = 1, upper_bound = 20) {
-  if (n <= 0) stop("n must be positive")
-  if (length <= 0) stop("length must be positive")
-  if (lower_bound > upper_bound) {
-    stop("lower_bound must be less than or equal to upper_bound")
-  }
-  
-  # Validate numeric parameters
-  if (!all(sapply(list(n, length, lower_bound, upper_bound), is.numeric))) {
-    stop("All numeric parameters must be numeric")
-  }
-  
-  if (!all(sapply(list(n, length), function(x) x == round(x)))) {
-    stop("n and length must be integers")
-  }
-
-  # Generate base strings
-  base_strings <- sapply(1:n, function(x) {
-    paste0(sample(c(LETTERS, 0:9), length, replace = TRUE), collapse = "")
-  })
-  
-  # Calculate strings per year
-  num_per_group <- n / (upper_bound - lower_bound + 1)
-  
-  # Generate year suffixes
-  suffixes <- rep(lower_bound:upper_bound, each = ceiling(num_per_group))[1:n]
-  
-  # Combine strings with suffixes
-  unique_strings <- paste0(base_strings, "/", suffixes)
-  
-  return(unique_strings)
-}
-
-
-#' Generate Complex High-Dimensional Data for Testing
-#'
-#' @description 
-#' Generates synthetic high-dimensional data with clusters and trends for testing 
-#' dimensionality reduction methods. Creates data with specified properties:
-#' - Multiple clusters along a trend line
-#' - Variable density regions 
-#' - Controllable noise levels
-#' - Optional visualization
-#'
-#' The function generates cluster centers along a trend line, adds points around those
-#' centers with specified spread, and incorporates random noise to create high and 
-#' low density areas. The data is useful for testing dimensionality reduction and
-#' visualization methods.
-#'
-#' @param n_points Integer number of points to generate
-#' @param n_dim Integer number of dimensions 
-#' @param n_clusters Integer number of clusters
-#' @param cluster_spread Numeric controlling cluster variance
-#' @param fig_name Character path to save visualization (optional)
-#' @return A `data.frame` with `n_points` rows and `n_dim` columns. Column names 
-#'         are "Dim1" through "DimN" where N is n_dim.
-#' @examples
-#' # Generate basic dataset
-#' data <- generate_complex_data(n_points = 500, n_dim = 10, 
-#'                              n_clusters = 4, cluster_spread = 1)
-#'                              
-#' # The function returns a data frame, which can be inspected
-#' head(data)
-#'
-#' @importFrom MASS mvrnorm
-#' @importFrom stats runif rnorm prcomp
-#' @importFrom ggplot2 ggplot aes geom_point theme_minimal labs coord_fixed ggsave
-#' @export
-generate_complex_data <- function(n_points = 500, n_dim = 10, n_clusters = 4, 
-                                cluster_spread = 1, fig_name = NA) {
-  # Input validation
-  if (!is.numeric(n_points) || n_points <= 0 || n_points %% 1 != 0) {
-    stop("n_points must be a positive integer")
-  }
-  if (!is.numeric(n_dim) || n_dim <= 0 || n_dim %% 1 != 0) {
-    stop("n_dim must be a positive integer")
-  }
-  if (!is.numeric(n_clusters) || n_clusters <= 0 || n_clusters %% 1 != 0) {
-    stop("n_clusters must be a positive integer")
-  }
-  if (!is.numeric(cluster_spread) || cluster_spread <= 0) {
-    stop("cluster_spread must be a positive number")
-  }
-  if (!is.na(fig_name) && !is.character(fig_name)) {
-    stop("fig_name must be NA or a character string ending in .png")
-  }
-  
-  if (n_clusters > n_points) {
-    stop("Number of clusters cannot exceed number of points")
-  }
-  
-  # Generate a trend vector
-  trend <- seq(-10, 10, length.out = n_points)
-  
-  # Generate cluster centers along the trend
-  cluster_centers <- matrix(0, nrow = n_clusters, ncol = n_dim)
-  for (i in 1:n_clusters) {
-    cluster_centers[i, ] <- 0.5 * runif(n_dim, min = -10, max = 10) + 
-      trend[floor(i * n_points / n_clusters)]
-  }
-  
-  # Generate points around each cluster center
-  points_per_cluster <- floor(n_points / n_clusters)
-  data <- do.call(rbind, lapply(1:n_clusters, function(i) {
-    mvrnorm(n = points_per_cluster, 
-            mu = cluster_centers[i, ], 
-            Sigma = diag(cluster_spread, n_dim))
-  }))
-  
-  # Add random noise to create high and low density areas
-  noise <- matrix(rnorm(nrow(data) * n_dim, mean = 0, sd = 3.3), 
-                 ncol = n_dim)
-  data <- data + noise
-  
-  # Add trend to multiple dimensions
-  for (j in 1:n_dim) {
-    data[, j] <- data[, j] + trend[1:nrow(data)]
-  }
-  
-  # Convert to data frame with proper column names
-  data <- as.data.frame(data)
-  colnames(data) <- paste0("Dim", 1:n_dim)
-  
-  # Create visualization if requested
-  if (!is.na(fig_name)) {
-    # Perform PCA for visualization
-    pca_result <- prcomp(data, scale. = FALSE)
-    pca_data <- as.data.frame(pca_result$x[, 1:2])
-    colnames(pca_data) <- c("PC1", "PC2")
-    
-    # Create plot
-    p <- ggplot(pca_data, aes(x = .data$PC1, y = .data$PC2)) +
-      geom_point(alpha = 0.5) +
-      theme_minimal() +
-      labs(title = "PCA of Simulated High-Dimensional Data",
-           x = "PC 1", y = "PC 2") +
-      coord_fixed()
-    
-    # ENSURE DIRECTORY EXISTS
-    output_dir <- dirname(fig_name)
-    if (!dir.exists(output_dir)) {
-        dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
-    }
-
-    # Save plot
-    ggsave_white_bg(filename = fig_name, plot = p, dpi = 300)
-  }
-  
-  return(data)
-}
-
-
-
-#' Increase Missing Values in a Matrix
+# New
+#' Extract Numeric Values from Mixed Data
 #'
 #' @description
-#' Strategically introduces NA values into a distance matrix while maintaining symmetry.
-#' New NA values are added preferentially farther from the diagonal to simulate real-world 
-#' measurement patterns where distant pairs are more likely to be unmeasured.
+#' Extracts numeric values from data that may contain threshold indicators
+#' (e.g., "<10", ">1280") or regular numeric values.
 #'
-#' @details
-#' The function:
-#' 1. Calculates needed additional NAs to reach target percentage
-#' 2. Creates probability matrix favoring off-diagonal elements
-#' 3. Randomly selects positions weighted by distance from diagonal
-#' 4. Maintains matrix symmetry by mirroring NAs
-#'
-#' @param mat Matrix to modify
-#' @param target_na_percentage Numeric between 0 and 1 specifying desired proportion of NAs
-#' @return A `matrix` with an increased number of `NA` values, maintaining symmetry.
+#' @param x A vector that may contain numeric values, character strings with
+#'   threshold indicators, or a mix of both.
+#' @return A numeric vector with threshold indicators converted to their
+#'   numeric equivalents.
 #' @examples
-#' # Create sample distance matrix
-#' dist_mat <- matrix(runif(100), 10, 10)
-#' dist_mat[lower.tri(dist_mat)] <- t(dist_mat)[lower.tri(dist_mat)]
-#' diag(dist_mat) <- 0
-#' 
-#' # Increase NAs to 70%
-#' sparse_mat <- increase_na_percentage(dist_mat, 0.7)
+#' # Mixed data with threshold indicators
+#' mixed_data <- c(10, 20, "<5", ">100", 50)
+#' extract_numeric_values(mixed_data)
+#'
 #' @export
-increase_na_percentage <- function(mat, target_na_percentage) {
-  # Input validation
-  if (!is.matrix(mat)) {
-    stop("Input must be a matrix")
-  }
-  if (!is.numeric(target_na_percentage) || 
-      target_na_percentage <= 0 || 
-      target_na_percentage >= 1) {
-    stop("target_na_percentage must be between 0 and 1")
-  }
-  
-  # Calculate current and target NA counts
-  total_elements <- length(mat)
-  current_na_count <- sum(is.na(mat))
-  target_na_count <- ceiling(target_na_percentage * total_elements)
-  additional_na_count <- target_na_count - current_na_count
-  
-  if (additional_na_count <= 0) {
-    warning("The matrix already has more NA values than the target percentage.")
-    return(mat)
-  }
-  
-  # Get indices of non-NA elements
-  non_na_indices <- which(!is.na(mat))
-  
-  # Calculate distance from diagonal for each element
-  n <- nrow(mat)
-  distances <- outer(1:n, 1:n, FUN = function(i, j) abs(i - j))
-  
-  # Create probability matrix favoring off-diagonal elements
-  max_distance <- max(distances)
-  # Add padding to avoid strictly diagonal matrix
-  distances <- distances + 0.15 * max_distance
-  
-  # Normalize probabilities
-  prob_matrix <- distances / max_distance
-  prob_vector <- as.vector(prob_matrix)
-  prob_vector <- prob_vector / sum(prob_vector)
-  
-  # Randomly sample indices based on probability vector
-  random_indices <- sample(non_na_indices, 
-                         size = additional_na_count,
-                         prob = prob_vector[non_na_indices], 
-                         replace = FALSE)
-  
-  # Replace selected elements with NA while maintaining symmetry
-  for (index in random_indices) {
-    row <- (index - 1) %/% nrow(mat) + 1
-    col <- (index - 1) %% ncol(mat) + 1
-    if (row != col && !is.na(mat[row, col])) {
-      mat[row, col] <- NA
-      mat[col, row] <- NA
+extract_numeric_values <- function(x) {
+  sapply(x, function(val) {
+    if (is.character(val)) {
+      if (grepl("^<", val)) {
+        as.numeric(sub("<", "", val))
+      } else if (grepl("^>", val)) {
+        as.numeric(sub(">", "", val))
+      } else {
+        as.numeric(val)
+      }
+    } else {
+      as.numeric(val)
     }
-  }
-  
-  return(mat)
+  }, USE.NAMES = FALSE)
 }
 
-#' Add Noise and Bias to Matrix Data
+
+# Newed
+#' Create Cross-Validation Folds for a Dissimilarity Matrix
 #'
 #' @description
-#' Creates noisy versions of a distance matrix by adding random noise and/or systematic bias.
-#' Useful for testing robustness of algorithms to measurement errors and systematic biases.
+#' Creates k-fold cross-validation splits from a dissimilarity matrix while maintaining
+#' symmetry. Each fold in the output consists of a training matrix (with some
+#' values masked as `NA`) and a corresponding ground truth matrix for validation.
 #'
-#' @details
-#' The function generates three variants of the input matrix:
-#' 1. n1: Matrix with random Gaussian noise
-#' 2. n2: Different realization of random noise
-#' 3. nb: Matrix with both random noise and systematic negative bias
+#' @param dissimilarity_matrix The input dissimilarity matrix, which may contain noise.
+#' @param ground_truth_matrix An optional, noise-free dissimilarity matrix to be used as the ground truth for evaluation. If `NULL`, the input `dissimilarity_matrix` is used as the truth.
+#' @param n_folds The integer number of folds to create.
+#' @param random_seed An optional integer to set the random seed for reproducibility.
 #'
-#' The noise level is scaled relative to the data mean to maintain realistic error magnitudes.
-#'
-#' @param matrix_data Numeric matrix to add noise to
-#' @return A `list` containing three noisy `matrix` objects:
-#'   \item{n1}{Matrix with the first realization of random Gaussian noise.}
-#'   \item{n2}{Matrix with a second, different realization of random Gaussian noise.}
-#'   \item{nb}{Matrix with both random noise and a systematic negative bias.}
+#' @return A list of length `n_folds`. Each element of the list is itself a list
+#'   containing two matrices: `truth` (the ground truth for that fold) and `train`
+#'   (the training matrix with `NA` values for validation).
+#' @note This function has breaking changes from previous versions:
+#'   \itemize{
+#'     \item Parameter \code{truth_matrix} renamed to \code{dissimilarity_matrix}
+#'     \item Parameter \code{no_noise_truth} renamed to \code{ground_truth_matrix}  
+#'     \item Return structure now uses named elements (\code{$truth}, \code{$train})
+#'   }
 #' @examples
-#' # Create sample distance matrix
-#' dist_mat <- matrix(runif(100), 10, 10)
-#' dist_mat[lower.tri(dist_mat)] <- t(dist_mat)[lower.tri(dist_mat)]
-#' diag(dist_mat) <- 0
+#' # Create a sample dissimilarity matrix
+#' d_mat <- matrix(runif(100), 10, 10)
+#' diag(d_mat) <- 0
 #'
-#' # Generate noisy versions
-#' noisy_variants <- add_noise_bias(dist_mat)
-#' @importFrom stats rnorm
+#' # Create 5-fold cross-validation splits
+#' folds <- create_cv_folds(d_mat, n_folds = 5, random_seed = 123)
 #' @export
-add_noise_bias <- function(matrix_data) {
-  # Input validation
-  if (!is.matrix(matrix_data) || !is.numeric(matrix_data)) {
-    stop("Input must be a numeric matrix")
+create_cv_folds <- function(dissimilarity_matrix, ground_truth_matrix = NULL,
+                            n_folds = 10, random_seed = NULL) {
+  # --- Input Validation and Setup ---
+  if (!is.null(random_seed)) {
+    if (!is.numeric(random_seed) || random_seed != round(random_seed)) {
+      stop("`random_seed` must be an integer.")
+    }
+    set.seed(random_seed)
   }
-  
-  # Calculate noise scale based on data mean
-  data_mean <- mean(matrix_data, na.rm = TRUE)
-  measurement_er <- 0.05 * data_mean
-  
-  # Generate first noisy variant
-  noise1 <- matrix(rnorm(length(matrix_data), 
-                        mean = 0, 
-                        sd = measurement_er), 
-                  nrow = nrow(matrix_data), 
-                  ncol = ncol(matrix_data))
-  noisy_matrix1 <- matrix_data + noise1
-  
-  # Enforce non-negative values and zero diagonal
-  noisy_matrix1[noisy_matrix1 < 0] <- 0
-  diag(noisy_matrix1) <- 0
-  
-  # Generate second noisy variant
-  noise2 <- matrix(rnorm(length(matrix_data), 
-                        mean = 0, 
-                        sd = measurement_er),
-                  nrow = nrow(matrix_data), 
-                  ncol = ncol(matrix_data))
-  noisy_matrix2 <- matrix_data + noise2
-  noisy_matrix2[noisy_matrix2 < 0] <- 0
-  diag(noisy_matrix2) <- 0
-  
-  # Generate biased variant
-  bias <- matrix(measurement_er, 
-                nrow = nrow(matrix_data), 
-                ncol = ncol(matrix_data))
-  noisy_biased_matrix <- matrix_data + noise2 - bias
-  noisy_biased_matrix[noisy_biased_matrix < 0] <- 0
-  diag(noisy_biased_matrix) <- 0
 
-  # Return all variants
-  return(list(
-    n1 = noisy_matrix1,
-    n2 = noisy_matrix2,
-    nb = noisy_biased_matrix
-  ))
+  if (!is.matrix(dissimilarity_matrix)) {
+    stop("`dissimilarity_matrix` must be a matrix.")
+  }
+
+  if (!is.null(ground_truth_matrix)) {
+    if (!is.matrix(ground_truth_matrix)) {
+      stop("`ground_truth_matrix` must be NULL or a matrix.")
+    }
+    if (!identical(dim(dissimilarity_matrix), dim(ground_truth_matrix))) {
+      stop("`dissimilarity_matrix` and `ground_truth_matrix` must have the same dimensions.")
+    }
+  }
+
+  if (!is.numeric(n_folds) || n_folds < 2 || n_folds != round(n_folds)) {
+    stop("`n_folds` must be an integer greater than or equal to 2.")
+  }
+
+  if (n_folds > nrow(dissimilarity_matrix)) {
+    stop("`n_folds` cannot be larger than the number of rows in the matrix.")
+  }
+
+  # Use the perfect and full matrix as the ground truth for evaluation if provided
+  eval_truth <- if (!is.null(ground_truth_matrix)) ground_truth_matrix else dissimilarity_matrix
+
+  # --- Fold Creation ---
+  # Initialize a list to store the [truth, train] pairs for each fold
+  matrix_list <- vector("list", n_folds)
+  for(i in 1:n_folds) {
+    matrix_list[[i]] <- list(truth = eval_truth, train = NULL)
+  }
+
+  # Determine the number of elements to hold out in each fold
+  num_elements <- sum(!is.na(dissimilarity_matrix))
+  holdout_size <- floor(num_elements / (n_folds * 2)) # Factor of 2 for symmetry
+
+  # Create a temporary copy to track available elements for sampling
+  sampling_pool <- dissimilarity_matrix
+
+  for(i in 1:n_folds) {
+    # Ensure there are enough elements left to sample for the holdout set
+    if (sum(!is.na(sampling_pool)) < holdout_size) {
+        warning("Could not create all requested folds due to data sparsity. Returning fewer folds.")
+        return(matrix_list[1:(i-1)])
+    }
+
+    # Sample validation indices from the remaining available elements
+    random_indices <- sample(which(!is.na(sampling_pool)), size = holdout_size)
+
+    # Create the training matrix for this fold by masking the holdout set
+    train_matrix <- dissimilarity_matrix
+    for(index in random_indices) {
+      # Convert the linear index to row/column coordinates
+      row <- (index - 1) %/% nrow(dissimilarity_matrix) + 1
+      col <- (index - 1) %% ncol(dissimilarity_matrix) + 1
+
+      # Mask the validation entries symmetrically
+      train_matrix[row, col] <- NA
+      train_matrix[col, row] <- NA
+
+      # Remove the selected elements from the sampling pool for subsequent folds
+      sampling_pool[row, col] <- NA
+      # Ensure symmetry is maintained in the sampling pool as well
+      sampling_pool[col, row] <- NA
+    }
+
+    matrix_list[[i]]$train <- train_matrix
+
+
+  }
+
+  return(matrix_list)
 }
 
 
+# Newed
 #' Save ggplot with white background
-#' 
+#'
 #' @description
-#' Wrapper around ggplot2::ggsave that ensures white background.
-#' This function masks ggplot2::ggsave.
+#' Wrapper around `ggplot2::ggsave` that ensures a white background by default.
 #' @importFrom ggplot2 ggsave
 #' @inheritParams ggplot2::ggsave
 #' @return No return value, called for side effects.
@@ -386,49 +165,20 @@ ggsave_white_bg <- function(..., bg = 'white') {
 }
 
 
+# Newed
 #' Color Palettes
-#' 
+#'
 #' @description
-#' Predefined color palettes optimized for visualization
-#' 
+#' Predefined color palettes optimized for visualization.
+#'
 #' @name color_palettes
 NULL
 
 #' @rdname color_palettes
 #' @export
 c25 <- c(
-  "purple", "green1", "blue1", "gold1", "red", 
+  "purple", "green1", "blue1", "gold1", "red",
   "darkturquoise", "darkorange", "skyblue2", "green4", "maroon",
   "yellow3", "gray40", "hotpink", "darkorange4", "deeppink1",
   "khaki2", "palegreen2", "dodgerblue2", "brown", "orchid1"
-)
-
-#' @rdname color_palettes
-#' @export
-c25_claud <- c(
-  "red", "green1", "blue1", "yellow3", "purple",
-  "darkorange", "hotpink", "darkturquoise", "gold1",
-  "maroon", "palegreen2", "dodgerblue2", "brown", "orchid1",
-  "green4", "sandybrown", "steelblue4", "yellow4", "plum3",
-  "darkorange4", "skyblue2", "deeppink1", "khaki2", "gray70"
-)
-
-#' @rdname color_palettes
-#' @export
-c25_old <- c(
-  "purple", "darkturquoise", "gold1", "darkorange4",
-  "green1", "blue1", "red", "plum3", "green4", "dodgerblue2",
-  "darkorange", "black", "skyblue2", "hotpink", "palegreen2",
-  "sandybrown", "gray70", "khaki2", "maroon", "orchid1",
-  "yellow4", "deeppink1", "steelblue4", "yellow3", "brown"
-)
-
-#' @rdname color_palettes
-#' @export
-c25_older <- c(
-  "dodgerblue2", "#E31A1C", "green4", "#6A3D9A", "#FF7F00",
-  "black", "gold1", "skyblue2", "#FB9A99", "palegreen2",
-  "#CAB2D6", "#FDBF6F", "gray70", "khaki2", "maroon",
-  "orchid1", "deeppink1", "blue1", "steelblue4", "darkturquoise",
-  "green1", "yellow4", "yellow3", "darkorange4", "brown"
 )

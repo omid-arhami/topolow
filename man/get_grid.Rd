@@ -2,26 +2,27 @@
 % Please edit documentation in R/adaptive_sampling.R
 \name{get_grid}
 \alias{get_grid}
-\title{Create Grid Around Maximum Likelihood Estimate}
+\title{Create Grid Around Maximum Likelihood Estimate (Internal)}
 \usage{
 get_grid(samples, param, num_points, start_factor, end_factor)
 }
 \arguments{
-\item{samples}{Data frame of MCMC samples with NLL column}
+\item{samples}{Data frame of parameter samples with an NLL column.}
 
-\item{param}{Character name of parameter column}
+\item{param}{Character name of the parameter column.}
 
-\item{num_points}{Integer number of points in grid}
+\item{num_points}{Integer number of points for the grid.}
 
-\item{start_factor}{Numeric factor for lower bound relative to MLE}
+\item{start_factor}{Numeric factor for grid's lower boundary relative to MLE.}
 
-\item{end_factor}{Numeric factor for upper bound relative to MLE}
+\item{end_factor}{Numeric factor for grid's upper boundary relative to MLE.}
 }
 \value{
-Numeric vector of grid points
+A numeric vector of grid points.
 }
 \description{
-Generates a sequence of values centered on the maximum likelihood estimate (MLE)
-of a parameter, extending by specified factors in each direction.
+Internal helper to generate a sequence of values for a parameter. The grid is
+centered on the parameter's Maximum Likelihood Estimate (MLE), which is found
+by calculating the mode of its weighted marginal distribution.
 }
 \keyword{internal}

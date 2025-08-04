@@ -2,17 +2,17 @@
 % Please edit documentation in R/diagnostics.R
 \name{calculate_diagnostics}
 \alias{calculate_diagnostics}
-\title{Calculate Adaptive Monte Carlo Sampling Diagnostics}
+\title{Calculate MCMC-style Diagnostics for Sampling Chains}
 \usage{
 calculate_diagnostics(chain_files, mutual_size = 500)
 }
 \arguments{
-\item{chain_files}{Character vector of paths to CSV files containing chains}
+\item{chain_files}{Character vector. Paths to CSV files, where each file represents a chain of samples.}
 
-\item{mutual_size}{Integer number of samples to use from end of each chain}
+\item{mutual_size}{Integer. Number of samples to use from the end of each chain for calculations.}
 }
 \value{
-A list object of class \code{topolow_amcs_diagnostics} containing convergence diagnostics for the MCMC chains.
+A list object of class \code{topolow_diagnostics} containing convergence diagnostics for the MCMC chains.
 \item{rhat}{A numeric vector of the R-hat (potential scale reduction factor) statistic for each parameter. Values close to 1 indicate convergence.}
 \item{ess}{A numeric vector of the effective sample size for each parameter.}
 \item{chains}{A list of data frames, where each data frame is a cleaned and trimmed MCMC chain.}
@@ -20,12 +20,13 @@ A list object of class \code{topolow_amcs_diagnostics} containing convergence di
 \item{mutual_size}{The integer number of samples used from the end of each chain for calculations.}
 }
 \description{
-Calculates standard Adaptive Monte Carlo Sampling diagnostics including R-hat (potential scale reduction)
-and effective sample size for multiple chains. Can be used with any iterative
-sampling or optimization procedure that produces chain-like output.
+Calculates standard MCMC-style convergence diagnostics for multiple chains from an
+optimization or sampling run. It computes the R-hat (potential scale reduction factor)
+and effective sample size (ESS) to help assess if the chains have converged to a
+stable distribution.
 }
 \examples{
-# This example demonstrates how to use the function with temporary files,
+# This example demonstrates how to use the function with temporary files.
 # Create dummy chain files in a temporary directory
 temp_dir <- tempdir()
 chain_files <- character(3)

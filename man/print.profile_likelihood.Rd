@@ -2,18 +2,19 @@
 % Please edit documentation in R/adaptive_sampling.R
 \name{print.profile_likelihood}
 \alias{print.profile_likelihood}
-\title{Print Method for Profile Likelihood Objects}
+\title{Print Method for profile_likelihood Objects}
 \usage{
 \method{print}{profile_likelihood}(x, ...)
 }
 \arguments{
-\item{x}{Profile likelihood object}
+\item{x}{A \code{profile_likelihood} object.}
 
-\item{...}{Additional arguments passed to print}
+\item{...}{Additional arguments passed to \code{print}.}
 }
 \value{
-The original \code{profile_likelihood} object (invisibly). Called for side effects (prints a summary to the console).
+The original \code{profile_likelihood} object (invisibly). Called for its
+side effect of printing a summary to the console.
 }
 \description{
-Print Method for Profile Likelihood Objects
+Provides a concise summary of a \code{profile_likelihood} object.
 }

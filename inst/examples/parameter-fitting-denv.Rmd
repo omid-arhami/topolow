@@ -93,11 +93,11 @@ write.csv(denv_data, "data_files/DENV_titers.csv", row.names = FALSE)
 
 
 denv_data_results <- process_antigenic_data(
-  file_path = "data_files/DENV_titers.csv",
+  denv_data,
   antigen_col = "virus_strain",
   serum_col = "serum_strain",
   value_col = "titer", 
-  is_titer = TRUE,
+  is_similarity = TRUE,
   metadata_cols = c("virusYear", "serumYear", "cluster", "color")
 )
 
@@ -148,7 +148,7 @@ start_time <- Sys.time()
 
 # Run initial parameter optimization
 results <- initial_parameter_optimization(
-  distance_matrix = denv_distance_matrix,
+  dissimilarity_matrix = denv_distance_matrix,
   mapping_max_iter = opt_params$mapping_max_iter,
   relative_epsilon = 1e-4,
   convergence_counter = 2,
@@ -204,7 +204,6 @@ samples <- log_transform_parameters(samples_file)
 # Setup adaptive sampling parameters
 amc_params <- list(
   num_samples = 3000, # Number of new samples to be added to the parameter distribution through AMC (for refinement.)
-  num_parallel_jobs = 7,  # Number of local parallel jobs (chains) to run.
   mapping_max_iter = 500, # Maximum iterations per map optimization
   relative_epsilon = 1e-4,
   folds = 20 # Number of CV folds
@@ -215,9 +214,8 @@ start_time <- Sys.time()
 
 run_adaptive_sampling(
   initial_samples_file = samples_file,
-  distance_matrix = denv_distance_matrix,
+  dissimilarity_matrix = denv_distance_matrix,
   num_samples = amc_params$num_samples,
-  num_parallel_jobs = amc_params$num_parallel_jobs,
   mapping_max_iter = amc_params$mapping_max_iter,
   scenario_name = scenario_name,
   relative_epsilon = amc_params$relative_epsilon,
@@ -257,7 +255,7 @@ clean_and_overwrite <- function(file_path) {
   # 1. Read every column in as character
   df <- read.csv(file_path, stringsAsFactors = FALSE, colClasses = "character")
   
-  # 2. For each column: remove any literal double‐quotes and coerce to numeric
+  # 2. For each column: remove any literal double-quotes and coerce to numeric
   df[] <- lapply(df, function(col) {
     # strip all " characters (in case they were embedded in the field)
     col_stripped <- gsub('"', "", col, fixed = TRUE)
@@ -330,7 +328,6 @@ for (param in params) {
   
   # Plot results
   pl_plot <- plot(pl_result, max_ll)
-  #ggsave_white_bg(paste0("profile_likelihood_denv_data_", param, ".png"), pl_plot)
   print(pl_plot)
 }
 ```
@@ -346,7 +343,6 @@ for (param in params) {
   
   # Plot results
   sens_plot <- plot(sensitivity, y_limit_factor=NULL)
-  #ggsave_white_bg(paste0("parameter_sensitivity_", param, ".pdf"), sens_plot)
   print(sens_plot)
 }
 ```
@@ -382,8 +378,7 @@ Finally, let's validate our optimal parameters:
 start_time <- Sys.time()
 
 # Run topolow with optimal parameters
-result <- create_topolow_map(
-  distance_matrix = denv_distance_matrix,
+result <- euclidean_embedding(dissimilarity_matrix =  denv_distance_matrix,
   ndim = optimal_params$N,
   mapping_max_iter = 500,
   k0 = optimal_params$k0,

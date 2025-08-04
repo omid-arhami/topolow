@@ -82,11 +82,11 @@ data(h3n2_data)
 write.csv(h3n2_data, "data_files/h3n2_data.csv", row.names = FALSE)
 
 H3N2_2003_data_results <- process_antigenic_data(
-  file_path = "data_files/h3n2_data.csv",
+  h3n2_data,
   antigen_col = "virusStrain",
   serum_col = "serumStrain",
   value_col = "titer", 
-  is_titer = TRUE,
+  is_similarity = TRUE,
   metadata_cols = c("virusYear", "serumYear", "cluster", "color")
 )
 
@@ -131,7 +131,7 @@ start_time <- Sys.time()
 
 # Run initial parameter optimization
 results <- initial_parameter_optimization(
-  distance_matrix = h3n2_distance_matrix,
+  dissimilarity_matrix = h3n2_distance_matrix,
   mapping_max_iter = opt_params$mapping_max_iter,
   relative_epsilon = 1e-4,
   convergence_counter = 2,
@@ -186,8 +186,7 @@ samples <- log_transform_parameters(samples_file, output_file = samples_file)
 
 # Setup adaptive sampling parameters
 amc_params <- list(
-  num_samples = 2, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) If using SLURM, can set = num_parallel_jobs for better accounting.
-  num_parallel_jobs = parallel::detectCores()-1,  # For local execution: Number of CPU cores available (Can try parallel::detectCores() ); For SLURM: Number of jobs to submit
+  num_samples = 2, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) 
   mapping_max_iter = 1000, # Maximum iterations per map optimization
   relative_epsilon = 1e-4,
   folds = 20 # Number of CV folds
@@ -199,9 +198,8 @@ start_time <- Sys.time()
 run_adaptive_sampling(
   initial_samples_file = samples_file,
   scenario_name = scenario_name,
-  distance_matrix = h3n2_distance_matrix,
+  dissimilarity_matrix = h3n2_distance_matrix,
   num_samples = amc_params$num_samples,
-  num_parallel_jobs = amc_params$num_parallel_jobs,
   mapping_max_iter = amc_params$mapping_max_iter,
   relative_epsilon = amc_params$relative_epsilon,
   folds = amc_params$folds,
@@ -292,7 +290,6 @@ for (param in params) {
   
   # Plot results
   pl_plot <- plot(pl_result, max_ll)
-  #ggsave_white_bg(paste0("profile_likelihood_H3N2_2003_data_", param, ".png"), pl_plot)
   print(pl_plot)
 }
 ```
@@ -308,7 +305,6 @@ for (param in params) {
   
   # Plot results
   sens_plot <- plot(sensitivity, y_limit_factor=NULL,  save_plot = FALSE)
-  #ggsave_white_bg(paste0("parameter_sensitivity_", param, ".pdf"), sens_plot)
   print(sens_plot)
 }
 ```
@@ -357,8 +353,7 @@ Finally, let's validate our optimal parameters:
 start_time <- Sys.time()
 
 # Run topolow with optimal parameters
-result <- create_topolow_map(
-  distance_matrix = h3n2_distance_matrix,
+result <- euclidean_embedding(dissimilarity_matrix = h3n2_distance_matrix,
   ndim = optimal_params$N,
   mapping_max_iter = 200,
   k0 = optimal_params$k0,

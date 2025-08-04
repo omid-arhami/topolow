@@ -2,43 +2,42 @@
 % Please edit documentation in R/adaptive_sampling.R
 \name{plot.profile_likelihood}
 \alias{plot.profile_likelihood}
-\title{Plot Method for Profile Likelihood Objects}
+\title{Plot Method for profile_likelihood Objects}
 \usage{
 \method{plot}{profile_likelihood}(x, LL_max, width = 3.5, height = 3.5, save_plot = FALSE, output_dir, ...)
 }
 \arguments{
-\item{x}{A profile_likelihood object}
+\item{x}{A \code{profile_likelihood} object returned by \code{profile_likelihood()}.}
 
-\item{LL_max}{Numeric maximum log-likelihood value}
+\item{LL_max}{The global maximum log-likelihood value from the entire sample set,
+used as the reference for calculating the confidence interval.}
 
-\item{width}{Numeric width of output plot in inches (default: 3.5)}
+\item{width, height}{Numeric. The width and height of the output plot in inches.}
 
-\item{height}{Numeric height of output plot in inches (default: 3.5)}
+\item{save_plot}{Logical. If TRUE, the plot is saved to a file.}
 
-\item{save_plot}{Logical. Whether to save plot to file. Default: FALSE}
+\item{output_dir}{Character. The directory where the plot will be saved. Required if \code{save_plot} is TRUE.}
 
-\item{output_dir}{Character. Directory for output files. Required if \code{save_plot} is TRUE.}
-
-\item{...}{Additional arguments passed to plot}
+\item{...}{Additional arguments passed to the plot function.}
 }
 \value{
-A ggplot object
+A ggplot object representing the profile likelihood plot.
 }
 \description{
-Creates a visualization of profile likelihood for a parameter showing maximum
-likelihood estimates and confidence intervals. Supports mathematical notation
-for parameter names and configurable output settings.
-
-Confidence interval is found using the likelihood ratio test:
-\eqn{LR(\theta_{ij}) = -2[log L_{max}(\theta_{ij}) - log L_{max}(\hat{\theta})]}
-where \eqn{\hat{\theta}} is the maximum likelihood estimate for all parameters.
-The 95\% confidence interval is:
-\eqn{\{\theta_{ij} : LR(\theta_{ij}) \leq \chi^2_{1,0.05} = 3.84\}}
+Creates a visualization of the profile likelihood for a parameter, showing the
+maximum likelihood estimates and the 95\% confidence interval. It supports
+mathematical notation for parameter names for clearer plot labels.
+}
+\details{
+The 95\% confidence interval is determined using the likelihood ratio test, where the
+cutoff is based on the chi-squared distribution:
+\eqn{LR(\theta_{ij}) = -2[log L_{max}(\theta_{ij}) - log L_{max}(\hat{\theta})]}.
+The interval includes all parameter values \eqn{\theta_{ij}} for which
+\eqn{LR(\theta_{ij}) \leq \chi^2_{1,0.05} \approx 3.84}.
 }
 \examples{
-# These examples take more than 5 seconds to run, so they are not run by default. 
-# Use parallel processing (the default) to speed up.
 \donttest{
+# This example can take more than 5 seconds to run.
 # Create a sample data frame of MCMC samples
 samples <- data.frame(
   log_N = log(runif(50, 2, 10)),
@@ -48,11 +47,12 @@ samples <- data.frame(
   NLL = runif(50, 20, 100)
 )
 
-# Calculate profile likelihood
+# Calculate profile likelihood for the "log_N" parameter
 pl_result <- profile_likelihood("log_N", samples, grid_size = 10)
 
-# Plot with maximum likelihood from samples
+# Provide the global maximum log-likelihood from the samples
 LL_max <- max(-samples$NLL)
+
 # The plot function requires the ggplot2 package
 if (requireNamespace("ggplot2", quietly = TRUE)) {
   plot(pl_result, LL_max, width = 4, height = 3)

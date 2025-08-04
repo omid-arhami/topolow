@@ -7,17 +7,19 @@
 generate_kde_samples(samples, n, epsilon = 0)
 }
 \arguments{
-\item{samples}{Data frame of previous samples with parameters and NLL}
+\item{samples}{A data frame of previous samples containing parameter columns and an "NLL" column.}
 
-\item{n}{Integer number of samples to generate}
+\item{n}{The integer number of new samples to generate.}
 
-\item{epsilon}{Numeric probability of wider bandwidth sampling}
+\item{epsilon}{A numeric probability (0-1) of sampling with a wider bandwidth to
+encourage exploration. Default is 0.}
 }
 \value{
-Data frame of n new samples
+A data frame containing \code{n} new parameter samples.
 }
 \description{
 Generates new parameter samples using weighted kernel density estimation
-for each parameter independently.
+for each parameter independently. This is an internal helper function for the
+adaptive sampling process.
 }
 \keyword{internal}

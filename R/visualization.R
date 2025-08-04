@@ -2,30 +2,6 @@
 # R/visualization.R
 
 #' Visualization functions for the topolow package
-#' 
-#' @description
-#' This file contains functions for visualizing topolow results including
-#' dimension reduction plots and cluster visualizations. Supports multiple
-#' plotting methods and customization options.
-#' 
-#' Functions handle:
-#' - Temporal mapping visualizations
-#' - Cluster mapping visualizations  
-#' - 2D and 3D projections
-#' - Multiple dimension reduction methods
-#' - Interactive and static plots
-#' - Diagnostic visualizations
-#' - Monte Carlo analysis visualizations
-#'
-#' @importFrom ggplot2 ggplot aes geom_point scale_color_manual theme_minimal coord_fixed 
-#'             ggsave theme element_text margin unit scale_shape_manual guides
-#' @importFrom dplyr %>% select filter
-#' @importFrom stats prcomp dist optimize
-#' @importFrom umap umap
-#' @importFrom gridExtra grid.arrange
-#' @importFrom scales comma
-#' @keywords internal
-"_PACKAGE"
 
 
 #' Plot Annotation Configuration Class
@@ -302,7 +278,7 @@ new_layout_config <- function(
     is.character(grid_linetype),
     is.logical(show_axis),
     is.logical(axis_lines),
-    inherits(plot_margin, "margin"),
+    ggplot2::is_margin(plot_margin),
     coord_type %in% c("fixed", "equal", "flip", "polar"),
     is.character(background_color),
     is.character(panel_background_color),
@@ -468,8 +444,6 @@ validate_topolow_df <- function(df, ndim, require_clusters = FALSE, require_temp
 #' @param config Dimension reduction configuration object
 #' @return Data frame with reduced dimensions
 #' @importFrom stats prcomp dist
-#' @importFrom umap umap
-#' @importFrom Rtsne Rtsne
 #' @keywords internal
 reduce_dimensions <- function(df, config) {
   if (!inherits(config, "dim_reduction_config")) {
@@ -508,7 +482,10 @@ reduce_dimensions <- function(df, config) {
                      }
                    },
                    "umap" = {
-                     umap_result <- do.call(umap,
+                      if (!requireNamespace("umap", quietly = TRUE)) {
+                        stop("umap package required for UMAP reduction. Please install it.")
+                      }
+                     umap_result <- do.call(umap::umap,
                                             c(list(d = coords,
                                                    n_components = config$n_components),
                                               config$umap_params))
@@ -516,7 +493,7 @@ reduce_dimensions <- function(df, config) {
                    },
                    "tsne" = {
                      if (!requireNamespace("Rtsne", quietly = TRUE)) {
-                       stop("Rtsne package required for t-SNE reduction")
+                       stop("Rtsne package required for t-SNE reduction. Please install it.")
                      }
                      tsne_result <- do.call(Rtsne::Rtsne,
                                             c(list(X = coords,
@@ -631,7 +608,7 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #' Create Temporal Mapping Plot
 #'
 #' @description
-#' Creates a visualization of points colored by time (year) using dimension reduction, with optional antigenic velocity arrows.
+#' Antigenic Mapping and Antigenic Velocity Function. Creates a visualization of points colored by time (year) using dimension reduction, with optional antigenic velocity arrows.
 #' Points are colored on a gradient scale based on their temporal values, with
 #' different shapes for antigens and antisera.
 #'
@@ -695,10 +672,8 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #' \code{\link{new_aesthetic_config}} for aesthetic options
 #' \code{\link{new_layout_config}} for layout options
 #' \code{\link{new_annotation_config}} for annotation options
-#' @importFrom ggrepel geom_label_repel geom_text_repel
 #' @importFrom ggplot2 ggplot aes geom_point geom_text geom_segment scale_colour_gradient scale_shape_manual scale_x_continuous scale_y_continuous labs
 #' @importFrom grid unit arrow
-#' @importFrom ape is.rooted unroot dist.nodes nodepath extract.clade
 #' @importFrom stats dist bw.nrd median
 #' @export
 plot_temporal_mapping <- function(df_coords, ndim, 
@@ -869,7 +844,9 @@ plot_temporal_mapping <- function(df_coords, ndim,
     positions$V2 <- positions$plot_y
     
     if (!is.null(phylo_tree)) {
-      #library(ape)
+      if (!requireNamespace("ape", quietly = TRUE)) {
+        stop("Package 'ape' is required for this function. Please install it.")
+      }
       if (ape::is.rooted(phylo_tree)) {
         phylo_tree <- ape::unroot(phylo_tree)
       }
@@ -894,13 +871,13 @@ plot_temporal_mapping <- function(df_coords, ndim,
         )
       }
       
-      # phylogenetic clade depth cutoff via leaf-to-backbone (longest‐path in terms of nodes, aka tree spine)
+      # phylogenetic clade depth cutoff via leaf-to-backbone (longest-path in terms of nodes, aka tree spine)
       # 1) force every edge to length 1
       tree_unit <- phylo_tree
       tree_unit$edge.length <- rep(1, nrow(tree_unit$edge))
       
-      # 2) compute node‐to‐node distances
-      DN <- dist.nodes(tree_unit)
+      # 2) compute node-to-node distances
+      DN <- ape::dist.nodes(tree_unit)
       
       # 3) find the two tips with maximum separation
       n_tip <- length(tree_unit$tip.label)
@@ -910,7 +887,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
       max_pair <- which(tip_dist_mat == max(tip_dist_mat), arr.ind = TRUE)[1, ]
       
       # 4) get the (internal + tip) nodes along that path
-      path_nodes <- nodepath(tree_unit, max_pair[1], max_pair[2])
+      path_nodes <- ape::nodepath(tree_unit, max_pair[1], max_pair[2])
       
       # 5) for each tip, its distance to the nearest node on that path
       leaf_distances <- apply(DN[tip_idx, path_nodes, drop = FALSE], 1, min)
@@ -947,7 +924,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
       )
       clade_members <- lapply(
         clade_nodes,
-        function(nd) extract.clade(phylo_tree, nd)$tip.label
+        function(nd) ape::extract.clade(phylo_tree, nd)$tip.label
       )
     }
     
@@ -976,7 +953,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
     
     for (i in seq_len(n)) {
       this_pt <- positions$name[i]
-      # determine past indices, excluding only known "non‐clade" tips
+      # determine past indices, excluding only known "non-clade" tips
       if (!is.null(phylo_tree) && this_pt %in% names(clade_members)) {
         # those present but *not* in the same clade
         bad <- setdiff(tree_present_points, clade_members[[this_pt]])
@@ -1017,7 +994,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
         data        = top_vel,
         inherit.aes = FALSE,
         aes(x = .data$V1, y = .data$V2),
-        shape       = 21,   # same filled‐circle shape you used for notable antigens
+        shape       = 21,   # same filled-circle shape you used for notable antigens
         color       = "black",
         size        = aesthetic_config$point_size * 1.2,
         stroke      = annotation_config$outline_size,
@@ -1053,7 +1030,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
           vjust = 0.5,
           alpha = 0.8*annotation_config$alpha
         )
-      # Annotate top‐velocity points exactly like notable‐point labels
+      # Annotate top-velocity points exactly like notable-point labels
       if (requireNamespace("ggrepel", quietly = TRUE)) {
         if (annotation_config$box) {
           p <- p +
@@ -1164,7 +1141,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
 #' Create Clustered Mapping Plots
 #'
 #' @description
-#' Creates a visualization of points colored by cluster assignment using dimension 
+#' Antigenic Mapping and Antigenic Velocity Function. Creates a visualization of points colored by cluster assignment using dimension 
 #' reduction, with optional antigenic velocity arrows. Points are colored by cluster with different shapes for antigens and 
 #' antisera.
 #'
@@ -1252,11 +1229,9 @@ plot_temporal_mapping <- function(df_coords, ndim,
 #' \code{\link{new_aesthetic_config}} for aesthetic options
 #' \code{\link{new_layout_config}} for layout options
 #' \code{\link{new_annotation_config}} for annotation options
-#' @importFrom ggrepel geom_label_repel geom_text_repel
-#' @importFrom ggplot2 ggplot aes geom_point geom_text geom_segment scale_colour_manual scale_fill_manual scale_shape_manual guides guide_legend labs scale_x_continuous scale_y_continuous
+#' @importFrom ggplot2 ggplot aes coord_fixed theme geom_point geom_text geom_segment scale_colour_manual scale_fill_manual scale_shape_manual guides guide_legend labs scale_x_continuous scale_y_continuous
 #' @importFrom grid unit arrow
 #' @importFrom dplyr group_by filter ungroup
-#' @importFrom ape is.rooted unroot dist.nodes nodepath extract.clade
 #' @importFrom stats dist bw.nrd median
 #' @export
 plot_cluster_mapping <- function(df_coords, ndim,
@@ -1280,7 +1255,19 @@ plot_cluster_mapping <- function(df_coords, ndim,
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
     warning("The ggrepel package is required for optimal label placement. Install with: install.packages('ggrepel')")
   }
-  
+  if (!requireNamespace("dplyr", quietly = TRUE)) {
+    stop("The dplyr package is required for this function. Please install it.")
+  }
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("The ggplot2 package is required for plotting. Please install it.")
+  }
+  if (!requireNamespace("grid", quietly = TRUE)) {
+    stop("The grid package is required for arrow specifications. Please install it.")
+  }
+  if (!requireNamespace("stats", quietly = TRUE)) {
+    stop("The stats package is required for statistical operations. Please install it.")
+  }
+
   if (layout_config$save_plot && missing(output_dir)) {
     stop("An 'output_dir' must be provided when 'layout_config$save_plot' is TRUE.", call. = FALSE)
   }
@@ -1298,7 +1285,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
   # Process row names to get strain names
   reduced_df$clean_name <- sub("^(V/|S/)", "", reduced_df$name)
   
-  #NOTABLE‑POINT & ARROW FLAGS
+  #NOTABLE-POINT & ARROW FLAGS
   reduced_df$is_notable <- FALSE
   reduced_df$is_arrow   <- FALSE
   
@@ -1490,7 +1477,9 @@ plot_cluster_mapping <- function(df_coords, ndim,
     positions$V2 <- positions$plot_y
     
     if (!is.null(phylo_tree)) {
-      #library(ape)
+      if (!requireNamespace("ape", quietly = TRUE)) {
+        stop("Package 'ape' is required for this function. Please install it.")
+      }
       if (ape::is.rooted(phylo_tree)) {
         phylo_tree <- ape::unroot(phylo_tree)
       }
@@ -1515,13 +1504,13 @@ plot_cluster_mapping <- function(df_coords, ndim,
         )
       }
       
-      # phylogenetic clade depth cutoff via leaf-to-backbone (longest‐path in terms of edges, aka tree spine)
+      # phylogenetic clade depth cutoff via leaf-to-backbone (longest-path in terms of edges, aka tree spine)
       # 1) force every edge to length 1
       tree_unit <- phylo_tree
       tree_unit$edge.length <- rep(1, nrow(tree_unit$edge))
       
-      # 2) compute node‐to‐node distances
-      DN <- dist.nodes(tree_unit)
+      # 2) compute node-to-node distances
+      DN <- ape::dist.nodes(tree_unit)
       
       # 3) find the two tips with maximum separation
       n_tip <- length(tree_unit$tip.label)
@@ -1531,7 +1520,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
       max_pair <- which(tip_dist_mat == max(tip_dist_mat), arr.ind = TRUE)[1, ]
       
       # 4) get the (internal + tip) nodes along that path
-      path_nodes <- nodepath(tree_unit, max_pair[1], max_pair[2])
+      path_nodes <- ape::nodepath(tree_unit, max_pair[1], max_pair[2])
       
       # 5) for each tip, its distance to the nearest node on that path
       leaf_distances <- apply(DN[tip_idx, path_nodes, drop = FALSE], 1, min)
@@ -1568,7 +1557,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
       )
       clade_members <- lapply(
         clade_nodes,
-        function(nd) extract.clade(phylo_tree, nd)$tip.label
+        function(nd) ape::extract.clade(phylo_tree, nd)$tip.label
       )
     }
     
@@ -1597,7 +1586,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
     
     for (i in seq_len(n)) {
       this_pt <- positions$name[i]
-      # determine past indices, excluding only known "non‐clade" tips
+      # determine past indices, excluding only known "non-clade" tips
       if (!is.null(phylo_tree) && this_pt %in% names(clade_members)) {
         # those present but *not* in the same clade
         bad <- setdiff(tree_present_points, clade_members[[this_pt]])
@@ -1650,7 +1639,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
         data        = top_vel,
         inherit.aes = FALSE,
         aes(x = .data$V1, y = .data$V2, fill = .data$cluster),
-        shape       = 21,   # same filled‐circle shape used for notable antigens
+        shape       = 21,   # same filled-circle shape used for notable antigens
         color       = "black",
         size        = aesthetic_config$point_size * 1.2,
         stroke      = annotation_config$outline_size,
@@ -1685,7 +1674,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
       #   vjust = 0.5,
       #   alpha = 0.8*annotation_config$alpha
       # )
-      # Annotate top‐velocity points exactly like notable‐point labels
+      # Annotate top-velocity points exactly like notable-point labels
       if (requireNamespace("ggrepel", quietly = TRUE)) {
         if (annotation_config$box) {
           p <- p +
@@ -1793,8 +1782,6 @@ plot_cluster_mapping <- function(df_coords, ndim,
 }
 
 
-
-
 #' Create 3D Visualization
 #'
 #' @description
@@ -1882,7 +1869,6 @@ plot_cluster_mapping <- function(df_coords, ndim,
 #' \code{\link{plot_temporal_mapping}} for 2D temporal visualization
 #' \code{\link{plot_cluster_mapping}} for 2D cluster visualization
 #' \code{\link{make_interactive}} for converting 2D plots to interactive versions
-#' @importFrom rgl open3d plot3d axes3d rgl.snapshot rgl.close rgl.cur
 #' @importFrom grDevices colorRampPalette
 #' @export
 plot_3d_mapping <- function(df, ndim, 
@@ -1891,7 +1877,10 @@ plot_3d_mapping <- function(df, ndim,
                             layout_config = new_layout_config(),
                             interactive = TRUE,
                             output_dir) {
-                              # Check if rgl package is available
+  if (!requireNamespace("rgl", quietly = TRUE)) {
+    stop("rgl package is required for 3D plotting. Install with: install.packages('rgl')")
+  }
+  # Check if rgl package is available
   has_rgl <- requireNamespace("rgl", quietly = TRUE)
   
   if (!has_rgl) {
@@ -2075,7 +2064,7 @@ save_plot <- function(plot, filename, layout_config = new_layout_config(),
   full_path <- file.path(output_dir, filename)
   
   # Save based on plot type
-  if(inherits(plot, "ggplot")) {
+  if(ggplot2::is_ggplot(plot)) {
     ggsave_white_bg(filename = full_path,
            plot = plot,
            width = layout_config$width,
@@ -2143,7 +2132,6 @@ save_plot <- function(plot, filename, layout_config = new_layout_config(),
 #'   tooltip_vars = c("cluster", "year", "antigen")
 #' )
 #' }
-#' @importFrom plotly ggplotly layout
 #' @export
 make_interactive <- function(plot, tooltip_vars = NULL) {
   if(!requireNamespace("plotly", quietly = TRUE)) {
@@ -2175,611 +2163,518 @@ make_interactive <- function(plot, tooltip_vars = NULL) {
 }
 
 
-
-#' Create Diagnostic Plots for Multiple Chains
+# Newed
+#' Create Diagnostic Plots for Multiple Sampling Chains
 #'
 #' @description
-#' Creates trace and density plots for multiple Adaptive Monte Carlo Sampling or optimization chains to assess
-#' convergence and mixing. Displays parameter trajectories and distributions across chains.
+#' Creates trace and density plots for multiple sampling or optimization chains to help
+#' assess convergence and mixing. It displays parameter trajectories and their
+#' distributions across all chains.
 #'
-#' @param chain_files Character vector of paths to CSV files containing chain data
-#' @param mutual_size Integer number of samples to use from end of each chain
-#' @param output_file Character path for saving plot. Required if `save_plot` is `TRUE`.
-#' @param output_dir Character. Directory for output files. Required if `save_plot` is `TRUE`.
-#' @param save_plot Logical. Whether to save plots to files. Default: FALSE
-#' @param width,height,res Plot dimensions and resolution for saving
-#' @return A ggplot object of the combined plots.
+#' @param chain_files A character vector of paths to CSV files, where each file contains data for one chain.
+#' @param mutual_size Integer. The number of samples to use from the end of each chain for plotting.
+#' @param output_file Character. The path for saving the plot. Required if `save_plot` is TRUE.
+#' @param output_dir Character. The directory for saving output files. Required if `save_plot` is TRUE.
+#' @param save_plot Logical. If TRUE, saves the plot to a file. Default: FALSE.
+#' @param width,height,res Numeric. The dimensions and resolution for the saved plot.
+#' @return A `ggplot` object of the combined plots.
 #' @examples
-#' # This example uses sample data files included with the package.
+#' # This example uses sample data files that would be included with the package.
 #' chain_files <- c(
 #'   system.file("extdata", "diag_chain1.csv", package = "topolow"),
 #'   system.file("extdata", "diag_chain2.csv", package = "topolow"),
 #'   system.file("extdata", "diag_chain3.csv", package = "topolow")
 #' )
-#' 
+#'
 #' # Only run the example if the files are found
 #' if (all(nzchar(chain_files))) {
 #'   # Create diagnostic plot without saving to a file
-#'   create_diagnostic_plots(chain_files, mutual_size = 2, save_plot = FALSE)
+#'   create_diagnostic_plots(chain_files, mutual_size = 50, save_plot = FALSE)
 #' }
-#' 
-#' @importFrom utils read.csv
-#' @importFrom ggplot2 ggplot aes geom_line geom_density labs theme_minimal theme element_blank element_rect ggsave
-#' @importFrom gridExtra grid.arrange
+#'
 #' @export
-create_diagnostic_plots <- function(chain_files, 
-                                  mutual_size = 2000,
-                                  output_file = "diagnostic_plots.png",
-                                  output_dir,
-                                  save_plot = FALSE,
-                                  width = 3000, height = 3000, res = 300) {
-  
+create_diagnostic_plots <- function(chain_files,
+                                    mutual_size = 2000,
+                                    output_file = "diagnostic_plots.png",
+                                    output_dir,
+                                    save_plot = FALSE,
+                                    width = 3000, height = 3000, res = 300) {
+                                      # Check if gridextra is available
+  if (!requireNamespace("gridExtra", quietly = TRUE)) {
+    stop("gridExtra package is required for plotting. Please install with install.packages('gridExtra').")
+  }
   if (save_plot && (missing(output_dir) || missing(output_file))) {
-      stop("`output_dir` and `output_file` must be provided when `save_plot` is TRUE.", call. = FALSE)
+    stop("`output_dir` and `output_file` must be provided when `save_plot` is TRUE.", call. = FALSE)
   }
-  
-  # Read chains
-  chains <- lapply(chain_files, read.csv)
-  
-  # Process samples 
+
+  # Read and process chain data
   par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
-  for(i in seq_along(chains)) {
-    chains[[i]] <- chains[[i]][
-      (nrow(chains[[i]]) - mutual_size - 1):nrow(chains[[i]]), 
-      par_names]
-  }
-  
+  chains <- lapply(chain_files, function(file) {
+    df <- utils::read.csv(file)
+    # Take the last `mutual_size` samples
+    tail(df[, par_names], mutual_size)
+  })
+
   n_params <- ncol(chains[[1]])
   n_chains <- length(chains)
-  
-  # Create plots for each parameter
-  plot_list <- vector("list", n_params * 2)
+
+  # Create a list to hold all the individual plots
+  plot_list <- list()
+
   for (i in seq_len(n_params)) {
-    # Prepare trace data
+    # Combine data from all chains for the current parameter
     trace_data <- do.call(rbind, lapply(seq_len(n_chains), function(j) {
       data.frame(
-        Chain = j, 
+        Chain = as.factor(j),
         Iteration = seq_len(nrow(chains[[j]])),
-        Value = chains[[j]][,i]
+        Value = chains[[j]][, i]
       )
     }))
-    
-    # Trace plot
-    plot_list[[i*2-1]] <- ggplot(trace_data, 
-      aes(x = .data$Iteration, y = .data$Value, color = factor(.data$Chain))) +
-      geom_line(size = 0.5) +
-      labs(title = paste("Trace Plot:", par_names[i]),
-           x = "Iteration", y = "Value") +
-      theme_minimal() +
-      theme(
+
+    # Create Trace Plot
+    p_trace <- ggplot2::ggplot(trace_data,
+                               ggplot2::aes(x = .data$Iteration, y = .data$Value, color = .data$Chain)) +
+      ggplot2::geom_line(linewidth = 0.5) +
+      ggplot2::labs(title = paste("Trace Plot:", par_names[i]), x = "Iteration", y = "Value") +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
         legend.position = "none",
-        panel.grid.minor = element_blank(),
-        panel.border = element_rect(color = "black", fill = NA)
+        panel.grid.minor = ggplot2::element_blank(),
+        panel.border = ggplot2::element_rect(color = "black", fill = NA)
       )
-    
-    # Density plot  
-    plot_list[[i*2]] <- ggplot(trace_data,
-      aes(x = .data$Value, color = factor(.data$Chain))) +
-      geom_density(alpha = 0.3) +
-      labs(title = paste("Density:", par_names[i]),
-           x = "Value", y = "Density") +
-      theme_minimal() +
-      theme(
-        legend.position = "none", 
-        panel.grid.minor = element_blank(),
-        panel.border = element_rect(color = "black", fill = NA)
+    plot_list <- c(plot_list, list(p_trace))
+
+    # Create Density Plot
+    p_density <- ggplot2::ggplot(trace_data, ggplot2::aes(x = .data$Value, color = .data$Chain)) +
+      ggplot2::geom_density(alpha = 0.3) +
+      ggplot2::labs(title = paste("Density Plot:", par_names[i]), x = "Value", y = "Density") +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        legend.position = "none",
+        panel.grid.minor = ggplot2::element_blank(),
+        panel.border = ggplot2::element_rect(color = "black", fill = NA)
       )
+    plot_list <- c(plot_list, list(p_density))
   }
-  
-  # Arrange and save
-  combined_plot <- gridExtra::grid.arrange(
-    grobs = plot_list, 
-    ncol = 2
-  )
-  
-  # Optionally save
-  if(save_plot) {
+
+  # Arrange all plots into a grid
+  combined_plot <- gridExtra::grid.arrange(grobs = plot_list, ncol = 2)
+
+  # Optionally save the combined plot
+  if (save_plot) {
     full_output_path <- file.path(output_dir, output_file)
-    
     ggsave_white_bg(full_output_path, combined_plot,
-           width = width/300, height = height/300, 
-           dpi = res, limitsize = FALSE)
+                    width = width / res, height = height / res,
+                    dpi = res, limitsize = FALSE)
   }
-  
-  # Return plot object
+
   return(combined_plot)
 }
 
 
-#' Plot Method for Convergence Diagnostics
-#' 
+# Newed
+#' Plot Method for topolow Convergence Diagnostics
+#'
 #' @description
-#' Creates visualization of convergence diagnostics from Monte Carlo sampling, including 
-#' parameter mean trajectories and covariance matrix stability over iterations. Helps assess
-#' whether parameter estimation has converged to stable distributions.
-#' 
+#' Creates visualizations of convergence diagnostics from a sampling run, including
+#' parameter mean trajectories and covariance matrix stability over iterations. This helps
+#' assess whether parameter estimation has converged.
+#'
 #' @details
 #' The function generates two types of plots:
 #' 1. Parameter mean plots: Shows how the mean value for each parameter changes over iterations.
-#'    Stabilization of these plots indicates convergence of parameter distributions.
-#'    
-#' 2. Covariance change plot: Shows relative changes in the covariance matrix using the 
-#'    Frobenius norm (also called Hilbert-Schmidt norm), which is defined as the square root of the 
-#'    sum of the absolute squares of all matrix elements: \eqn{\sqrt{\sum|a_{ij}|^2}}. 
-#'    A decreasing trend approaching zero indicates stable relationships between parameters.
+#'    Stabilization of these plots indicates convergence.
+#' 2. Covariance change plot: Shows the relative change in the Frobenius norm of the
+#'    covariance matrix. A decreasing trend approaching zero indicates stable relationships
+#'    between parameters.
 #'
-#' @param x A topolow_convergence object from check_gaussian_convergence().
-#' @param param_names Optional character vector of parameter names to use in plot titles.
-#'        If NULL (default), uses the param_names from the topolow_convergence object.
-#' @param ... Additional arguments passed to underlying plot functions (currently not used).
+#' @param x A `topolow_convergence` object from `check_gaussian_convergence()`.
+#' @param param_names Optional character vector of parameter names for plot titles.
+#'   If NULL, names are taken from the input object.
+#' @param ... Additional arguments (not currently used).
 #' @return A grid of plots showing convergence metrics.
 #' @examples
 #' # Example with simulated data
 #' chain_data <- data.frame(
-#'   log_N = rnorm(1000, mean = 1.5, sd = 0.1),
-#'   log_k0 = rnorm(1000, mean = -0.5, sd = 0.2)
+#'   param1 = rnorm(1000, mean = 1.5, sd = 0.1),
+#'   param2 = rnorm(1000, mean = -0.5, sd = 0.2)
 #' )
-#' 
+#'
 #' # Check convergence
 #' results <- check_gaussian_convergence(chain_data)
-#' 
+#'
 #' # Plot diagnostics
 #' plot(results)
-#' 
-#' # With custom parameter names
-#' plot(results, param_names = c("Dimensions (log)", "Spring constant (log)"))
 #'
-#' @seealso \code{\link{check_gaussian_convergence}} for generating the convergence object
+#' # With custom parameter names
+#' plot(results, param_names = c("Parameter 1 (log)", "Parameter 2 (log)"))
+#'
+#' @seealso \code{\link{check_gaussian_convergence}} for generating the convergence object.
 #' @method plot topolow_convergence
-#' @importFrom ggplot2 ggplot aes geom_line labs theme_minimal theme element_blank element_rect
-#' @importFrom gridExtra grid.arrange
 #' @export
 plot.topolow_convergence <- function(x, param_names = NULL, ...) {
-  # Use param_names from object if not provided
+  # Check if required packages are available
+  if (!requireNamespace("gridExtra", quietly = TRUE)) {
+    stop("gridExtra package is required for plotting. Please install with install.packages('gridExtra').")
+  }
+  # Use param_names from the object if not provided by the user
   if (is.null(param_names)) {
     param_names <- x$param_names
   }
-  
-  # Parameter mean plots
+
+  # Create a plot for the mean trajectory of each parameter
   mean_plots <- lapply(seq_along(param_names), function(i) {
     plot_data <- data.frame(
       Iteration = seq_len(nrow(x$mean_history)),
-      Value = x$mean_history[,i]
+      Value = x$mean_history[, i]
     )
-    
-    ggplot(plot_data, aes(x = .data$Iteration, y = .data$Value)) +
-      geom_line(color = "steelblue") +
-      labs(title = paste("Parameter Mean:", param_names[i]),
-           x = "Iteration", y = "Value") +
-      theme_minimal() +
-      theme(
-        panel.grid.minor = element_blank(),
-        panel.border = element_rect(color = "black", fill = NA)
+    ggplot2::ggplot(plot_data, ggplot2::aes(x = .data$Iteration, y = .data$Value)) +
+      ggplot2::geom_line(color = "steelblue") +
+      ggplot2::labs(title = paste("Parameter Mean:", param_names[i]), x = "Iteration", y = "Mean Value") +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        panel.grid.minor = ggplot2::element_blank(),
+        panel.border = ggplot2::element_rect(color = "black", fill = NA)
       )
   })
-  
-  # Covariance change plot
-  cov_plot <- {
-    plot_data <- data.frame(
-      Iteration = seq_along(x$cov_changes),
-      Change = x$cov_changes
+
+  # Create a plot for the change in the covariance matrix norm
+  cov_plot_data <- data.frame(
+    Iteration = seq_along(x$cov_changes),
+    Change = x$cov_changes
+  )
+  cov_plot <- ggplot2::ggplot(cov_plot_data, ggplot2::aes(x = .data$Iteration, y = .data$Change)) +
+    ggplot2::geom_line(color = "darkred") +
+    ggplot2::labs(title = "Covariance Matrix Stability", x = "Iteration", y = "Relative Change in Norm") +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid.minor = ggplot2::element_blank(),
+      panel.border = ggplot2::element_rect(color = "black", fill = NA)
     )
-    
-    ggplot(plot_data, aes(x = .data$Iteration, y = .data$Change)) +
-      geom_line(color = "steelblue") +
-      labs(title = "Covariance Changes",
-           x = "Iteration", y = "Relative Change") +
-      theme_minimal() +
-      theme(
-        panel.grid.minor = element_blank(),
-        panel.border = element_rect(color = "black", fill = NA)
-      )
-  }
-  
-  # Combine plots
+
+  # Arrange all plots into a single grid
   gridExtra::grid.arrange(
     grobs = c(mean_plots, list(cov_plot)),
     ncol = 2
   )
 }
 
-
-#' Print Method for Convergence Diagnostics
+#' Print Method for topolow Convergence Diagnostics
 #'
-#' @param x A topolow_convergence object
-#' @param ... Additional arguments passed to print
-#' @return No return value, called for side effects (prints a summary to the console).
+#' @param x A `topolow_convergence` object.
+#' @param ... Additional arguments passed to print.
+#' @return No return value; called for its side effect of printing a summary.
 #' @method print topolow_convergence
 #' @export
 print.topolow_convergence <- function(x, ...) {
-  cat("TopoLow Convergence Diagnostics:\n")
-  cat(sprintf("Convergence achieved: %s\n", x$converged))
-  cat(sprintf("Mean convergence: %s\n", x$mean_converged))
-  cat(sprintf("Covariance convergence: %s\n", x$cov_converged))
-  cat("\nFinal parameter means:\n")
+  cat("--- topolow Convergence Diagnostics ---\n")
+  cat(sprintf("Overall Convergence Achieved: %s\n", x$converged))
+  cat(sprintf("Mean Vector Converged: %s\n", x$mean_converged))
+  cat(sprintf("Covariance Matrix Converged: %s\n", x$cov_converged))
+  cat("\nFinal Parameter Means:\n")
   print(setNames(x$final_mean, x$param_names))
 }
 
-#' Plot Method for Adaptive Monte Carlo Sampling Diagnostics
+# Newed
+#' Plot Method for topolow parameter estimation Diagnostics
 #'
 #' @description
-#' Creates trace and density plots for multiple chains to assess convergence
-#' and mixing.
+#' Creates trace and density plots for multiple chains to assess convergence and mixing.
+#' This is an S3 method that dispatches on `topolow_diagnostics` objects.
 #'
-#' @param x A topolow_amcs_diagnostics object
-#' @param output_dir Character. Directory for output files. Required if `save_plot` is `TRUE`.
-#' @param output_file Character path for saving plot 
+#' @param x A `topolow_diagnostics` object from `calculate_diagnostics()`.
+#' @param output_dir Character. Directory for output files. Required if `save_plot` is TRUE.
+#' @param output_file Character path for saving the plot.
 #' @param save_plot Logical. Whether to save the plot.
-#' @param width,height,res Plot dimensions and resolution
-#' @param ... Additional arguments passed to plot functions
+#' @param ... Additional arguments passed to `create_diagnostic_plots`.
 #' @return A ggplot object of the combined plots.
-#' @method plot topolow_amcs_diagnostics
+#' @method plot topolow_diagnostics
 #' @export
-plot.topolow_amcs_diagnostics <- function(x, 
+plot.topolow_diagnostics <- function(x,
                                         output_dir,
-                                        output_file = "mc_diagnostics.png",
+                                        output_file = "topolow_param_diagnostics.png",
                                         save_plot = FALSE,
-                                        width = 3000, height = 3000, 
-                                        res = 300, ...) {
-  create_diagnostic_plots(x$chains, x$mutual_size, 
-                         output_file = output_file,
-                         output_dir = if(!missing(output_dir)) output_dir else NULL,
-                         save_plot = save_plot,
-                         width = width, height = height, 
-                         res = res, ...)
+                                        ...) {
+  # This method is a wrapper around the main plotting function
+  create_diagnostic_plots(chain_files = x$chains, # Pass the actual chain data
+                          mutual_size = x$mutual_size,
+                          output_file = output_file,
+                          output_dir = if (!missing(output_dir)) output_dir else NULL,
+                          save_plot = save_plot,
+                          ...)
 }
 
-#' Print Method for Adaptive Monte Carlo Sampling Diagnostics
+#' Print Method for topolow parameter estimation Diagnostics
 #'
-#' @param x A topolow_amcs_diagnostics object
-#' @param ... Additional arguments passed to print
-#' @return No return value, called for side effects (prints a summary to the console).
-#' @method print topolow_amcs_diagnostics
+#' @param x A `topolow_diagnostics` object.
+#' @param ... Additional arguments passed to print.
+#' @return No return value; called for its side effect of printing a summary.
+#' @method print topolow_diagnostics
 #' @export
-print.topolow_amcs_diagnostics <- function(x, ...) {
-  cat("TopoLow Adaptive Monte Carlo Sampling Diagnostics:\n")
-  cat("\nR-hat values (should be close to 1):\n")
+print.topolow_diagnostics <- function(x, ...) {
+  cat("--- topolow Adaptive Sampling Diagnostics ---\n")
+  cat("\nR-hat values (should be close to 1 for convergence):\n")
   print(setNames(x$rhat, x$param_names))
-  cat("\nEffective Sample Sizes:\n")
+  cat("\nEffective Sample Sizes (higher is better):\n")
   print(setNames(x$ess, x$param_names))
 }
 
+# Newed
 
-#' Plot Network Structure Analysis
+# New:
+#' Plot Network Structure
 #'
 #' @description
-#' Creates visualization of distance matrix network structure showing data
-#' availability patterns and connectivity.
+#' Creates a visualization of the dissimilarity matrix as a network graph, showing
+#' data availability patterns and connectivity between points.
 #'
-#' @param network_results List output from analyze_network_structure()
-#' @param output_file Character. Full path (including filename and extension) where the plot will be saved.
-#'        If NULL, the plot is not saved.
-#' @param aesthetic_config Plot aesthetic configuration object
-#' @param layout_config Plot layout configuration object
-#' @return A \code{ggplot} object representing the network graph.
+#' @param network_results The list output from `analyze_network_structure()`.
+#' @param output_file Character. An optional full path to save the plot. If NULL, the plot is not saved.
+#' @param width Numeric. Width in pixels for saved plot (default: 3000).
+#' @param height Numeric. Height in pixels for saved plot (default: 3000).
+#' @param dpi Numeric. Resolution in dots per inch (default: 300).
+#'
+#' @return A `ggplot` object representing the network graph.
+#'
 #' @examples
-#' # Create sample network data
-#' adj_mat <- matrix(sample(c(0,1), 25, replace=TRUE), 5, 5)
-#' # Add row and column names, which are required by the analysis function
+#' # Create a sample dissimilarity matrix
+#' adj_mat <- matrix(runif(25), 5, 5)
 #' rownames(adj_mat) <- colnames(adj_mat) <- paste0("Point", 1:5)
-#' # Ensure the matrix is symmetric for the analysis
 #' adj_mat[lower.tri(adj_mat)] <- t(adj_mat)[lower.tri(adj_mat)]
 #' diag(adj_mat) <- 0
 #' net_analysis <- analyze_network_structure(adj_mat)
-#' 
-#' # Create plot and return the plot object
+#'
+#' # Create and display the plot
 #' plot_network_structure(net_analysis)
-#' @importFrom igraph graph_from_adjacency_matrix layout_with_fr get.edgelist
+#'
 #' @importFrom ggplot2 ggplot geom_segment geom_point coord_fixed theme_void theme element_text labs ggsave
 #' @export
 plot_network_structure <- function(network_results, output_file = NULL,
-                                 aesthetic_config = new_aesthetic_config(),
-                                 layout_config = new_layout_config()) {
-  # Create graph layout
-  graph <- igraph::graph_from_adjacency_matrix(
-    network_results$adjacency,
-    mode = "undirected"
-  )
-  
-  layout <- igraph::layout_with_fr(graph)
-  layout_df <- data.frame(
-    x = layout[,1],
-    y = layout[,2],
-    node = rownames(network_results$adjacency)
-  )
-  
-  # Create edge data
-  edges <- as.data.frame(igraph::get.edgelist(graph))
-  edges <- merge(
-    edges,
-    layout_df,
-    by.x = "V1",
-    by.y = "node"
-  )
-  edges <- merge(
-    edges,
-    layout_df,
-    by.x = "V2",
-    by.y = "node",
-    suffixes = c(".from", ".to")
-  )
-  
-  # Create plot
-  plot <- ggplot() +
-    geom_segment(
+                                   width = 3000, height = 3000, dpi = 300) {
+                                    # Check if required packages are available
+  if (!requireNamespace("igraph", quietly = TRUE)) {
+    stop("igraph packages is required for this function. Please install it with: install.packages('igraph')")
+  }
+
+  if (nrow(network_results$adjacency) == 0 || sum(network_results$adjacency) == 0) {
+    # Handle empty network case
+    layout_df <- data.frame(
+      x = numeric(0),
+      y = numeric(0),
+      node = character(0)
+    )
+    edges <- data.frame(
+      from = character(0),
+      to = character(0),
+      x.from = numeric(0),
+      y.from = numeric(0),
+      x.to = numeric(0),
+      y.to = numeric(0)
+    )
+  } else {
+    # Existing logic for non-empty networks
+    graph <- igraph::graph_from_adjacency_matrix(
+      network_results$adjacency,
+      mode = "undirected"
+    )
+
+    # ALSO ADD: Check if graph has edges
+    if (igraph::ecount(graph) == 0) {
+      # No edges - create simple layout
+      layout <- matrix(c(seq_along(rownames(network_results$adjacency)),
+                         rep(0, nrow(network_results$adjacency))),
+                       ncol = 2)
+    } else {
+      # Use the Fruchterman-Reingold layout algorithm for node positions
+      layout <- igraph::layout_with_fr(graph)
+    }
+
+    layout_df <- data.frame(
+      x = layout[,1],
+      y = layout[,2],
+      node = rownames(network_results$adjacency)
+    )
+
+    # Handle edges
+    if (igraph::ecount(graph) > 0) {
+      edges <- as.data.frame(igraph::as_edgelist(graph))
+      names(edges) <- c("from", "to")
+      edges <- merge(edges, layout_df, by.x = "from", by.y = "node", all.x = TRUE)
+      edges <- merge(edges, layout_df, by.x = "to", by.y = "node", all.x = TRUE, suffixes = c(".from", ".to"))
+    } else {
+      edges <- data.frame(
+        from = character(0), to = character(0),
+        x.from = numeric(0), y.from = numeric(0),
+        x.to = numeric(0), y.to = numeric(0)
+      )
+    }
+  }
+
+
+  # Create the plot with fixed aesthetic values
+  p <- ggplot2::ggplot() +
+    ggplot2::geom_segment(
       data = edges,
-      aes(
-        x = .data$x.from,
-        y = .data$y.from,
-        xend = .data$x.to,
-        yend =.data$y.to
-      ),
+      ggplot2::aes(x = .data$x.from, y = .data$y.from, xend = .data$x.to, yend = .data$y.to),
       alpha = 0.3,
       color = "grey50"
     ) +
-    geom_point(
+    ggplot2::geom_point(
       data = layout_df,
-      aes(x = .data$x, y = .data$y),
-      color = "red",
-      alpha = aesthetic_config$point_alpha
+      ggplot2::aes(x = .data$x, y = .data$y),
+      color = "steelblue",
+      size = 4,        # Fixed value instead of aesthetic_config$point_size
+      alpha = 0.8      # Fixed value instead of aesthetic_config$point_alpha
     ) +
-    coord_fixed() +
-    theme_void() +
-    theme(
-      plot.title = element_text(
-        size = aesthetic_config$title_size,
+    ggplot2::coord_fixed() +
+    ggplot2::theme_void() +
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(
+        size = 14,    # Fixed value instead of aesthetic_config$title_size
         hjust = 0.5
       ),
-      legend.position = if(aesthetic_config$show_legend) 
-        aesthetic_config$legend_position else "none"
+      legend.position = "none"  # Fixed to no legend
     ) +
-    labs(
+    ggplot2::labs(
       title = sprintf(
         "Network Structure (%.1f%% Complete)",
         network_results$summary$completeness * 100
-      ),
-      size = "Connections"
-    )
-  
-  # Save plot if a file path is provided
-  if (!is.null(output_file)) {
-  ggsave_white_bg(
-        filename = output_file,
-    plot = plot,
-    width = layout_config$width,
-    height = layout_config$height,
-    dpi = layout_config$dpi
-  )
-  }
-  
-  return(plot)
-}
-
-
-
-#' Plot Distance Matrix Heatmap
-#'
-#' @description
-#' Creates heatmap visualization of distance matrix showing patterns and
-#' structure in the measurements.
-#'
-#' @param heatmap_data List output from prepare_heatmap_data()
-#' @param output_file Character. Full path (including filename and extension) where the plot will be saved.
-#'        If NULL, the plot is not saved.
-#' @param aesthetic_config Plot aesthetic configuration object
-#' @param layout_config Plot layout configuration object
-#'
-#' @return A ggplot object containing:
-#'   - Heatmap visualization of the distance matrix
-#'   - Color gradient representing distance values
-#'   - Title showing matrix completeness percentage
-#'
-#' @examples
-#' # Create sample heatmap data
-#' dist_mat <- matrix(rnorm(100), 10, 10)
-#' hmap_data <- prepare_heatmap_data(dist_mat)
-#' 
-#' # Create and display the plot object
-#' plot_distance_heatmap(hmap_data)
-#'
-#' @importFrom ggplot2 ggplot aes geom_tile scale_fill_gradient theme_minimal theme element_text labs ggsave
-#' @export
-plot_distance_heatmap <- function(heatmap_data, output_file = NULL,
-                                  aesthetic_config = new_aesthetic_config(),
-                                  layout_config = new_layout_config()) {
-  
-  # Prepare data for plotting
-  plot_data <- reshape2::melt(heatmap_data$matrix_data)
-  plot_data$value <- as.numeric(as.character(plot_data$value))
-  
-  # Remove NAs and non-numeric values
-  plot_data <- plot_data[!is.na(plot_data$value) & is.finite(plot_data$value),]
-  
-  # Create base theme  
-  base_theme <- theme_minimal() +
-    theme(
-      plot.title = element_text(
-        size = aesthetic_config$title_size,
-        hjust = 0.5
-      ),
-      axis.text.x = element_text(
-        angle = 90,
-        vjust = 0.5,
-        hjust = 1,
-        size = aesthetic_config$axis_text_size * 0.7
-      ),
-      axis.text.y = element_text(
-        size = aesthetic_config$axis_text_size * 0.7
-      ),
-      plot.margin = layout_config$plot_margin
-    )
-  
-  # Create plot
-  plot <- ggplot(
-    plot_data,
-    aes(.data$Var1, .data$Var2, fill = .data$value)
-  ) +
-    geom_tile() +
-    scale_fill_gradient(
-      low = aesthetic_config$gradient_colors$low,
-      high = aesthetic_config$gradient_colors$high,
-      na.value = "grey"
-    ) +
-    base_theme +
-    labs(
-      x = NULL,
-      y = NULL,
-      title = sprintf(
-        "Distance Matrix (%.1f%% Complete)",
-        heatmap_data$stats$completeness * 100
       )
     )
-  
-  # Save plot if required
+
+  # Save the plot if an output file path is provided
   if (!is.null(output_file)) {
     ggsave_white_bg(
-        filename = output_file,
-      plot = plot,
-      width = layout_config$width,
-      height = layout_config$height,
-      dpi = layout_config$dpi
+      filename = output_file,
+      plot = p,
+      width = width / dpi,
+      height = height / dpi,
+      dpi = dpi
     )
   }
-  
-  return(plot)
+
+  return(p)
 }
 
 
-#' Plot Fitted vs True Distances
+# Newed
+#' Plot Fitted vs. True Dissimilarities
 #'
 #' @description
-#' Creates diagnostic plots comparing fitted distances from a model against true distances.
-#' Generates both a scatter plot with prediction intervals and a residuals plot.
+#' Creates diagnostic plots comparing fitted dissimilarities from a model against the true
+#' dissimilarities. It generates both a scatter plot with an identity line and
+#' prediction intervals, and a residuals plot.
 #'
-#' @param distance_matrix Matrix of true distances
-#' @param p_dist_mat Matrix of predicted/fitted distances
+#' @param dissimilarity_matrix Matrix of true dissimilarities.
+#' @param p_dissimilarity_mat Matrix of predicted/fitted dissimilarities.
 #' @param scenario_name Character string for output file naming. Used if `save_plot` is TRUE.
-#' @param ndim Integer number of dimensions used in the model
-#' @param confidence_level Numeric confidence level for prediction intervals (default: 0.95)
-#' @param save_plot Logical. Whether to save plots to files. Default: TRUE
-#' @param output_dir Character. Directory for output files. Required if `save_plot` is `TRUE`.
+#' @param ndim Integer number of dimensions used in the model.
+#' @param confidence_level Numeric confidence level for prediction intervals (default: 0.95).
+#' @param save_plot Logical. Whether to save plots to files. Default: FALSE.
+#' @param output_dir Character. Directory for output files. Required if `save_plot` is TRUE.
+#'
 #' @return A list containing the `scatter_plot` and `residuals_plot` ggplot objects.
+#'
 #' @examples
 #' # Create sample data
 #' true_dist <- matrix(runif(100, 1, 10), 10, 10)
 #' pred_dist <- true_dist + rnorm(100)
-#' 
+#'
 #' # Create plots without saving
-#' plots <- scatterplot_fitted_vs_true(true_dist, pred_dist, save_plot = FALSE)
-#' 
+#' plots <- scatterplot_fitted_vs_true(
+#'   dissimilarity_matrix = true_dist,
+#'   p_dissimilarity_mat = pred_dist,
+#'   save_plot = FALSE
+#'  )
+#'
 #' # You can then display a plot, for instance:
 #' # plots$scatter_plot
-#' 
+#'
 #' @importFrom stats na.omit cor lm coef
-#' @importFrom ggplot2 ggplot aes geom_point geom_abline geom_smooth geom_hline scale_y_continuous ggsave
-#' @importFrom ggplot2 annotate labs theme_classic theme element_text element_blank element_rect scale_x_continuous 
+#' @importFrom ggplot2 ggplot aes geom_point geom_abline geom_smooth geom_hline scale_y_continuous
+#'   annotate labs theme_classic theme element_text element_blank element_rect scale_x_continuous
 #' @export
-scatterplot_fitted_vs_true <- function(distance_matrix, p_dist_mat, 
+scatterplot_fitted_vs_true <- function(dissimilarity_matrix, p_dissimilarity_mat,
                                        scenario_name, ndim,
                                        save_plot = FALSE,
                                        output_dir,
                                        confidence_level = 0.95) {
-  
+
   if (save_plot && (missing(output_dir) || missing(scenario_name) || missing(ndim))) {
     stop("`output_dir`, `scenario_name`, and `ndim` must be provided when `save_plot` is TRUE.", call. = FALSE)
   }
-  
-  # Create evaluation data frame with simple numeric conversion to remove NA and thresholded values
-  evaldf <- data.frame(
-    distance_matrix = suppressWarnings(as.numeric(as.vector(distance_matrix))),
-    p_dist_mat = as.vector(p_dist_mat)
+
+  # Create a data frame for evaluation, removing NA values
+  # Extract numeric values from threshold indicators
+  true_dissim_vector <- extract_numeric_values(as.vector(dissimilarity_matrix))
+  pred_dissim_vector <- as.vector(p_dissimilarity_mat)
+
+  eval_df <- data.frame(
+    true_dissimilarity = true_dissim_vector,
+    pred_dissimilarity = pred_dissim_vector
   )
-  evaldf <- na.omit(evaldf)
-  
-  # Calculate performance metrics  
-  mae <- mean(abs(evaldf$distance_matrix - evaldf$p_dist_mat), na.rm = TRUE)
-  Pearson_corr <- cor(evaldf$p_dist_mat, evaldf$distance_matrix, 
-                      method = "pearson", use = "pairwise.complete.obs")
-  
-  # Calculate prediction interval
-  margin_of_error <- calculate_prediction_interval(distance_matrix, p_dist_mat,
-                                                 confidence_level = confidence_level)
-  
+  eval_df <- stats::na.omit(eval_df)
+
+  # Calculate performance metrics
+  mae <- mean(abs(eval_df$true_dissimilarity - eval_df$pred_dissimilarity))
+  pearson_corr <- stats::cor(eval_df$pred_dissimilarity, eval_df$true_dissimilarity, method = "pearson")
+
+  # Calculate prediction interval margin of error
+  margin_of_error <- calculate_prediction_interval(dissimilarity_matrix, p_dissimilarity_mat,
+                                                   confidence_level = confidence_level)
+
   # Get regression line parameters
-  reg_line <- lm(p_dist_mat ~ distance_matrix, data = evaldf)
-  slope <- coef(reg_line)[2]
-  intercept <- coef(reg_line)[1]
-  
-  # Create scatter plot 
-  scatter_plot <- ggplot(evaldf, aes(x = .data$distance_matrix, y = .data$p_dist_mat)) +
-    geom_point(alpha = 0.6, color = "#3366FF", size = 2) +
-    geom_abline(intercept = 0, slope = 1, linetype = "dashed", 
-                color = "green", size = 0.7) +
-    geom_smooth(method = "lm", se = TRUE, color = "red", 
-                linetype = "dashed", level = 0.999,
-                fill = "pink", alpha = 0.6, size = 0.3) +
-    geom_abline(intercept = intercept + mean(margin_of_error), 
-                slope = slope, linetype = "dashed", 
-                color = "black", size = 0.7) +
-    geom_abline(intercept = intercept - mean(margin_of_error), 
-                slope = slope, linetype = "dashed", 
-                color = "black", size = 0.7) +
-    theme_classic() +
-    theme(
-      plot.title = element_text(size = 10, face = "bold", hjust = 0.5),
-      axis.title = element_text(size = 10),
-      axis.text = element_text(size = 9),
-      legend.position = "none",
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      panel.border = element_rect(colour = "black", fill = NA, size = 1)
+  reg_line <- stats::lm(pred_dissimilarity ~ true_dissimilarity, data = eval_df)
+  slope <- stats::coef(reg_line)[2]
+  intercept <- stats::coef(reg_line)[1]
+
+  # --- Create Scatter Plot ---
+  scatter_plot <- ggplot2::ggplot(eval_df, ggplot2::aes(x = .data$true_dissimilarity, y = .data$pred_dissimilarity)) +
+    ggplot2::geom_point(alpha = 0.6, color = "#3366FF", size = 2) +
+    ggplot2::geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "darkgreen", linewidth = 0.7) +
+    ggplot2::geom_smooth(method = "lm", se = TRUE, color = "red", linetype = "dashed",
+                         level = 0.99, fill = "pink", alpha = 0.5, linewidth = 0.5) +
+    ggplot2::geom_abline(intercept = intercept + margin_of_error, slope = slope, linetype = "dotted", color = "black", linewidth = 0.7) +
+    ggplot2::geom_abline(intercept = intercept - margin_of_error, slope = slope, linetype = "dotted", color = "black", linewidth = 0.7) +
+    ggplot2::theme_classic() +
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(size = 10, face = "bold", hjust = 0.5),
+      axis.title = ggplot2::element_text(size = 10),
+      axis.text = ggplot2::element_text(size = 9),
+      panel.border = ggplot2::element_rect(colour = "black", fill = NA, linewidth = 1)
     ) +
-    scale_x_continuous(limits = c(0, max(evaldf$distance_matrix)), 
-                      expand = c(0, 0)) +
-    scale_y_continuous(limits = c(0, max(evaldf$p_dist_mat)), 
-                      expand = c(0, 0)) +
-    labs(
-      x = "Original Distance",
-      y = "Estimated Distance",
-      title = sprintf("Mean Absolute Error = %.2f, Pearson's r = %.2f\nPrediction interval = \\u00B1%.2f",
-                     mae, Pearson_corr, margin_of_error)
+    ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(0, max(eval_df$true_dissimilarity, na.rm=T))) +
+    ggplot2::scale_y_continuous(expand = c(0, 0), limits = c(0, max(eval_df$pred_dissimilarity, na.rm=T))) +
+    ggplot2::labs(
+      x = "True Dissimilarity",
+      y = "Estimated Dissimilarity",
+      title = sprintf("MAE = %.2f, Pearson's r = %.2f, Prediction Interval = %.2f",
+                      mae, pearson_corr, margin_of_error)
     )
-  
-  # Create residuals plot
-  evaldf$residuals <- evaldf$distance_matrix - evaldf$p_dist_mat
-  
-  residuals_plot <- ggplot(evaldf, aes(x = .data$p_dist_mat, y = .data$residuals)) +
-    geom_point(alpha = 0.6, color = "red") +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
-    theme_classic() +
-    theme(plot.title = element_text(size = 10)) +
-    labs(x = "Fitted Values", y = "Residuals",
-         title = "Residuals vs. Fitted Values") +
-    annotate("text", x = max(evaldf$p_dist_mat) * 0.7, y = Inf, vjust = 1.5,
-             label = sprintf("Mean absolute errors = %.2f", 
-                           mean(abs(evaldf$residuals))),
-             color = "blue", size = 3) +
-    annotate("text", x = max(evaldf$p_dist_mat) * 0.7, y = Inf, vjust = 3,
-             label = sprintf("SD of errors = %.2f", 
-                           sd(evaldf$residuals)),
-             color = "blue", size = 3)
-  
-  # Save plots if requested
-  if(save_plot) {
+
+  # --- Create Residuals Plot ---
+  eval_df$residuals <- eval_df$true_dissimilarity - eval_df$pred_dissimilarity
+  residuals_plot <- ggplot2::ggplot(eval_df, ggplot2::aes(x = .data$pred_dissimilarity, y = .data$residuals)) +
+    ggplot2::geom_point(alpha = 0.6, color = "darkred") +
+    ggplot2::geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+    ggplot2::theme_classic() +
+    ggplot2::labs(x = "Fitted Values", y = "Residuals", title = "Residuals vs. Fitted Values") +
+    ggplot2::annotate("text", x = max(eval_df$pred_dissimilarity) * 0.7, y = Inf, vjust = 1.5,
+                      label = sprintf("Mean absolute error = %.2f", mean(abs(eval_df$residuals))),
+                      color = "blue", size = 3)
+
+  # --- Save Plots if Requested ---
+  if (save_plot) {
+    if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
     # Save scatter plot
-    scatter_file <- file.path(output_dir,
-                              sprintf("%s_prediction_scatter_dim_%d.png", 
-                                      scenario_name, ndim))
+    scatter_file <- file.path(output_dir, sprintf("%s_prediction_scatter_dim_%d.png", scenario_name, ndim))
     ggsave_white_bg(scatter_file, scatter_plot, width = 8, height = 8, dpi = 300)
-    
+
     # Save residuals plot
-    residuals_file <- file.path(output_dir,
-                                sprintf("%s_residuals_vs_fitted_dim_%d.png",
-                                        scenario_name, ndim))
+    residuals_file <- file.path(output_dir, sprintf("%s_residuals_vs_fitted_dim_%d.png", scenario_name, ndim))
     ggsave_white_bg(residuals_file, residuals_plot, width = 8, height = 8, dpi = 300)
   }
-  
-  # Return both plots
+
   return(list(
     scatter_plot = scatter_plot,
     residuals_plot = residuals_plot

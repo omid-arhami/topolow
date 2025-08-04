@@ -7,24 +7,24 @@
 \method{summary}{topolow}(object, ...)
 }
 \arguments{
-\item{object}{A topolow object returned by create_topolow_map()}
+\item{object}{A \code{topolow} object returned by \code{euclidean_embedding()}.}
 
-\item{...}{Additional arguments passed to summary (not used)}
+\item{...}{Additional arguments passed to summary (not used).}
 }
 \value{
 No return value. This function is called for its side effect of
 printing a detailed summary to the console.
 }
 \description{
-Provides a detailed summary of the optimization results including parameters,
-convergence and performance metrics.
+Provides a more detailed summary of the optimization results from \code{euclidean_embedding},
+including parameters, convergence, and performance metrics.
 }
 \examples{
-# Create a simple distance matrix and run the optimization
+# Create a simple dissimilarity matrix and run the optimization
 dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
-result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=50, 
-                             k0=1.0, cooling_rate=0.001, c_repulsion=0.1,
-                             verbose = FALSE)
+result <- euclidean_embedding(dist_mat, ndim=2, mapping_max_iter=50,
+                           k0=1.0, cooling_rate=0.001, c_repulsion=0.1,
+                           verbose = FALSE)
 # Summarize the result object
 summary(result)
 }

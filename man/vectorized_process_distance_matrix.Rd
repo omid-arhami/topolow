@@ -2,7 +2,8 @@
 % Please edit documentation in R/core.R
 \name{vectorized_process_distance_matrix}
 \alias{vectorized_process_distance_matrix}
-\title{Vectorized Processing of Distance Matrix for Convergence Error Calculations}
+\title{TopoLow Core Functions
+Vectorized Processing of Dissimilarity Matrix for Convergence Error Calculations}
 \usage{
 vectorized_process_distance_matrix(
   distances_numeric,
@@ -11,7 +12,7 @@ vectorized_process_distance_matrix(
 )
 }
 \arguments{
-\item{distances_numeric}{Numeric matrix. The numeric distance values (without threshold
+\item{distances_numeric}{Numeric matrix. The numeric dissimilarity values (without threshold
 indicators)}
 
 \item{threshold_mask}{Integer matrix. Codes representing threshold types:
@@ -21,10 +22,10 @@ indicators)}
 }
 \value{
 Numeric matrix with processed distance values. Elements where threshold
-conditions are satisfied will contain NA.
+conditions are not satisfied will contain NA.
 }
 \description{
-Efficiently processes elements of the distance matrix for calculating convergence error
+Efficiently processes elements of the dissimilarity matrix for calculating convergence error
 using pre-processed numeric representations of thresholds. This optimized version
 eliminates expensive string operations during optimization.
 }

@@ -6,11 +6,14 @@
 
 # List of required packages
 required_packages <- c(
-  "ggplot2", "dplyr", "data.table", "reshape2", "plotly", "Racmacs", 
-  "parallel", "coda", "MASS", "vegan", "igraph", "lhs", "umap",
-  "gridExtra", "scales", "filelock"
-)
-
+  "ggplot2", "dplyr", "data.table", "reshape2", 
+  "parallel", "lhs",
+    "future",
+    "lifecycle",
+    "stats",
+    "utils",
+    "filelock",
+    "rlang")
 # Check which packages are missing
 missing_packages <- required_packages[!sapply(required_packages, requireNamespace, quietly = TRUE)]
 

@@ -2,10 +2,10 @@
 % Please edit documentation in R/adaptive_sampling.R
 \name{likelihood_function}
 \alias{likelihood_function}
-\title{Evaluate Likelihood with Cross-Validation}
+\title{Evaluate a Parameter Set with Cross-Validation}
 \usage{
 likelihood_function(
-  distance_matrix,
+  dissimilarity_matrix,
   mapping_max_iter,
   relative_epsilon,
   N,
@@ -17,40 +17,38 @@ likelihood_function(
 )
 }
 \arguments{
-\item{distance_matrix}{Distance matrix to fit}
+\item{dissimilarity_matrix}{The input dissimilarity matrix to fit.}
 
-\item{mapping_max_iter}{Maximum map optimization iterations}
+\item{mapping_max_iter}{The maximum number of optimization iterations.}
 
-\item{relative_epsilon}{Convergence threshold}
+\item{relative_epsilon}{The convergence threshold for optimization.}
 
-\item{N}{Number of dimensions}
+\item{N}{The number of dimensions for the embedding.}
 
-\item{k0}{Initial spring constant}
+\item{k0}{The initial spring constant.}
 
-\item{cooling_rate}{Spring constant decay rate}
+\item{cooling_rate}{The spring constant decay rate.}
 
-\item{c_repulsion}{Repulsion constant}
+\item{c_repulsion}{The repulsion constant.}
 
-\item{folds}{Number of CV folds}
+\item{folds}{The number of cross-validation folds.}
 
-\item{num_cores}{Number of cores for parallel processing}
+\item{num_cores}{The number of cores for parallel processing.}
 }
 \value{
-List with:
-\item{Holdout_MAE}{Mean absolute error on validation data}
-\item{NLL}{Negative log likelihood}
+A list containing the pooled \code{Holdout_MAE} and the \code{NLL}.
 }
 \description{
-Calculates cross-validated likelihood for a set of parameters by:
-\enumerate{
-\item Splitting data into training/validation sets
-\item Fitting model on training data
-\item Evaluating likelihood on validation set
-\item Repeating across folds
-To calculate one NLL per set of parameters, the function uses a pooled errors approach which combines
-all validation errors into one set, then calculate a single NLL. This approach has two main advantages:
-1- It treats all validation errors equally, respecting the underlying error distribution assumption
-2- It properly accounts for the total number of validation points
+This internal function calculates the cross-validated likelihood for a given
+set of parameters. It splits the data into training and validation sets across
+multiple folds, fits the topolow model on each training set, and evaluates the
+error on the corresponding validation set.
 }
+\details{
+To calculate a single Negative Log-Likelihood (NLL) value per parameter set,
+the function uses a "pooled errors" approach. It combines all out-of-sample
+errors from every fold into a single set before calculating the NLL and the
+overall Mean Absolute Error (MAE). This method respects the underlying error
+distribution and correctly accounts for the total number of validation points.
 }
 \keyword{internal}

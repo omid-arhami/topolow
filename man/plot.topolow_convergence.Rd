@@ -2,42 +2,41 @@
 % Please edit documentation in R/visualization.R
 \name{plot.topolow_convergence}
 \alias{plot.topolow_convergence}
-\title{Plot Method for Convergence Diagnostics}
+\title{Plot Method for topolow Convergence Diagnostics}
 \usage{
 \method{plot}{topolow_convergence}(x, param_names = NULL, ...)
 }
 \arguments{
-\item{x}{A topolow_convergence object from check_gaussian_convergence().}
+\item{x}{A \code{topolow_convergence} object from \code{check_gaussian_convergence()}.}
 
-\item{param_names}{Optional character vector of parameter names to use in plot titles.
-If NULL (default), uses the param_names from the topolow_convergence object.}
+\item{param_names}{Optional character vector of parameter names for plot titles.
+If NULL, names are taken from the input object.}
 
-\item{...}{Additional arguments passed to underlying plot functions (currently not used).}
+\item{...}{Additional arguments (not currently used).}
 }
 \value{
 A grid of plots showing convergence metrics.
 }
 \description{
-Creates visualization of convergence diagnostics from Monte Carlo sampling, including
-parameter mean trajectories and covariance matrix stability over iterations. Helps assess
-whether parameter estimation has converged to stable distributions.
+Creates visualizations of convergence diagnostics from a sampling run, including
+parameter mean trajectories and covariance matrix stability over iterations. This helps
+assess whether parameter estimation has converged.
 }
 \details{
 The function generates two types of plots:
 \enumerate{
 \item Parameter mean plots: Shows how the mean value for each parameter changes over iterations.
-Stabilization of these plots indicates convergence of parameter distributions.
-\item Covariance change plot: Shows relative changes in the covariance matrix using the
-Frobenius norm (also called Hilbert-Schmidt norm), which is defined as the square root of the
-sum of the absolute squares of all matrix elements: \eqn{\sqrt{\sum|a_{ij}|^2}}.
-A decreasing trend approaching zero indicates stable relationships between parameters.
+Stabilization of these plots indicates convergence.
+\item Covariance change plot: Shows the relative change in the Frobenius norm of the
+covariance matrix. A decreasing trend approaching zero indicates stable relationships
+between parameters.
 }
 }
 \examples{
 # Example with simulated data
 chain_data <- data.frame(
-  log_N = rnorm(1000, mean = 1.5, sd = 0.1),
-  log_k0 = rnorm(1000, mean = -0.5, sd = 0.2)
+  param1 = rnorm(1000, mean = 1.5, sd = 0.1),
+  param2 = rnorm(1000, mean = -0.5, sd = 0.2)
 )
 
 # Check convergence
@@ -47,9 +46,9 @@ results <- check_gaussian_convergence(chain_data)
 plot(results)
 
 # With custom parameter names
-plot(results, param_names = c("Dimensions (log)", "Spring constant (log)"))
+plot(results, param_names = c("Parameter 1 (log)", "Parameter 2 (log)"))
 
 }
 \seealso{
-\code{\link{check_gaussian_convergence}} for generating the convergence object
+\code{\link{check_gaussian_convergence}} for generating the convergence object.
 }

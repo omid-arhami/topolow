@@ -1,33 +1,36 @@
-# Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assays
+# Topolow: Force-Directed Euclidean Embedding of Dissimilarity Data
 
 ## Overview
 
-`topolow` is an R package that implements a novel, physics-inspired algorithm for antigenic cartography mapping and analysis. The algorithm addresses critical challenges in mapping antigenic relationships from incomplete experimental data, particularly for rapidly evolving pathogens like influenza, SARS-CoV-2, HIV, and dengue viruses.
+`topolow` is an R package that implements a novel, physics-inspired algorithm for **Euclidean embedding** of potentially non-metric, sparse, and noisy dissimilarity data. The algorithm converts dissimilarity matrices into valid Euclidean coordinate systems, making the data compatible with standard statistical and machine learning tools like PCA, clustering, and regression.
+
+**The Problem**: Many datasets contain dissimilarity measurements that violate metric axioms (symmetry, triangle inequality) or are highly sparse with missing values. Standard methods like Multidimensional Scaling (MDS) struggle with such data, leading to poor embeddings or complete failure.
+
+**The Solution**: Topolow uses a physics-inspired approach that models objects as particles connected by springs (for known dissimilarities) and repulsive forces (for missing pairs). This gradient-free optimization is robust to local optima and handles non-metric data naturally.
 
 ### Key Advantages
 
--   **Superior handling of missing data**: Effectively processes datasets with even more than 95% missing values
--   **Complete positioning**: Maps all antigens regardless of dimensionality or data sparsity
--   **Improved accuracy**: Achieves better prediction accuracy than traditional MDS approaches
--   **Stability**: Demonstrates orders of magnitude better consistency across multiple runs
--   **Automatic dimensionality optimization**: Determines optimal mapping dimensions through likelihood-based estimation
--   **Noise reduction**: Effectively reduces experimental noise and bias through network-based error dampening
+- **Handles non-metric data**: Works with dissimilarities that violate metric axioms
+- **Superior performance on sparse data**: Effectively processes datasets with >95% missing values
+- **Calculates antigenic velocity vectors (biology)**: Measures the rate and direction of viral evolution, offering early warnings of lineage replacements.
+- **Robust optimization**: Gradient-free algorithm avoids local optima
+- **Statistical foundation**: Maximum likelihood estimation under Laplace error model
+- **Automatic parameter optimization**: Determines optimal dimensions and parameters through cross-validation
+- **Handles censored data**: Properly incorporates threshold measurements (e.g., "<1", ">64")
+- **Network-based error dampening**: Reduces experimental noise through interconnected force system
+- **Complete positioning**: Maps all objects regardless of data sparsity
 
 ## Installation
 
-### From CRAN (inside R)
+### From CRAN
 
-Topolow is also published on R's own library manager, CRAN. <https://cran.r-project.org/package=topolow>
-
-``` r
+```r
 install.packages("topolow")
-``` 
+```
 
 ### From GitHub
 
-You can install the development version of topolow directly from GitHub:
-
-``` r
+```r
 # Install devtools if needed
 if (!require("devtools")) install.packages("devtools")
 
@@ -35,222 +38,554 @@ if (!require("devtools")) install.packages("devtools")
 devtools::install_github("omid-arhami/topolow")
 ```
 
-### From Release versions
-
-Alternatively, you can install using the single source file:
-
-1.  Download the latest release
-2.  For Windows binary: Install the .zip file
-3.  For source package: Install the .tar.gz file
-
-``` r
-# For Windows binary
-install.packages("path/to/topolow_X.zip", repos = NULL)
-
-# For source package
-install.packages("path/to/topolow_X.tar.gz", repos = NULL, type = "source")
-```
-
 ### Optional Dependencies
 
 For 3D visualization capabilities, install the `rgl` package:
 
-``` r
+```r
 install.packages("rgl")
 ```
 
-Note for macOS users: The `rgl` package requires XQuartz to be installed for proper OpenGL support. You can download it from <https://www.xquartz.org/>, then install the downloaded package and restart your computer.
-
-Even without rgl, you can use all core functionality of topolow. The package will automatically fall back to 2D visualizations.
+Note for macOS users: The `rgl` package requires XQuartz. Download from https://www.xquartz.org/, install, and restart your computer.
 
 ## Quick Start
 
-Here's a simple example to check if Topolow is working and to analytically validate its result.
+### Simple Example: Embedding 4 Points
 
-Let us take 4 points in a 2D space, two reference antigens S/1 and S/2 and two test antigens V/1 and V/2.
+Let's embed 4 points with known coordinates to validate the algorithm:
 
-S/1 at (0, 0)
-
-S/2 at (3, 0)
-
-V/1 at (2, 2)
-
-V/2 at (0, 4)
-
-The pairwise Euclidean distances between these points are computed as follows:
-
-<!-- For inline equations, use single $ -->
-
-$d(S/1,S/2) = \sqrt{(3-0)^2 + (0-0)^2} = \sqrt{9 + 0} = \sqrt{9} = 3.$
-
-$d(S/1,V/1) = \sqrt{(2-0)^2 + (2-0)^2} = \sqrt{4 + 4} = \sqrt{8} = 2\sqrt{2} \approx 2.828.$
-
-$d(S/1,V/2) = \sqrt{(0-0)^2 + (4-0)^2} = \sqrt{0 + 16} = \sqrt{16} = 4.$
-
-$d(S/2,V/1) = \sqrt{(2-3)^2 + (2-0)^2} = \sqrt{1 + 4} = \sqrt{5} \approx 2.236.$
-
-$d(S/2,V/2) = \sqrt{(0-3)^2 + (4-0)^2} = \sqrt{9 + 16} = \sqrt{25} = 5.$
-
-$d(V/1,V/2) = \sqrt{(0-2)^2 + (4-2)^2} = \sqrt{4 + 4} = \sqrt{8} = 2\sqrt{2} \approx 2.828.$
-
-Imagine we have measured the distances of V/1 against S/1 and S/2, and V/2 against S/1 and S/2. We use Topolow to find the distance between V/1 and V/2 which is missing in the distance matrix (dist_mat in code below). From the analytical calculations we expect d(V/1,V/2) = 2.828.
-
-Remember that this is the simplest example with an analytical solution that lets us verify the result. The true value of using Topolow to find missing distances is when there are many points and many missing distances in the data.
-
-``` r
+```r
 library(topolow)
 
-# Create a 4×4 simple distance matrix
+# Known coordinates:
+# S1 at (0,0), S2 at (3,0), S3 at (4,4), V1 at (2,2), V2 at (0,4)
+# We'll provide some distances and let Topolow infer the missing ones
+coordinates <- data.frame(
+  point = c("S1", "S2", "S3", "V1", "V2"),
+  x = c(0, 3, 4, 2, 0),
+  y = c(0, 0, 4, 2, 4)
+)
+# Create a matrix with just the x,y coordinates for distance calculation
+coord_matrix <- as.matrix(coordinates[, c("x", "y")])
+rownames(coord_matrix) <- coordinates$point
+# Calculate the distance matrix using Euclidean distance
+dist_mat <- as.matrix(dist(coord_matrix))
+# Remove a known distance to see if topolow predicts it accurately
+dist_mat["V1", "V2"] <- NA
+dist_mat["V2", "V1"] <- NA
 
-dist_mat <- matrix(c(
-  # S/1  S/2  V/1  V/2
-     0,   3,   2.828,   4,    # S/1
-     3,   0,  2.236, 5,   # S/2
-     2.828,  2.236,   0,   NA,    # V/1
-     4, 5 ,  NA,   0     # V/2
-), nrow=4)
-rownames(dist_mat) <- colnames(dist_mat) <- c("S/1", "S/2", "V/1", "V/2")
+# Run Topolow (manual parameters for quick demo)
+result <- euclidean_embedding(
+  dissimilarity_matrix = dist_mat,
+  ndim = 2,
+  mapping_max_iter = 1000,
+  k0 = 7, 
+  cooling_rate = 0.01, 
+  c_repulsion = 0.1,
+  verbose = TRUE
+)
 
-# Run TopoLow in 2D
-result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=1000, 
-                             k0=1, cooling_rate=0.0001, c_repulsion=0.001, 
-                             write_positions_to_csv = FALSE, verbose = TRUE)
-
-# Investigate the results
+# Check results
+print("Original matrix:")
 print(dist_mat)
+print("Estimated distances:")
 print(result$est_distances)
-         S/1      S/2      V/1      V/2
-S/1 0.000000 3.000027 2.827970 4.000056
-S/2 3.000027 0.000000 2.235928 5.000045
-V/1 2.827970 2.235928 0.000000 2.828457
-V/2 4.000056 5.000045 2.828457 0.000000
+
+# The missing distance V1-V2 should be approximately 2.83
 ```
-All of the estimated distances are close to the analytical solution, including model's estimate for the missing distance between V/1 and V/2.
 
+### Automatic Optimization with Euclidify
 
-## Reproduction Studies
+For real applications, use `Euclidify()` which automatically optimizes all parameters:
 
-This package includes computationally intensive examples in the `inst/examples` directory. These examples demonstrate complete use cases in the paper but require computational time and resources.
+```r
+# Using automatic parameter optimization
+result_auto <- Euclidify(
+  dissimilarity_matrix = dist_mat,
+  ndim_range = c(2, 4),
+  output_dir = tempdir(),  # Required for optimization files
+  n_initial_samples = 50,  # Reduced for quick demo
+  n_adaptive_samples = 100,
+  folds = 4,
+  verbose = "standard"
+)
 
-To run these studies after installing Topolow, you can copy all associated files, subdirectories, and the Rmd files to your machine. 
-Then read through the markdown notebooks and choose which parts you wish to run. There are usually options to use the provided parameters to bypass some parts of the simulations.
+# Extract optimized distances
+est_dist <- result_auto$est_distances
+print(est_dist)
 
-Note: Results of time-intensive sections are also provided in csv files and explained at the beginning of each Rmd file.
+# View optimal parameters found
+print(result_auto$optimal_params)
+```
+
+## Applications and Examples
+
+### 1. Antigenic Mapping: Viral Evolution with Temporal Visualization
+
+For immunologists studying viral evolution and vaccine effectiveness, Topolow can generate insightful visualizations. A key feature for this application is the calculation of antigenic velocity vectors, which show the rate and direction of antigenic drift for each virus against its recent predecessors. These vectors can reveal evolutionary trends and highlight potential vaccine-escape variants by revealing fast movements.
+```r
+# Example: H3N2 Influenza A antigenic evolution with temporal mapping and velocity vectors
+
+# Create a more comprehensive antigenic dataset with temporal information
+antigen_data <- data.frame(
+  virus = c("A/H3N2/HK/1968", "A/H3N2/EN/1972", "A/H3N2/VI/1975", "A/H3N2/TX/1977", 
+            "A/H3N2/BK/1979", "A/H3N2/SI/1987", "A/H3N2/BE/1989", "A/H3N2/BE/1992",
+            "A/H3N2/WU/1995", "A/H3N2/SY/1997", "A/H3N2/FU/2002", "A/H3N2/WI/2005"),
+  serum = rep(c("anti-HK68/1968", "anti-EN72/1972", "anti-VI75/1975", "anti-TX77/1977", "anti-BK79/1979", 
+                "anti-SI87/1987"), each = 12),
+  titer = c(2560, 1280, 640, 320, 160, 80, 40, "<40", "<40", "<40", "<40", "<40",
+            640, 2560, 1280, 640, 320, 160, 80, 40, "<40", "<40", "<40", "<40",
+            320, 640, 2560, 1280, 640, 320, 160, 80, 40, "<40", "<40", "<40",
+            160, 320, 640, 2560, 1280, 640, 320, 160, 80, 40, "<40", "<40",
+            80, 160, 320, 640, 2560, 1280, 640, 320, 160, 80, 40, "<40",
+            "<40", 80, 160, 320, 640, 2560, 1280, 640, 320, 160, 80, 40),
+  year = rep(c(1968, 1972, 1975, 1977, 1979, 1987, 1989, 1992, 1995, 1997, 2002, 2005), 6)
+)
+
+# Convert titers to dissimilarity matrix
+results <- process_antigenic_data(
+  data = antigen_data,
+  antigen_col = "virus",
+  serum_col = "serum", 
+  value_col = "titer",
+  is_similarity = TRUE,  # Titers are similarities
+  scale_factor = 10      # Base dilution factor of HI assay
+)
+antigenic_matrix <- results$matrix
+
+# Create antigenic map with temporal information
+antigenic_map <- Euclidify(
+  dissimilarity_matrix = antigenic_matrix,
+  ndim_range = c(3, 6),
+  folds = 10,
+  output_dir = tempdir(),
+  verbose = "standard"
+)
+
+# Prepare data for temporal visualization
+positions_df <- data.frame(
+  V1 = antigenic_map$positions[, 1],
+  V2 = antigenic_map$positions[, 2],
+  V3 = antigenic_map$positions[, 3],
+  name = rownames(antigenic_map$positions),
+  year = as.numeric(sub(".*/([0-9]+).*", "\\1", rownames(antigenic_map$positions))),
+  antigen = grepl("^V/", rownames(antigenic_map$positions)),
+  antiserum = grepl("^S/", rownames(antigenic_map$positions))
+)
+  
+
+# Configure visualization aesthetics
+aesthetic_config <- new_aesthetic_config(
+  point_size = 3.0,
+  point_alpha = 0.8,
+  point_shapes = c(antigen = 16, antiserum = 5),  # Circle for antigens, diamond for sera
+  gradient_colors = list(low = "blue", high = "red"),
+  show_labels = TRUE,
+  show_title = TRUE,
+  title_size = 14,
+  axis_text_size = 11,
+  show_legend = TRUE,
+  legend_position = "right",
+  arrow_alpha = 0.7
+)
+
+layout_config <- new_layout_config(
+  width = 10,
+  height = 8,
+  save_plot = FALSE,
+  arrow_plot_threshold = 0.15,  # Show arrows for significant movements
+  show_grid = TRUE,
+  grid_type = "major"
+)
+
+annotation_config <- new_annotation_config(
+  notable_points = c("V/A/H3N2/HK/1968", "V/A/H3N2/FU/2002", "V/A/H3N2/WI/2005")
+)
+
+# Create temporal antigenic map with velocity vectors
+temporal_plot <- plot_temporal_mapping(
+  df_coords = positions_df,
+  ndim = 3,
+  draw_arrows = TRUE,           # Enable velocity vectors
+  annotate_arrows = TRUE,       # Label arrows with strain names
+  sigma_t = 2.0,               # Temporal bandwidth (years)
+  sigma_x = 1.5,               # Spatial bandwidth (antigenic units)
+  aesthetic_config = aesthetic_config,
+  layout_config = layout_config,
+  annotation_config = annotation_config,
+  output_dir = tempdir()
+)
+
+print(temporal_plot)
+
+# Create clustered view by antigenic epoch
+positions_df$cluster <- cut(positions_df$year, 
+                           breaks = c(1965, 1975, 1985, 1995, 2010),
+                           labels = c("Pre-1975", "1975-1985", "1985-1995", "Post-1995"))
+
+# Visualize antigenic clusters with evolutionary relationships
+cluster_plot <- plot_cluster_mapping(
+  df_coords = positions_df,
+  ndim = 3,
+  draw_arrows = TRUE,
+  show_one_arrow_per_cluster = TRUE,  # One representative arrow per cluster
+  aesthetic_config = aesthetic_config,
+  layout_config = layout_config,
+  annotation_config = annotation_config
+)
+
+print(cluster_plot)
+
+# Generate 3D visualization for enhanced perspective
+if (requireNamespace("rgl", quietly = TRUE)) {
+  # Interactive 3D antigenic map
+  plot_3d <- plot_3d_mapping(
+    positions_df,
+    ndim = 3,
+    aesthetic_config = aesthetic_config,
+  layout_config = layout_config
+  )
+  
+  cat("3D antigenic map created. Use mouse to rotate and zoom.\n")
+}
+```
+
+### 2. General Data Science: Customer Similarity
+
+```r
+# Example: Customer behavior dissimilarity
+customer_data <- data.frame(
+  customer = rep(paste0("Cust", 1:5), each = 5),
+  product = rep(paste0("Prod", 1:5), 5),
+  dissimilarity = c(0, 2.1, 3.5, 1.8, 4.2,
+                   2.1, 0, 1.9, 3.1, 2.8,
+                   3.5, 1.9, 0, 2.4, 3.7,
+                   1.8, 3.1, 2.4, 0, 2.9,
+                   4.2, 2.8, 3.7, 2.9, 0)
+)
+
+# Convert to matrix format
+dissim_matrix <- list_to_matrix(
+  data = customer_data,
+  object_col = "customer",
+  reference_col = "product", 
+  value_col = "dissimilarity",
+  is_similarity = FALSE
+)
+
+# Embed in Euclidean space
+customer_map <- Euclidify(
+  dissimilarity_matrix = dissim_matrix,
+  output_dir = tempdir(),
+  ndim_range = c(2, 4),
+  verbose = "standard"
+)
+
+plot(customer_map$positions, main = "Customer Behavior Map")
+text(customer_map$positions[,1] + jitter(rep(0, nrow(customer_map$positions)), amount = 0.2), 
+     customer_map$positions[,2] + jitter(rep(0, nrow(customer_map$positions)), amount = 0.2), 
+     labels = rownames(customer_map$positions), pos = 3, cex = 0.5)
+```
+
+### 3. Handling Large and Sparse Data
+
+```r
+# Example: Large symmetric sparse matrix with realistic structure
+set.seed(12345)  # For reproducibility
+
+# Generate a large, realistic sparse dissimilarity matrix
+n_objects <- 50
+object_names <- paste0("Object_", sprintf("%02d", 1:n_objects))
+
+# Create base coordinates in 3D space with clustered structure
+cluster_centers <- matrix(c(
+  c(0, 0, 0),      # Cluster 1
+  c(5, 0, 0),      # Cluster 2  
+  c(0, 5, 0),      # Cluster 3
+  c(5, 5, 0),      # Cluster 4
+  c(2.5, 2.5, 3)   # Cluster 5
+), ncol = 3, byrow = TRUE)
+
+# Assign objects to clusters
+cluster_assignments <- sample(1:5, n_objects, replace = TRUE, 
+                             prob = c(0.25, 0.25, 0.20, 0.20, 0.10))
+
+# Generate coordinates with cluster structure + noise
+true_coordinates <- matrix(0, n_objects, 3)
+for(i in 1:n_objects) {
+  cluster_id <- cluster_assignments[i]
+  true_coordinates[i, ] <- cluster_centers[cluster_id, ] + rnorm(3, 0, 0.8)
+}
+
+rownames(true_coordinates) <- object_names
+
+# Calculate complete Euclidean distance matrix
+complete_distances <- as.matrix(dist(true_coordinates))
+
+# Add realistic measurement noise (5% coefficient of variation)
+noisy_distances <- complete_distances * (1 + rnorm(n_objects^2, 0, 0.05))
+noisy_distances <- pmax(noisy_distances, 0.1)  # Minimum distance threshold
+
+# Make symmetric and zero diagonal
+noisy_distances[lower.tri(noisy_distances)] <- t(noisy_distances)[lower.tri(noisy_distances)]
+diag(noisy_distances) <- 0
+
+# Introduce structured sparsity (85% missing data)
+# Objects in the same cluster are more likely to have measurements
+total_pairs <- n_objects * (n_objects - 1) / 2
+target_missing_pairs <- round(total_pairs * 0.85)  # 85% sparsity
+
+# Generate upper triangular indices for sampling
+upper_tri_indices <- which(upper.tri(noisy_distances), arr.ind = TRUE)
+
+# Create sampling weights: higher probability for within-cluster pairs
+sampling_weights <- numeric(nrow(upper_tri_indices))
+for(k in 1:nrow(upper_tri_indices)) {
+  i <- upper_tri_indices[k, 1]
+  j <- upper_tri_indices[k, 2]
+  if(cluster_assignments[i] == cluster_assignments[j]) {
+    sampling_weights[k] <- 0.3  # Lower chance of being missing (within cluster)
+  } else {
+    sampling_weights[k] <- 1.0  # Higher chance of being missing (between clusters)
+  }
+}
+
+# Sample pairs to remove
+missing_pair_indices <- sample(
+  nrow(upper_tri_indices), 
+  target_missing_pairs, 
+  prob = sampling_weights
+)
+
+# Create sparse matrix
+sparse_matrix <- noisy_distances
+sparse_matrix[upper_tri_indices[missing_pair_indices, ]] <- NA
+sparse_matrix[upper_tri_indices[missing_pair_indices, c(2,1)]] <- NA
+
+rownames(sparse_matrix) <- colnames(sparse_matrix) <- object_names
+
+# Calculate actual sparsity
+actual_sparsity <- sum(is.na(sparse_matrix)) / (n_objects * (n_objects-1)) * 100
+
+cat("=== SPARSE DATA EXAMPLE ===\n")
+cat("Generated sparse dissimilarity matrix:\n")
+cat("- Matrix size:", n_objects, "x", n_objects, "objects\n")
+cat("- Actual sparsity:", round(actual_sparsity, 1), "% missing data\n")
+cat("- Clustering structure: 5 clusters with", table(cluster_assignments), "objects each\n")
+cat("- Noise level: 5% coefficient of variation\n")
+cat("- Within-cluster connectivity preserved for realism\n")
+
+cat("=== Check the connectivity of the data graph ===\n")
+# Network structure analysis for sparse data insights
+network_analysis <- analyze_network_structure(sparse_matrix)
+network_plot <- plot_network_structure(network_analysis)
+print(network_plot)
+
+# Demonstrate Topolow's superior sparse data handling
+cat("\n=== EMBEDDING SPARSE DATA ===\n")
+
+# Topolow embedding with automatic optimization
+sparse_result <- Euclidify(
+  dissimilarity_matrix = sparse_matrix,
+  ndim_range = c(2, 8),
+  output_dir = tempdir(),
+  n_initial_samples = 50,
+  n_adaptive_samples = 150,
+  folds = 20,
+  verbose = "standard"
+)
+
+# Evaluate embedding quality by visualizing the results 
+# and coloring by original cluster for validation
+plot_colors <- rainbow(5)[cluster_assignments]
+
+plot(sparse_result$positions[, 1:2], 
+     col = plot_colors, 
+     pch = 19, 
+     cex = 1.2,
+     main = paste("Topolow Embedding of Sparse Data\n", 
+                 round(actual_sparsity, 1), "% Missing Values"),
+     xlab = "Dimension 1", 
+     ylab = "Dimension 2")
+
+legend("topleft", 
+       legend = paste("Cluster", 1:5), 
+       col = rainbow(5), 
+       pch = 19, 
+       cex = 0.6)
+
+# Add text labels for some points
+text(sparse_result$positions[1:10, 1:2], 
+     labels = object_names[1:10], 
+     pos = 3, 
+     cex = 0.6)
+```
 
 ## How Topolow Works
 
 Topolow employs a novel physical model where:
 
-1.  **Antigens as particles**: Test and reference antigens are represented as particles in an N-dimensional space
-2.  **Spring-based connections**: Pairs with known measurements are connected by springs with free lengths equal to their antigenic distance
-3.  **Repulsive forces**: Pairs without direct measurements apply repulsive forces to each other, following an inverse square law
-4.  **Mass-weighted motion**: Each antigen receives an effective mass proportional to its number of measurements, providing natural regularization
-5.  **Cooling schedule**: Spring and repulsion constants gradually decrease during optimization, allowing fine-scale adjustments in final stages
+1. **Objects as particles**: Each object becomes a particle in N-dimensional space
+2. **Spring forces**: Pairs with known dissimilarities are connected by springs with rest lengths equal to the measured dissimilarity
+3. **Repulsive forces**: Pairs without measurements apply repulsive forces, preventing particle collapse
+4. **Mass-weighted motion**: Each particle has effective mass proportional to its number of measurements
+5. **Statistical foundation**: Minimizes Mean Absolute Error, equivalent to Maximum Likelihood Estimation under Laplace error model
+6. **Gradient-free optimization**: Sequential pairwise updates avoid local optima common in gradient-based methods
+7. **Cooling schedule**: Force constants gradually decrease, allowing fine-scale adjustments
 
-This approach allows Topolow to effectively optimize antigenic positions through a series of one-dimensional calculations, eliminating the need for complex gradient computations required by traditional MDS methods.
-
-## Antigenic Velocity
-
-- **What it is**  
-  Computes for each antigen a **velocity vector**  showing the rate and direction of each antigen’s drift. 
-  \[
-    v_i = \frac{\sum_{j:\,t_j<t_i} K_{ij}\,\frac{x_i - x_j}{t_i - t_j}}
-               {\sum_{j:\,t_j<t_i} K_{ij}}
-  \]
-
-- **Key parameters**  
-  - `sigma_x` (antigenic bandwidth) and `sigma_t` (temporal bandwidth) — default: auto-estimated via Silverman’s rule  
-  - `clade_depth` — depth (in tree edges) for phylo-aware clade filtering (Average Leaf-to-Backbone Distance)
+**Key Distinction from MDS**: While MDS methods impute missing values and calculate eigenvalues or gradient vectors, Topolow works directly with the structure in the data and uses physics-inspired forces for robust optimization.
 
 ## Features
 
--   **Physics-inspired optimization**: Employs a spring-mass system for robust positioning in high-dimensional spaces
--   **Optimal dimensionality detection**: Automatically determines the best dimensionality through likelihood-based estimation. This is particularly useful for datasets with high levels of missingness and complexity (e.g., due to various serotypes).
--   **Complete antigenic positioning**: Maps all antigens
--   **Noise reduction**: Decreases measurement errors through network-based dampening
--   **Threshold handling**: Properly incorporates low and high reactor thresholds (e.g., \<40) as equality constraints
--   **Cross-validation**: Built-in validation framework for performance assessment
--   **Parallel processing**: Support for multi-core execution
--   **Visualization tools**: Interactive and publication-ready map generation
--   **Phylogenetically-Aware Clade Detection**: Dynamic depth-based clades (no rooting or branch lengths required) are defined based on Average Leaf-to-Backbone Distance (ALBD) in the tree
+### Core Algorithm
+- **Physics-inspired optimization**: Spring-mass system for robust positioning
+- **Gradient-free**: Avoids local optima through stochastic pairwise interactions  
+- **Non-metric compatibility**: Handles data violating metric axioms
+- **Sparse data handling**: No imputation required for missing values
+- **Censored data support**: Handles threshold indicators (<, >) as constraints
 
-## Input Data Format
+### Parameter Optimization
+- **Automatic dimension selection**: Likelihood-based optimal dimensionality
+- **Adaptive Monte Carlo**: Parameter optimization focusing on high-likelihood regions
+- **Cross-validation**: Built-in k-fold validation for robust parameter estimates
 
-The algorithm can handle input data in various formats - if the raw input consists of one or multiple long tables with references on columns and challenges on rows, they are converted to the standard matrix form. (See the example scripts in `inst/examples`)
+### Practical Features
+- **Parallel processing**: Multi-core support for large datasets
+- **Convergence diagnostics**: Automatic convergence detection and monitoring
+- **Flexible input formats**: Handles matrices, data frames, similarity/dissimilarity data
+- **Comprehensive visualization**: 2D, 3D, temporal, and cluster-based plotting tools, including antigenic velocity vectors to track evolutionary drift.
 
-The package accepts distance matrices with the following characteristics:
+## Input Data Formats
 
--   Square symmetric matrices
--   Can contain NA values for missing measurements
--   Can contain threshold indicators (\< or \>) for bounded measurements
+Topolow accepts data in multiple formats:
 
-## Algorithm Parameters
+### 1. Matrix Format
+```r
+# Direct dissimilarity matrix
+dist_matrix <- matrix(c(0, 1.2, 2.1, 1.2, 0, 1.8, 2.1, 1.8, 0), nrow=3)
+```
 
-Key parameters for the TopoLow algorithm:
+### 2. Long Format (List)
+```r
+# Convert long format to matrix
+long_data <- data.frame(
+  object = c("A", "B", "C"),
+  reference = c("X", "Y", "Z"), 
+  value = c(1.2, 1.8, 2.1)
+)
+matrix_data <- list_to_matrix(long_data, "object", "reference", "value")
+```
 
--   ndim: Number of dimensions (typically 2-20)
--   k0: Initial spring constant (typical range: 0.1-30)
--   cooling_rate: Spring decay rate (typical range: 0.0001-0.1)
--   c_repulsion: Repulsion constant (typical range: 0.00001-0.1)
+### 3. Threshold Measurements
+```r
+# Data with detection limits
+threshold_matrix <- matrix(c(0, ">64", "<40", ">64", 0, "20", "<40", "20", 0), nrow=3)
+```
 
-The optimal values for each data can be determined through adaptive Monte Carlo simulations done by functions `initial_parameter_optimization` and `run_adaptive_sampling`. (See the example scripts in `inst/examples`)
+## Performance Advantages
 
-## Performance
+Based on empirical evaluations in the Bioinformatics paper (Arhami and Rohani, 2025):
 
-Topolow demonstrates significant improvements over traditional MDS approaches:
-
--   **27 simulated datasets with varying missingness and complexity**: Between 50% to 1000% improved prediction accuracy
--   **H3N2 influenza data (1968 - 2003)**: Similar prediction accuracy to the extensively tested maps in the literature
--   **HIV neutralization data (Subtypes B and C tested)**: 41% improved prediction accuracy
--   **Run-to-run stability**: Orders of magnitude better consistency across multiple runs
--   **Parameter sensitivity**: Performance remains robust across a wide range of parameter values
+- **50-1000% improved accuracy** over MDS on simulated datasets with varying missingness
+- **56% improvement** on dengue virus antigenic data
+- **41% improvement** on HIV neutralization data  
+- **Orders of magnitude better stability** across multiple runs
+- **Superior performance maintained** even at 90% data sparsity
+- **Robust performance** across wide parameter ranges
 
 ## Applications
 
-Topolow is particularly valuable for:
+### Immunology and Virology  
+- **Antigenic cartography**: Map viral evolution and vaccine effectiveness
+- **Track evolutionary drift**: Use antigenic velocity vectors to identify fast-evolving samples and potential vaccine escape variants
+- **Immune repertoire analysis**: Visualize antibody/TCR similarity
+- **Vaccine design**: Identify antigenic variants and coverage gaps
+- **Pathogen surveillance**: Track emerging variants
+- **Cross-reactivity analysis**: Understand immune cross-protection
 
--   Understanding antigenic evolution of rapidly evolving viral pathogens
--   Early detection of emerging antigenic variants
--   Predicting antigenic phenotypes for under-characterized strains
--   Amplifying training data for downstream machine learning models
--   Analyzing any continuous and relational phenotype under directional selection pressure
+### General Data Science
+- **Customer segmentation**: Embed behavioral dissimilarity data
+- **Recommendation systems**: Map user-item preference dissimilarities
+- **Network analysis**: Embed graph distances into Euclidean space
+- **Dimensionality reduction**: Robust alternative to PCA for non-Euclidean data
+- **Anomaly detection**: Identify outliers in dissimilarity space
+
+### Bioinformatics and Computational Biology
+- **Protein structure analysis**: Embed structural dissimilarity measures
+- **Phylogenetic analysis**: Visualize evolutionary distances
+- **Gene expression**: Map correlation-based dissimilarities
+- **Drug discovery**: Embed molecular dissimilarity for compound analysis
+
+### Other Domains
+- **Psychology**: Embed perceptual or cognitive dissimilarity data
+- **Marketing**: Map brand perception and consumer preferences  
+- **Geographic analysis**: Handle incomplete distance data
+- **Social network analysis**: Embed relationship dissimilarities
+
+## Algorithm Parameters
+
+Key parameters of `euclidean_embedding()` for manual optimization:
+
+- **ndim**: Number of dimensions (typically 2-10)
+- **k0**: Initial spring constant (typical range: 0.1-30)
+- **cooling_rate**: Parameter decay rate (typical range: 0.0001-0.05)
+- **c_repulsion**: Repulsion constant (typical range: 0.0001-0.4)
+
+**Recommendation**: Use `Euclidify()` for automatic parameter optimization if you are not willing to invest time on manual tuning and investigation.
+
+## Comparison with Other Methods
+
+| Method | Non-metric Compatible | Missing Data | Sparse Data | Gradient-free | Stability |
+|--------|----------------|-------------|--------------|---------------|-----------|
+| Topolow | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Classical MDS | ❌ | ❌ (requires imputation) | ❌ | ✅ | ✅ |
+| Iterative MDS | ❌ | ❌ (requires imputation) | ❌ | ❌ | ❌ |
+| t-SNE | ❌ | ❌ | ❌ | ❌ | ❌ |
+| UMAP | ❌ | ❌ | ❌ | ❌ | ⚠️ |
 
 ## Using on HPC or SLURM Clusters
 
-When using topolow on HPC systems with SLURM (only available in Topolow v0.3.2), additional setup might be needed:
+topolow can be used on a single HPC system and leverage the larger number of cores by increasing `max_cores` parameters. Distributed processing using SLURM is supported in versions prior to 1.0.0.
 
-1.  Ensure the correct R version is loaded (4.3.2 or newer):
-
-``` bash
-module load R/4.4.1
-```
-
-2.  Install required dependencies, e.g.:
-
-``` r
-install.packages(c("reshape2", "data.table", "dplyr", "ggplot2"))
-```
-
-3.  When submitting SLURM jobs, set the correct R module in the script:
-
-``` r
-initial_parameter_optimization(
-  # ... other parameters ...
-  r_module = "R/4.4.1", # Set this to match your cluster's R module
-  use_slurm = TRUE
-)
-```
 
 ## Documentation
 
-See the full documentation of the package and all functionalities in <https://github.com/omid-arhami/topolow/blob/main/build/topolow-manual.pdf>
+Full documentation available at:
+```r
+# View documentation for specific functions
+?Euclidify
+?euclidean_embedding
+?initial_parameter_optimization
 
-For detailed documentation of a specific function in Topolow package:
-
-``` r
-# View documentation
-?function_name
+# Package overview
+help(package = "topolow")
 ```
+
+## Citation
+
+If you use this package, please cite:
+
+Omid Arhami, Pejman Rohani, Topolow: a mapping algorithm for antigenic cross-reactivity and binding affinity assays, *Bioinformatics*, Volume 41, Issue 7, July 2025, btaf372, https://doi.org/10.1093/bioinformatics/btaf372
+
+```bibtex
+@article{10.1093/bioinformatics/btaf372,
+    author = {Arhami, Omid and Rohani, Pejman},
+    title = {Topolow: a mapping algorithm for antigenic cross-reactivity and binding affinity assays},
+    journal = {Bioinformatics},
+    volume = {41},
+    number = {7},
+    pages = {btaf372},
+    year = {2025},
+    month = {06},
+    abstract = {Understanding antigenic evolution through cross-reactivity assays is crucial for tracking rapidly evolving pathogens requiring regular vaccine updates. However, existing cartography methods, commonly based on multidimensional scaling (MDS), face significant challenges with sparse and complex data, producing incomplete and inconsistent maps. There is an urgent need for robust computational methods that can accurately map antigenic relationships from incomplete experimental data while maintaining biological relevance, especially given that more than 95\% of possible measurements could be missing in large-scale studies.We present Topolow, an algorithm that transforms cross-reactivity and binding affinity measurements into accurate positions in a phenotype space. Using a physics-inspired model, Topolow achieved comparable prediction accuracy to MDS for H3N2 influenza and 56\% and 41\% improved accuracy for dengue and HIV, while maintaining complete positioning of all antigens. The method effectively reduces experimental noise and bias, determines optimal dimensionality through likelihood-based estimation, avoiding distortions due to insufficient dimensions, and demonstrates orders of magnitude better stability across multiple runs. We also introduce antigenic velocity vectors, which measure the rate of antigenic advancement of each isolate per unit of time against its temporal and evolutionary related background, revealing the underlying antigenic relationships and cluster transitions.Topolow is implemented in R and freely available at https://doi.org/10.5281/zenodo.15620983 and https://github.com/omid-arhami/topolow.},
+    issn = {1367-4811},
+    doi = {10.1093/bioinformatics/btaf372},
+    url = {https://doi.org/10.1093/bioinformatics/btaf372},
+    eprint = {https://academic.oup.com/bioinformatics/article-pdf/41/7/btaf372/63582086/btaf372.pdf},
+}
+```
+
+Software DOI: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15620983.svg)](https://doi.org/10.5281/zenodo.15620983)
 
 ## Contributing
 
@@ -258,23 +593,13 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 ## License
 
-This project is protected by a pre-publication license.
-
--   Researchers can use the software for academic purposes.
--   Redistribution, modification, and commercial use are prohibited before publication.
-
-The license will transition upon publication - see the LICENSE file for details.
-
-## Citation
-
-If you use this package, please cite the article:
-
-Omid Arhami, Pejman Rohani, Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assays, Bioinformatics, 2025;, btaf372, https://doi.org/10.1093/bioinformatics/btaf372
-
-Software doi: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15620983.svg)](https://doi.org/10.5281/zenodo.15620983)
+This project is distributed under BSD-3-Clause license
+YEAR: 2025
+COPYRIGHT HOLDER: Omid Arhami
 
 ## Contact
 
--   Maintainer: Omid Arhami
--   Email: [omid.arhami\@uga.edu](mailto:omid.arhami@uga.edu){.email}
--   GitHub: @omid-arhami
+- **Maintainer**: Omid Arhami
+- **Email**: [omid.arhami@uga.edu](mailto:omid.arhami@uga.edu)
+- **GitHub**: @omid-arhami
+- **Issues**: https://github.com/omid-arhami/topolow/issues

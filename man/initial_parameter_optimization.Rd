@@ -2,10 +2,10 @@
 % Please edit documentation in R/adaptive_sampling.R
 \name{initial_parameter_optimization}
 \alias{initial_parameter_optimization}
-\title{Run Parameter Optimization Via Latin Hypercube Sampling}
+\title{Parameter Space Sampling and Optimization Functions for topolow}
 \usage{
 initial_parameter_optimization(
-  distance_matrix,
+  dissimilarity_matrix,
   mapping_max_iter = 1000,
   relative_epsilon,
   convergence_counter,
@@ -27,45 +27,39 @@ initial_parameter_optimization(
 )
 }
 \arguments{
-\item{distance_matrix}{Matrix or data frame. Input distance matrix. Must be square
-and symmetric. Can contain NA values for missing measurements.}
+\item{dissimilarity_matrix}{Matrix. Input dissimilarity matrix. Must be square and symmetric.}
 
-\item{mapping_max_iter}{Integer. Maximum number of optimization iterations.}
+\item{mapping_max_iter}{Integer. Maximum number of optimization iterations for each map.}
 
 \item{relative_epsilon}{Numeric. Convergence threshold for relative change in error.}
 
-\item{convergence_counter}{Integer. Number of iterations below threshold before
-declaring convergence.}
+\item{convergence_counter}{Integer. Number of iterations below threshold before declaring convergence.}
 
 \item{scenario_name}{Character. Name for output files and job identification.}
 
-\item{N_min, N_max}{Integer. Range for number of dimensions parameter.}
+\item{N_min, N_max}{Integer. Range for the number of dimensions parameter.}
 
-\item{k0_min, k0_max}{Numeric. Range for initial spring constant parameter.}
+\item{k0_min, k0_max}{Numeric. Range for the initial spring constant parameter.}
 
-\item{c_repulsion_min, c_repulsion_max}{Numeric. Range for repulsion constant parameter.}
+\item{c_repulsion_min, c_repulsion_max}{Numeric. Range for the repulsion constant parameter.}
 
-\item{cooling_rate_min, cooling_rate_max}{Numeric. Range for spring decay parameter.}
+\item{cooling_rate_min, cooling_rate_max}{Numeric. Range for the cooling rate parameter.}
 
-\item{num_samples}{Integer. Number of LHS samples to generate (default: 20).}
+\item{num_samples}{Integer. Number of LHS samples to generate. Default: 20.}
 
-\item{max_cores}{Integer. Maximum number of cores to use for parallel processing. If NULL,
-uses all available cores minus 1 (default: NULL).}
+\item{max_cores}{Integer. Maximum number of cores for parallel processing. Default: NULL (uses all but one).}
 
 \item{folds}{Integer. Number of cross-validation folds. Default: 20.}
 
 \item{verbose}{Logical. Whether to print progress messages. Default: FALSE.}
 
-\item{write_files}{Logical. Whether to save results to CSV. Default: FALSE.}
+\item{write_files}{Logical. Whether to save results to a CSV file. Default: FALSE.}
 
-\item{output_dir}{Character. Directory where output files will be saved.
-Required if \code{write_files} is \code{TRUE}.}
+\item{output_dir}{Character. Directory for output files. Required if \code{write_files} is TRUE.}
 }
 \value{
-A \code{data.frame} containing the parameter sets and their performance metrics
-(\code{Holdout_MAE} and \code{NLL}). The columns of the data frame are \code{N}, \code{k0},
-\code{cooling_rate}, \code{c_repulsion}, \code{Holdout_MAE}, and \code{NLL}.
-If \code{write_files} is \code{TRUE}, this data frame is also saved to a CSV file as a side effect.
+A \code{data.frame} containing the log-transformed parameter sets and their performance metrics.
+Columns include: \code{log_N}, \code{log_k0}, \code{log_cooling_rate}, \code{log_c_repulsion}, \code{Holdout_MAE}, and \code{NLL}.
 }
 \description{
 Performs parameter optimization using Latin Hypercube Sampling (LHS) combined with
@@ -76,37 +70,42 @@ parameters, the function uses a pooled errors approach which combine all validat
 one set, then calculate a single NLL. This approach has two main advantages:
 1- It treats all validation errors equally, respecting the underlying error distribution assumption
 2- It properly accounts for the total number of validation points
+
+\strong{Note}: As of version 2.0.0, this function returns log-transformed parameters directly,
+eliminating the need to call \code{log_transform_parameters()} separately.
 }
 \details{
+Initial Parameter Optimization using Latin Hypercube Sampling
+
 The function performs these steps:
 \enumerate{
-\item Generates LHS samples in parameter space
-\item Creates k-fold splits of input data
-\item For each parameter set and fold:
-\itemize{
-\item Trains model on training set
-\item Evaluates on validation set
-\item Calculates MAE and negative log likelihood
-}
+\item Generates LHS samples in the parameter space (original scale for sampling).
+\item Creates k-fold splits of the input data.
+\item For each parameter set, it trains the model on each fold's training set and evaluates
+on the validation set, calculating a pooled MAE and NLL across all folds.
 \item Computations are run locally in parallel.
+\item \strong{NEW}: Automatically log-transforms the final results for direct use with adaptive sampling.
 }
+}
+\note{
+\strong{Breaking Change in v2.0.0:} This function now returns log-transformed parameters directly.
+The returned data frame has columns \code{log_N}, \code{log_k0}, \code{log_cooling_rate}, \code{log_c_repulsion}
+instead of the original scale parameters. This eliminates the need to call \code{log_transform_parameters()}
+separately before using \code{run_adaptive_sampling()}.
 
-Parameters ranges are transformed to log scale where appropriate to handle
-different scales effectively.
+\strong{Breaking Change in v2.0.0:} The parameter \code{distance_matrix} has been renamed to
+\code{dissimilarity_matrix}. Please update your code accordingly.
 }
 \examples{
 \donttest{
-# This example is wrapped in \donttest{} because it can exceed 5 seconds,
-# 1. Create a structured, synthetic dataset for the example
-# Generate coordinates for a more realistic test case
-synth_coords <- generate_complex_data(n_points = 20, n_dim = 3)
-# Convert coordinates to a distance matrix
+# This example can exceed 5 seconds on some systems.
+# 1. Create a simple synthetic dataset for the example
+synth_coords <- matrix(rnorm(60), nrow = 20, ncol = 3)
 dist_mat <- coordinates_to_matrix(synth_coords)
 
 # 2. Run the optimization on the synthetic data
-# ensuring it passes CRAN's automated checks.
 results <- initial_parameter_optimization(
-  distance_matrix = dist_mat,
+  dissimilarity_matrix = dist_mat,
   mapping_max_iter = 100,
   relative_epsilon = 1e-3,
   convergence_counter = 2,
@@ -119,10 +118,9 @@ results <- initial_parameter_optimization(
   max_cores = 2,
   verbose = FALSE
 )
-print(results)
 }
 
 }
 \seealso{
-\code{\link{create_topolow_map}} for the core optimization algorithm
+\code{\link{euclidean_embedding}} for the core optimization algorithm.
 }

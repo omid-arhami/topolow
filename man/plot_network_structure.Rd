@@ -2,42 +2,43 @@
 % Please edit documentation in R/visualization.R
 \name{plot_network_structure}
 \alias{plot_network_structure}
-\title{Plot Network Structure Analysis}
+\title{Plot Network Structure}
 \usage{
 plot_network_structure(
   network_results,
   output_file = NULL,
-  aesthetic_config = new_aesthetic_config(),
-  layout_config = new_layout_config()
+  width = 3000,
+  height = 3000,
+  dpi = 300
 )
 }
 \arguments{
-\item{network_results}{List output from analyze_network_structure()}
+\item{network_results}{The list output from \code{analyze_network_structure()}.}
 
-\item{output_file}{Character. Full path (including filename and extension) where the plot will be saved.
-If NULL, the plot is not saved.}
+\item{output_file}{Character. An optional full path to save the plot. If NULL, the plot is not saved.}
 
-\item{aesthetic_config}{Plot aesthetic configuration object}
+\item{width}{Numeric. Width in pixels for saved plot (default: 3000).}
 
-\item{layout_config}{Plot layout configuration object}
+\item{height}{Numeric. Height in pixels for saved plot (default: 3000).}
+
+\item{dpi}{Numeric. Resolution in dots per inch (default: 300).}
 }
 \value{
 A \code{ggplot} object representing the network graph.
 }
 \description{
-Creates visualization of distance matrix network structure showing data
-availability patterns and connectivity.
+Creates a visualization of the dissimilarity matrix as a network graph, showing
+data availability patterns and connectivity between points.
 }
 \examples{
-# Create sample network data
-adj_mat <- matrix(sample(c(0,1), 25, replace=TRUE), 5, 5)
-# Add row and column names, which are required by the analysis function
+# Create a sample dissimilarity matrix
+adj_mat <- matrix(runif(25), 5, 5)
 rownames(adj_mat) <- colnames(adj_mat) <- paste0("Point", 1:5)
-# Ensure the matrix is symmetric for the analysis
 adj_mat[lower.tri(adj_mat)] <- t(adj_mat)[lower.tri(adj_mat)]
 diag(adj_mat) <- 0
 net_analysis <- analyze_network_structure(adj_mat)
 
-# Create plot and return the plot object
+# Create and display the plot
 plot_network_structure(net_analysis)
+
 }

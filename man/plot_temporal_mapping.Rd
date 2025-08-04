@@ -59,7 +59,7 @@ Use x_limits and y_limits in layout_config to set axis limits.}
 A \code{ggplot} object containing the temporal mapping visualization.
 }
 \description{
-Creates a visualization of points colored by time (year) using dimension reduction, with optional antigenic velocity arrows.
+Antigenic Mapping and Antigenic Velocity Function. Creates a visualization of points colored by time (year) using dimension reduction, with optional antigenic velocity arrows.
 Points are colored on a gradient scale based on their temporal values, with
 different shapes for antigens and antisera.
 }

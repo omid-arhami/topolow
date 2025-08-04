@@ -2,30 +2,26 @@
 % Please edit documentation in R/diagnostics.R
 \name{analyze_network_structure}
 \alias{analyze_network_structure}
-\title{Calculate Network Analysis Metrics}
+\title{Analyze Network Structure}
 \usage{
-analyze_network_structure(distance_matrix)
+analyze_network_structure(dissimilarity_matrix)
 }
 \arguments{
-\item{distance_matrix}{Square symmetric matrix of distances}
+\item{dissimilarity_matrix}{Square symmetric matrix of dissimilarities.}
 }
 \value{
 A list containing the network analysis results:
-\item{adjacency}{A logical \code{matrix} where \code{TRUE} indicates a measured distance
-between two points, representing the network's adjacency matrix.}
-\item{connectivity}{A \code{data.frame} with node-level metrics, including the \code{completeness}
-(degree) for each point.}
-\item{summary}{A list of overall network statistics, including \code{n_points}, \code{n_measurements},
-and total \code{completeness}.}
+\item{adjacency}{A logical \code{matrix} where \code{TRUE} indicates a measured dissimilarity.}
+\item{connectivity}{A \code{data.frame} with node-level metrics, including the \code{completeness} (degree) for each point.}
+\item{summary}{A list of overall network statistics, including \code{n_points}, \code{n_measurements}, and total \code{completeness}.}
 }
 \description{
-Analyzes the connectivity pattern in a distance matrix by converting it to
-a network representation. Useful for assessing data completeness and structure.
+Analyzes the connectivity of a dissimilarity matrix, returning node degrees and
+overall completeness.
 }
 \examples{
-# Create a sample distance matrix
+# Create a sample dissimilarity matrix
 dist_mat <- matrix(runif(25), 5, 5)
-# Add row and column names
 rownames(dist_mat) <- colnames(dist_mat) <- paste0("Point", 1:5)
 dist_mat[lower.tri(dist_mat)] <- t(dist_mat)[lower.tri(dist_mat)]
 diag(dist_mat) <- 0
@@ -34,5 +30,4 @@ dist_mat[1, 3] <- NA; dist_mat[3, 1] <- NA
 # Analyze the network structure
 metrics <- analyze_network_structure(dist_mat)
 print(metrics$summary$completeness)
-
 }

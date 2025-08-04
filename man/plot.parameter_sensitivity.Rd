@@ -2,7 +2,7 @@
 % Please edit documentation in R/adaptive_sampling.R
 \name{plot.parameter_sensitivity}
 \alias{plot.parameter_sensitivity}
-\title{Plot Method for Parameter Sensitivity Analysis}
+\title{Plot Parameter Sensitivity Analysis}
 \usage{
 \method{plot}{parameter_sensitivity}(
   x,
@@ -15,25 +15,27 @@
 )
 }
 \arguments{
-\item{x}{A parameter_sensitivity object}
+\item{x}{A \code{parameter_sensitivity} object, typically from \code{parameter_sensitivity_analysis()}.}
 
-\item{width}{Numeric width of output plot in inches (default: 3.5)}
+\item{width}{The numeric width of the output plot in inches.}
 
-\item{height}{Numeric height of output plot in inches (default: 3.5)}
+\item{height}{The numeric height of the output plot in inches.}
 
-\item{save_plot}{Logical. Whether to save plot to file. Default: FALSE}
+\item{save_plot}{A logical indicating whether to save the plot to a file.}
 
-\item{output_dir}{Character. Directory for output files. Required if \code{save_plot} is TRUE.}
+\item{output_dir}{A character string specifying the directory for output files. Required if \code{save_plot} is TRUE.}
 
-\item{y_limit_factor}{Numeric. Factor to set the upper y-axis limit as a percentage above
-the threshold value (e.g., 1.10 for 10\% above). Default: NULL (automatic scaling)}
+\item{y_limit_factor}{A numeric factor to set the upper y-axis limit as a percentage
+above the threshold value (e.g., 1.10 for 10\% above). If NULL, scaling is automatic.}
 
-\item{...}{Additional arguments passed to plot}
+\item{...}{Additional arguments (not currently used).}
 }
 \value{
-A ggplot object
+A \code{ggplot} object representing the sensitivity plot.
 }
 \description{
-Creates a visualization of parameter sensitivity showing minimum MAE values
-across parameter ranges with threshold indicators.
+The S3 plot method for \code{parameter_sensitivity} objects. It creates a visualization
+showing how the model's performance (minimum MAE) changes across the range of a
+single parameter. A threshold line is included to indicate the region of acceptable
+performance.
 }

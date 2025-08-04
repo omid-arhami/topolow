@@ -2,18 +2,18 @@
 % Please edit documentation in R/visualization.R
 \name{print.topolow_convergence}
 \alias{print.topolow_convergence}
-\title{Print Method for Convergence Diagnostics}
+\title{Print Method for topolow Convergence Diagnostics}
 \usage{
 \method{print}{topolow_convergence}(x, ...)
 }
 \arguments{
-\item{x}{A topolow_convergence object}
+\item{x}{A \code{topolow_convergence} object.}
 
-\item{...}{Additional arguments passed to print}
+\item{...}{Additional arguments passed to print.}
 }
 \value{
-No return value, called for side effects (prints a summary to the console).
+No return value; called for its side effect of printing a summary.
 }
 \description{
-Print Method for Convergence Diagnostics
+Print Method for topolow Convergence Diagnostics
 }

@@ -19,6 +19,398 @@ knitr::opts_chunk$set(
  message = TRUE,    # Show messages
   error = TRUE      # Continue on error
 )
+
+
+
+#' Convert Distance Matrix to Titer Panel Format
+#'
+#' @description
+#' Converts a distance matrix to a titer panel format, handling threshold measurements
+#' and logarithmic transformations common in antigenic cartography. The function 
+#' identifies reference points (typically antisera) and challenge points (typically
+#' antigens) based on row/column name prefixes.
+#'
+#' @param input_matrix Matrix of distances, with row/column names prefixed with 
+#'        "V/" for antigens and "S/" for sera
+#' @param base Numeric. Base for logarithmic transformation. Default exp(1). For HI Assay 2
+#' @param tens Numeric. Scaling factor for final titers. Default 1. For HI Assay 10
+#'
+#' @details 
+#' The function:
+#' 1. Identifies antigen and serum entries from matrix row/column names
+#' 2. Creates titer table from antigen-serum pairs
+#' 3. Handles threshold indicators (< and >) in distance values
+#' 4. Applies appropriate transformations to convert distances to titers
+#'
+#' Transformation steps:
+#' 1. Extract numeric values from thresholded measurements
+#' 2. Convert distances to titers via logarithmic transformation
+#' 3. Apply scaling factor
+#' 4. Reapply threshold indicators to transformed values
+#'
+#' @return A `matrix` of titers with:
+#' - Rows corresponding to antigen strains (without "V/" prefix)
+#' - Columns corresponding to antisera (without "S/" prefix)
+#' - Values as character strings including threshold indicators where applicable
+#' - `NA` values replaced with "*"
+#'
+#' @examples
+#' # Create sample distance matrix
+#' dist_mat <- matrix(c(0, 2, ">3", 2, 0, 4, "3", 4, 0), nrow=3)
+#' rownames(dist_mat) <- c("V/strain1", "V/strain2", "S/serum1")
+#' colnames(dist_mat) <- c("V/strain1", "V/strain2", "S/serum1")
+#'
+#' # Convert to titer panel
+#' titer_panel <- dist_to_titer_table(dist_mat)
+dist_to_titer_table <- function(input_matrix, base=exp(1), tens=1) {
+  # Input validation
+  if (!is.matrix(input_matrix)) {
+    stop("input_matrix must be a matrix")
+  }
+  
+  if (!all(apply(input_matrix, 2, function(x) is.numeric(x) || is.character(x)))) {
+    stop("Matrix values must be numeric or character")
+  }
+  
+  if (is.null(rownames(input_matrix)) || is.null(colnames(input_matrix))) {
+    stop("Matrix must have row and column names")
+  }
+
+  # Validate prefixes
+  if(!any(startsWith(rownames(input_matrix), "S/")) ||
+     !any(startsWith(rownames(input_matrix), "V/"))) {
+    stop("Matrix must have both antiserum (S/) and virus (V/) entries")
+  }
+  
+  if (!is.numeric(base) || base <= 0) {
+    stop("base must be a positive number")
+  }
+  
+  if (!is.numeric(tens) || tens <= 0) {
+    stop("tens must be a positive number")
+  }
+
+  # Creating the panel of data:
+  # Find row names that start with "S/"
+  serum_names_S <- rownames(input_matrix)[startsWith(rownames(input_matrix), "S/")]
+  
+  # Remove "S/" from the beginning of each element in serum_names
+  serum_names <- sub("^S/", "", serum_names_S)
+  
+  # Find row names that start with "V/"
+  antigen_names_V <- rownames(input_matrix)[startsWith(rownames(input_matrix), "V/")]
+  
+  # Remove "V/" from the beginning of each element 
+  antigen_names <- sub("^V/", "", antigen_names_V)
+
+  # Convert the distances to titers in a panel format
+  distance_table = symmetric_to_nonsymmetric_matrix(input_matrix, serum_names_S)
+  
+  
+  # Set row and column names
+  rownames(distance_table) <- antigen_names
+  colnames(distance_table) <- serum_names
+
+  # Handle threshold values
+  replace_greater_than <- function(x) {
+    if (is.character(x) && grepl("^>", x)) {
+      as.numeric(sub("^>", "", x))
+    } else {
+      x
+    }
+  }
+  
+  replace_smaller_than <- function(x) {
+    if (is.character(x) && grepl("^<", x)) {
+      as.numeric(sub("^<", "", x))
+    } else {
+      x
+    }
+  }
+  
+  # Process matrix values
+  numeric_dist_table <- apply(distance_table, c(1, 2), replace_greater_than)
+  numeric_dist_table <- apply(numeric_dist_table, c(1, 2), replace_smaller_than)
+  numeric_dist_table <- apply(numeric_dist_table, 2, as.numeric)
+  
+  # Find column maxima
+  column_maxes <- apply(numeric_dist_table, 2, max, na.rm = TRUE)
+
+  # Create an empty matrix to hold the results, preserving dimensions
+  titer_table <- matrix(NA, 
+                        nrow = nrow(distance_table), 
+                        ncol = ncol(distance_table),
+                        dimnames = list(rownames(distance_table), colnames(distance_table)))
+
+  # Loop through the matrix to calculate titers
+  for (j in 1:ncol(distance_table)) {
+    for (i in 1:nrow(distance_table)) {
+      value <- distance_table[i, j]
+      max_value <- column_maxes[j]
+
+      if (is.na(value)) {
+        titer_table[i, j] <- NA
+      } else if (is.character(value) && startsWith(value, ">")) {
+        num_part <- as.numeric(sub(">", "", value))
+        titer_table[i, j] <- paste0("<", max_value - num_part)
+      } else if (is.character(value) && startsWith(value, "<")) {
+        num_part <- as.numeric(sub("<", "", value))
+        titer_table[i, j] <- paste0(">", max_value - num_part)
+      } else {
+        titer_table[i, j] <- as.character(max_value - as.numeric(value))
+      }
+    }
+  }
+
+  # Final transformation to titer scale
+  transform_value <- function(x, base=base, tens=tens) {
+    if (is.na(x)) {
+      return(NA)
+    } else if (is.character(x) && grepl("^<", x)) {
+      num_part <- as.numeric(sub("^<", "", x))
+      return(paste0("<", (base^num_part) * tens))
+    } else if (is.character(x) && grepl("^>", x)) {
+      num_part <- as.numeric(sub("^>", "", x))
+      return(paste0(">", (base^num_part) * tens))
+    } else {
+      return((base^as.numeric(x)) * tens)
+    }
+  }
+  
+  # Apply transformation
+  titer_table <- apply(titer_table, c(1, 2), 
+                       function(x) transform_value(x, base=base, tens=tens))
+
+  # Replace NA with *
+  titer_table[is.na(titer_table)] <- '*'
+  
+  return(titer_table)
+}
+
+
+#' Create and Optimize a RACMACS Map
+#'
+#' @description
+#' Creates and optimizes an antigenic map using the RACMACS package and keeps the 
+#' best optimization result. This function wraps common RACMACS functionality to 
+#' provide a simplified interface for map creation and optimization.
+#'
+#' @param titer_table Matrix or data frame of titer measurements.
+#' @param dim Integer number of dimensions for the map (default: 2).
+#' @param optimization_number Integer number of optimization runs (default: 400).
+#' @param output_file Character. An optional, full path (including filename and 
+#'        extension) where the map coordinates will be saved as a CSV file. 
+#'        If NULL (the default), the coordinates are not saved to a file.
+#' @param num_cores Integer number of cores to use for parallel optimization 
+#'        (default: 1).
+#'
+#' @return A `racmap` object from the `Racmacs` package, containing the optimized coordinates and other map data.
+#'
+#' @examples
+#' # Create a dummy titer table for the example
+#' ag_names <- paste("V", 1:5)
+#' sr_names <- paste("S", 1:4)
+#' titer_table <- matrix(
+#'   sample(c(10, 20, 40, 80, 160, 320, 640, 1280, 2560, 5120), 20, replace = TRUE),
+#'   nrow = length(ag_names), ncol = length(sr_names),
+#'   dimnames = list(ag_names, sr_names)
+#' )
+#' 
+#' # Create and optimize map without saving coordinates
+#' map_obj <- create_and_optimize_RACMACS_map(titer_table)
+#' 
+#' # Create map and save coordinates to a temporary file.
+#' # tempfile() creates a path in the session's temporary directory.
+#' temp_coords_file <- tempfile(fileext = ".csv")
+#' map_obj_saved <- create_and_optimize_RACMACS_map(
+#'   titer_table, 
+#'   dim = 3,
+#'   optimization_number = 100,
+#'   output_file = temp_coords_file
+#' )
+#' 
+#' # Check that the file was created
+#' file.exists(temp_coords_file)
+#' 
+#' # Clean up the temporary file
+#' unlink(temp_coords_file)
+#'
+#' @importFrom tools file_ext
+create_and_optimize_RACMACS_map <- function(titer_table, 
+                                          dim = 2,
+                                          optimization_number = 400,
+                                          output_file = NULL,
+                                          num_cores = 1) {
+  if (!requireNamespace("Racmacs", quietly = TRUE)) {
+    stop("Package 'Racmacs' is required for this function. Please install it.")
+  }
+  library(Racmacs)
+  # Set number of cores for optimization
+  options(RacOptimizer.num_cores = num_cores)
+  
+  # Create map object from the titer table
+  map <- Racmacs::acmap(titer_table = titer_table)
+  
+  # Optimize the map
+  map <- Racmacs::optimizeMap(
+    options = list(ignore_disconnected = TRUE),
+    map = map,
+    number_of_dimensions = dim,
+    number_of_optimizations = optimization_number,
+    minimum_column_basis = "none"
+  )
+  
+  # Keep only the best optimization run
+  map <- Racmacs::keepBestOptimization(map)
+  
+  # Save coordinates if an output file path is provided
+  if (!is.null(output_file)) {
+    # Validate that output_file is a single character string
+    if (!is.character(output_file) || length(output_file) != 1) {
+      stop("'output_file' must be a single character string specifying the path.", call. = FALSE)
+    }
+    
+    # Check for a valid file extension
+    if (tools::file_ext(output_file) != "csv") {
+        warning("The 'output_file' should ideally have a .csv extension.")
+    }
+
+    # Extract the directory from the full path
+    output_dir <- dirname(output_file)
+    
+    # Create the output directory if it does not exist
+    if (!dir.exists(output_dir)) {
+        dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+    }
+    
+    # Save the coordinates of the map to the specified file
+    Racmacs::save.coords(
+        map, 
+        filename = output_file,
+        optimization_number = 1,
+        antigens = TRUE, 
+        sera = TRUE
+    )
+  }
+  
+  return(map)
+}
+
+
+
+# New
+#' Calculate Statistical Significance of Procrustes Difference
+#'
+#' @description
+#' Performs a Procrustes permutation test to calculate the statistical significance 
+#' of the difference between two point configurations (maps). This helps 
+#' determine if the similarity between the two configurations is greater than expected 
+#' by chance.
+#'
+#' @param coords1 A numeric matrix of coordinates from the first configuration, where rows are points and columns are dimensions.
+#' @param coords2 A numeric matrix of coordinates from the second configuration, with dimensions matching `coords1`.
+#' 
+#' @return A single numeric p-value from the Procrustes permutation test. A small 
+#'   p-value suggests the configurations are more similar than expected by chance.
+#'   
+#' @examples
+#' # Create two sample 3D coordinate matrices
+#' coords1 <- matrix(rnorm(30), nrow = 10, ncol = 3)
+#' coords2 <- coords1 + rnorm(30, sd = 1.5) # Add significant noise
+#' 
+#' # Calculate the significance of the difference
+#' p_val <- calculate_procrustes_significance(coords1, coords2)
+#' print(p_val)
+#' 
+calculate_procrustes_significance <- function(coords1, coords2) {
+  if (!requireNamespace("vegan", quietly = TRUE)) {
+    stop("Package 'vegan' is required for this function. Please install it.")
+  }
+  # --- Input Validation ---
+  if (!is.matrix(coords1) || !is.numeric(coords1) || 
+      !is.matrix(coords2) || !is.numeric(coords2)) {
+    stop("Inputs must be numeric matrices.")
+  }
+  if (!identical(dim(coords1), dim(coords2))) {
+    stop("Coordinate matrices must have the same dimensions.")
+  }
+  if (any(!is.finite(coords1)) || any(!is.finite(coords2))) {
+    stop("Coordinate matrices must contain finite values.")
+  }
+
+  # --- Procrustes Permutation Test ---
+  # The vegan::protest function performs the permutation test
+  procrustes_result <- vegan::protest(coords1, coords2)
+  
+  return(procrustes_result$signif)
+}
+
+
+
+#' Calculate Procrustes Difference Between Two Configurations
+#'
+#' @description 
+#' Computes the quantitative difference between two point configurations (maps) 
+#' using Procrustes analysis. The function calculates the sum of squared 
+#' differences between the two sets of coordinates after optimal rotation, 
+#' translation, and uniform scaling.
+#'
+#' @param coords1 A numeric matrix of coordinates from the first configuration, where rows are points and columns are dimensions.
+#' @param coords2 A numeric matrix of coordinates from the second configuration, with dimensions matching `coords1`.
+#' 
+#' @return A single numeric value representing the sum of squared differences after the Procrustes transformation.
+#' 
+#' @examples
+#' # Create two sample 3D coordinate matrices
+#' coords1 <- matrix(rnorm(30), nrow = 10, ncol = 3)
+#' # Create a second set of coordinates that is a slightly rotated version of the first
+#' angle <- pi / 8
+#' rotation_matrix <- matrix(c(cos(angle), -sin(angle), 0, sin(angle), cos(angle), 0, 0, 0, 1), 3, 3)
+#' coords2 <- coords1 %*% rotation_matrix + rnorm(30, sd = 0.1) # Add some noise
+#' 
+#' # Calculate the Procrustes sum of squares difference
+#' diff <- calculate_procrustes_difference(coords1, coords2)
+#' print(diff)
+#' 
+calculate_procrustes_difference <- function(coords1, coords2) {
+  if (!requireNamespace("vegan", quietly = TRUE)) {
+    stop("Package 'vegan' is required for this function. Please install it.")
+  }
+  # --- Input Validation ---
+  if (!is.matrix(coords1) || !is.numeric(coords1) || 
+      !is.matrix(coords2) || !is.numeric(coords2)) {
+    stop("Inputs must be numeric matrices.")
+  }
+  if (!identical(dim(coords1), dim(coords2))) {
+    stop("Coordinate matrices must have the same dimensions.")
+  }
+  if (any(!is.finite(coords1)) || any(!is.finite(coords2))) {
+    stop("Coordinate matrices must contain finite values.")
+  }
+
+  # --- Procrustes Analysis ---
+  # Perform Procrustes analysis to find the optimal alignment and difference
+  procrustes_result <- vegan::procrustes(coords1, coords2, scale = TRUE)
+  
+  return(procrustes_result$ss)
+}
+
+
+# Function to calculate pairwise Procrustes distances
+calc_procrustes_dists <- function(maps) {
+  n <- length(maps)
+  dists <- matrix(NA, n, n)
+  
+  for(i in 1:(n-1)) {
+    for(j in (i+1):n) {
+      proc <- procrustes(maps[[i]], maps[[j]])
+      dists[i,j] <- dists[j,i] <- proc$ss
+    }
+  }
+  
+  return(dists)
+}
+
 ```
 
 ## Introduction
@@ -83,7 +475,7 @@ hiv_titers <- hiv_titers %>% dplyr::filter(IC50 != "")
 
 hiv_titers <- hiv_titers %>% dplyr::filter(Subtype %in% c("B", "C")) #, "01_AE", "A1", "G", "07_BC", "02_AG", "D", "A1D", "02A1"
 
-hiv_titers$IC50 <- clean_data(hiv_titers$IC50, k=2, take_log=TRUE)
+hiv_titers$IC50 <- clean_data(hiv_titers$IC50, k=2)
 hiv_titers <- na.omit(hiv_titers)
 
 # Sort the dataset based on the "year" column
@@ -94,11 +486,11 @@ write.csv(hiv_titers, file.path(output_dir,"hiv_assay_full.csv"))
 
 # Load and process HIV data
 hiv_results <- process_antigenic_data(
-  file_path = "procrustes_results/hiv_assay_full.csv",
+  hiv_titers,
   antigen_col = "Virus",
   serum_col = "Antibody", 
   value_col = "IC50",
-  is_titer = FALSE,
+  is_similarity = FALSE,
   base = 2,
   scale_factor = 1,
   metadata_cols = c("Subtype", "Country")
@@ -162,7 +554,7 @@ filtered_data <- filtered_data %>%
 write.csv(filtered_data, file.path(output_dir,"hiv_filtered_long_data.csv"))
 
 
-hiv_matrix <- long_to_matrix(filtered_data,
+hiv_matrix <- titers_list_to_matrix(filtered_data,
                             chnames = "Virus",
                             rnames = "Antibody", 
                             values_column = "distance",
@@ -177,11 +569,11 @@ data(h3n2_data)
 write.csv(h3n2_data, file.path(output_dir,"h3n2_data.csv"), row.names = FALSE)
 
 h3n2_results <- process_antigenic_data(
-  file_path = "procrustes_results/h3n2_data.csv",
+  h3n2_data,
   antigen_col = "virusStrain",
   serum_col = "serumStrain",
   value_col = "titer", 
-  is_titer = TRUE,
+  is_similarity = TRUE,
   metadata_cols = c("virusYear", "serumYear", "cluster", "color")
 )
 
@@ -190,12 +582,13 @@ h3n2_matrix <- h3n2_results$matrix
 
 ```{r}
 # Load and process Denv data of Katzelnick et al 2015 (also in Bell et al 2019)
+DENV_titers <- read.csv("data_files/DENV_titers.csv", stringsAsFactors = FALSE)
 denv_data_results <- process_antigenic_data(
-  file_path = "data_files/DENV_titers.csv",
+  DENV_titers,
   antigen_col = "virus_strain",
   serum_col = "serum_strain",
   value_col = "titer", 
-  is_titer = TRUE,
+  is_similarity = TRUE,
   metadata_cols = c("virusYear", "serumYear", "cluster", "color")
 )
 
@@ -224,8 +617,7 @@ generate_topolow_maps <- function(distance_matrix, params, valid_points, n_maps 
   maps <- vector("list", n_maps)
   
   for(i in 1:n_maps) {
-    res <- create_topolow_map(
-      distance_matrix = distance_matrix,
+    res <- euclidean_embedding(dissimilarity_matrix =  distance_matrix,
       ndim = params$N, 
       mapping_max_iter = 100,
       k0 = params$k0,
@@ -323,7 +715,7 @@ clean_and_overwrite <- function(file_path) {
   # 1. Read every column in as character
   df <- read.csv(file_path, stringsAsFactors = FALSE, colClasses = "character")
   
-  # 2. For each column: remove any literal double‐quotes and coerce to numeric
+  # 2. For each column: remove any literal double-quotes and coerce to numeric
   df[] <- lapply(df, function(col) {
     # strip all " characters (in case they were embedded in the field)
     col_stripped <- gsub('"', "", col, fixed = TRUE)
@@ -422,21 +814,6 @@ cat("DENV valid points:", length(denv_filtered_points),
 Now we'll calculate pairwise Procrustes distances between all maps for each method:
 
 ```{r}
-# Function to calculate pairwise Procrustes distances
-calc_procrustes_dists <- function(maps) {
-  n <- length(maps)
-  dists <- matrix(NA, n, n)
-  
-  for(i in 1:(n-1)) {
-    for(j in (i+1):n) {
-      proc <- procrustes(maps[[i]], maps[[j]])
-      dists[i,j] <- dists[j,i] <- proc$ss
-    }
-  }
-  
-  return(dists)
-}
-
 # Calculate distances
 h3n2_topo_dists <- calc_procrustes_dists(h3n2_topolow_maps)
 h3n2_mds_dists <- calc_procrustes_dists(h3n2_mds_maps)

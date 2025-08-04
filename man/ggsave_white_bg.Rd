@@ -17,6 +17,5 @@ from the plot theme.}
 No return value, called for side effects.
 }
 \description{
-Wrapper around ggplot2::ggsave that ensures white background.
-This function masks ggplot2::ggsave.
+Wrapper around \code{ggplot2::ggsave} that ensures a white background by default.
 }

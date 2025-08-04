@@ -2,17 +2,17 @@
 % Please edit documentation in R/core.R
 \name{create_topolow_map}
 \alias{create_topolow_map}
-\title{Main TopoLow algorithm implementation}
+\title{Main TopoLow algorithm implementation (DEPRECATED)}
 \usage{
 create_topolow_map(
   distance_matrix,
   ndim,
-  mapping_max_iter,
+  mapping_max_iter = 1000,
   k0,
   cooling_rate,
   c_repulsion,
   relative_epsilon = 1e-04,
-  convergence_counter = 5,
+  convergence_counter = 3,
   initial_positions = NULL,
   write_positions_to_csv = FALSE,
   output_dir,
@@ -45,11 +45,12 @@ random initialization is used. Matrix should have nrow = nrow(distance_matrix)
 and ncol = ndim.}
 
 \item{write_positions_to_csv}{Logical. Whether to save point positions to CSV file.
-Default is FALSE}
+Default is FALSE.}
 
-\item{output_dir}{Character. Directory to save CSV file. Required if \code{write_positions_to_csv} is TRUE.}
+\item{output_dir}{Character. Directory to save CSV file. Required if
+\code{write_positions_to_csv} is TRUE.}
 
-\item{verbose}{Logical. Whether to print progress messages. Default is TRUE.}
+\item{verbose}{Logical. Whether to print progress messages. Default is FALSE.}
 }
 \value{
 A \code{list} object of class \code{topolow}. This list contains the results of the
@@ -64,45 +65,58 @@ optimization and includes the following components:
 }
 }
 \description{
-TopoLow (Topological Optimization for Low-Dimensional Mapping) optimizes point positions in n-dimensional
-space to match a target distance matrix. The algorithm uses a physics-inspired approach with
-spring and repulsive forces to find optimal point configurations while handling missing
-and thresholded measurements.
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
+
+\code{create_topolow_map()} was deprecated in version 2.0.0 and will be removed in
+a future version. Please use \code{\link[=euclidean_embedding]{euclidean_embedding()}} instead, which provides
+the same functionality with improved performance and additional features.
 }
 \details{
-The algorithm iteratively updates point positions using:
+This function has been superseded by \code{\link[=euclidean_embedding]{euclidean_embedding()}}, which offers:
 \itemize{
-\item Spring forces between points with measured distances
-\item Repulsive forces between points without measurements
-\item Modified forces for thresholded measurements (< or >)
-\item Adaptive spring constant that decays over iterations
-\item Convergence monitoring based on relative error change
+\item Enhanced matrix reordering for better optimization
+\item Improved parameter validation with informative warnings
+\item Consistent naming convention (dissimilarity vs distance)
+\item Better documentation and examples
 }
 
-Valid parameter ranges and constraints:
+The core algorithm remains identical, ensuring your results will be equivalent.
+The main changes are:
 \itemize{
-\item ndim: Positive integer, typically 2-20.
-\item k0: Initial spring constant, positive numeric > 0. Typical range: 0.1-30
-Controls initial force strength
-\item cooling_rate: Spring and repulsion decay rate, numeric between 0 and 1. Typical range: 0.0001-0.1
-Controls how quickly spring forces weaken
-\item c_repulsion: Repulsion constant, positive numeric > 0. Typical range: 0.00001-0.1
-Controls strength of repulsive forces
-\item relative_epsilon: Positive numeric, typically 1e-9 to 1e-3
-Smaller values require more iterations but give higher precision
-\item convergence_counter: Positive integer, typically 5-20
-Higher values do not necessarily lead to a better convergence
+\item Parameter name: \code{distance_matrix} --> \code{dissimilarity_matrix}
+\item Function name: \code{create_topolow_map()} --> \code{euclidean_embedding()}
 }
 }
 \examples{
-# Create a simple distance matrix
+\donttest{
+# Simple example (deprecated - use euclidean_embedding() instead)
 dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
 
-# Run TopoLow in 2D without writing to a file
-result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=100, 
-                      k0=1.0, cooling_rate=0.001, c_repulsion=0.01, verbose=FALSE)
-                      
-# results
-head(result$positions)
+# This will generate a deprecation warning
+result <- create_topolow_map(
+  dist_mat, 
+  ndim = 2, 
+  mapping_max_iter = 100,
+  k0 = 1.0, 
+  cooling_rate = 0.001, 
+  c_repulsion = 0.01, 
+  verbose = FALSE
+)
+
+# Recommended approach with new function:
+result_new <- euclidean_embedding(
+  dissimilarity_matrix = dist_mat,
+  ndim = 2,
+  mapping_max_iter = 100,
+  k0 = 1.0,
+  cooling_rate = 0.001,
+  c_repulsion = 0.01,
+  verbose = FALSE
+)
+}
 
 }
+\seealso{
+\code{\link[=euclidean_embedding]{euclidean_embedding()}} for the replacement function.
+}
+\keyword{internal}

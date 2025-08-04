@@ -2,7 +2,7 @@
 % Please edit documentation in R/adaptive_sampling.R
 \name{profile_likelihood_result}
 \alias{profile_likelihood_result}
-\title{Profile Likelihood Analysis Results Class}
+\title{S3 Constructor for Profile Likelihood Results}
 \usage{
 profile_likelihood_result(
   param_values,
@@ -12,8 +12,21 @@ profile_likelihood_result(
   sample_counts
 )
 }
+\arguments{
+\item{param_values}{Vector of parameter values.}
+
+\item{ll_values}{Vector of log-likelihood values.}
+
+\item{param_name}{Name of the analyzed parameter.}
+
+\item{bandwidth}{Bandwidth used for local windows.}
+
+\item{sample_counts}{Number of samples per estimate.}
+}
+\value{
+An object of class \code{profile_likelihood}.
+}
 \description{
-S3 class for storing and manipulating profile likelihood analysis results.
-Includes parameter values, log-likelihoods, and metadata for visualization.
+Internal S3 constructor for storing results from \code{profile_likelihood}.
 }
 \keyword{internal}

@@ -7,34 +7,25 @@
 clean_data(x, k = 3, take_log = FALSE)
 }
 \arguments{
-\item{x}{Numeric vector to clean}
+\item{x}{Numeric vector to clean.}
 
-\item{k}{Numeric threshold for outlier detection (default: 3)}
+\item{k}{Numeric threshold for outlier detection (default: 3).}
 
-\item{take_log}{Logical. Whether to log transform data before outlier detection (default: FALSE)}
+\item{take_log}{Logical. Deprecated parameter. Log transformation should be done before calling this function.}
 }
 \value{
 A numeric vector of the same length as \code{x}, where detected outliers have been replaced with \code{NA}.
 }
 \description{
-Removes outliers from numeric data using the Median Absolute Deviation method.
-Outliers are replaced with NA values. This function is particularly useful
-for cleaning parameter tables where each column may contain outliers.
+Removes outliers from numeric data using the Median Absolute Deviation (MAD) method.
+Outliers are replaced with NA values.
 }
 \examples{
 # Clean parameter values
 params <- c(0.01, 0.012, 0.011, 0.1, 0.009, 0.011, 0.15)
 clean_params <- clean_data(params)
 
-# Clean multiple parameter columns
-param_table <- data.frame(
-  k0 = runif(100),
-  cooling_rate = runif(100),
-  c_repulsion = runif(100)
-)
-clean_table <- as.data.frame(lapply(param_table, clean_data))
-
 }
 \seealso{
-\code{\link{detect_outliers_mad}} for the underlying outlier detection
+\code{detect_outliers_mad} for the underlying outlier detection.
 }

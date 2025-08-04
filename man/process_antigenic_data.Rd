@@ -5,19 +5,18 @@
 \title{Process Raw Antigenic Assay Data}
 \usage{
 process_antigenic_data(
-  file_path,
+  data,
   antigen_col,
   serum_col,
   value_col,
-  is_titer = TRUE,
+  is_similarity = FALSE,
   metadata_cols = NULL,
-  id_prefix = FALSE,
   base = NULL,
-  scale_factor = 10
+  scale_factor = 1
 )
 }
 \arguments{
-\item{file_path}{Character. Path to CSV file containing raw data.}
+\item{data}{Data frame containing raw data.}
 
 \item{antigen_col}{Character. Name of column containing virus/antigen identifiers.}
 
@@ -25,15 +24,15 @@ process_antigenic_data(
 
 \item{value_col}{Character. Name of column containing measurements (titers or distances).}
 
-\item{is_titer}{Logical. Whether values are titers (TRUE) or distances like IC50 (FALSE).}
+\item{is_similarity}{Logical. Whether values are measures of similarity such as titers
+or binding affinities (TRUE) or dissimilarities like IC50 (FALSE). Default: FALSE.}
 
 \item{metadata_cols}{Character vector. Names of additional columns to preserve.}
 
-\item{id_prefix}{Logical. Whether to prefix IDs with V/ and S/ (default: TRUE).}
+\item{base}{Numeric. Base for logarithm transformation (default: 2 for similarities, e for dissimilarities).}
 
-\item{base}{Numeric. Base for logarithm transformation (default: 2 for titers, e for IC50).}
-
-\item{scale_factor}{Numeric. Scale factor for titers (default: 10).}
+\item{scale_factor}{Numeric. Scale factor for similarities. This is the base value that all other
+dilutions are multiples of. E.g., 10 for HI assay where titers are 10, 20, 40,... Default: 1.}
 }
 \value{
 A list containing two elements:
@@ -41,52 +40,72 @@ A list containing two elements:
 \item{matrix}{A numeric \code{matrix} representing the processed symmetric distance matrix, with antigens and sera on columns and rows.}
 }
 \description{
-Processes raw antigenic assay data from CSV files into standardized long and matrix
-formats. Handles both titer data (which needs conversion to distances) and direct
-distance measurements like IC50. Preserves threshold indicators (<, >) and handles
-repeated measurements by averaging.
+Processes raw antigenic assay data from data frames into standardized long and matrix
+formats. Handles both similarity data (like titers, which need conversion to distances)
+and direct dissimilarity measurements like IC50. Preserves threshold indicators (<, >)
+and handles repeated measurements by averaging.
 }
 \details{
 The function handles these key steps:
 \enumerate{
-\item Reads and validates input data
+\item Validates input data and required columns
 \item Transforms values to log scale
-\item Converts titers to distances if needed
+\item Converts similarities to distances using Smith's method if needed
 \item Averages repeated measurements
 \item Creates standardized long format
-\item Creates distance matrix
+\item Creates symmetric distance matrix
 \item Preserves metadata and threshold indicators
 \item Preserves virusYear and serumYear columns if present
 }
 
 Input requirements and constraints:
 \itemize{
-\item CSV file must contain required columns
-\item Column names must match specified parameters in the function input
+\item Data frame must contain required columns
+\item Column names must match specified parameters
 \item Values can include threshold indicators (< or >)
 \item Metadata columns must exist if specified
 \item Allowed Year-related column names are "virusYear" and "serumYear"
 }
 }
 \examples{
-# Locate the example data file included in the package
-file_path <- system.file("extdata", "example_titer_data.csv", package = "topolow")
+# Example 1: Processing HI titer data (similarities)
+antigen_data <- data.frame(
+  virus = c("A/H1N1/2009", "A/H1N1/2010", "A/H1N1/2011", "A/H1N1/2009", "A/H1N1/2010"),
+  serum = c("anti-2009", "anti-2009", "anti-2009", "anti-2010", "anti-2010"),
+  titer = c(1280, 640, "<40", 2560, 1280),  # Some below detection limit
+  cluster = c("A", "A", "B", "A", "A"),
+  color = c("red", "red", "blue", "red", "red")
+)
 
-# Check if the file exists before running the example
-if (file.exists(file_path)) {
-  # Process the example titer data
-  results <- process_antigenic_data(
-    file_path,
-    antigen_col = "virusStrain",
-    serum_col = "serumStrain", 
-    value_col = "titer",
-    is_titer = TRUE,
-    metadata_cols = c("cluster", "color")
-  )
+# Process HI titer data (similarities -> distances)
+results <- process_antigenic_data(
+  data = antigen_data,
+  antigen_col = "virus",
+  serum_col = "serum", 
+  value_col = "titer",
+  is_similarity = TRUE,  # Titers are similarities
+  metadata_cols = c("cluster", "color"),
+  scale_factor = 10  # Base dilution factor
+)
 
-  # View the long format data
-  print(results$long)
-  # View the distance matrix
-  print(results$matrix)
-}
+# View the long format data
+print(results$long)
+# View the distance matrix
+print(results$matrix)
+
+# Example 2: Processing IC50 data (already dissimilarities)
+ic50_data <- data.frame(
+  virus = c("HIV-1", "HIV-2", "HIV-3"),
+  antibody = c("mAb1", "mAb1", "mAb2"),
+  ic50 = c(0.05, ">10", 0.2)
+)
+
+results_ic50 <- process_antigenic_data(
+  data = ic50_data,
+  antigen_col = "virus",
+  serum_col = "antibody",
+  value_col = "ic50",
+  is_similarity = FALSE  # IC50 values are dissimilarities
+)
+
 }

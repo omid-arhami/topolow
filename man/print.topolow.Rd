@@ -7,24 +7,23 @@
 \method{print}{topolow}(x, ...)
 }
 \arguments{
-\item{x}{A topolow object returned by create_topolow_map()}
+\item{x}{A \code{topolow} object returned by \code{euclidean_embedding()}.}
 
-\item{...}{Additional arguments passed to print (not used)}
+\item{...}{Additional arguments passed to print (not used).}
 }
 \value{
 The original \code{topolow} object (invisibly). This function is called for its
 side effect of printing a summary to the console.
 }
 \description{
-Provides a concise display of key optimization results including dimensions,
-iterations, error metrics and convergence status.
+Provides a concise display of key optimization results from \code{euclidean_embedding}.
 }
 \examples{
-# Create a simple distance matrix and run the optimization
+# Create a simple dissimilarity matrix and run the optimization
 dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)
-result <- create_topolow_map(dist_mat, ndim=2, mapping_max_iter=50, 
-                             k0=1.0, cooling_rate=0.001, c_repulsion=0.1,
-                             verbose = FALSE)
+result <- euclidean_embedding(dist_mat, ndim=2, mapping_max_iter=50,
+                           k0=1.0, cooling_rate=0.001, c_repulsion=0.1,
+                           verbose = FALSE)
 # Print the result object
 print(result)
 }

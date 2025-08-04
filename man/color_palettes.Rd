@@ -4,29 +4,14 @@
 \name{color_palettes}
 \alias{color_palettes}
 \alias{c25}
-\alias{c25_claud}
-\alias{c25_old}
-\alias{c25_older}
 \title{Color Palettes}
 \format{
 An object of class \code{character} of length 20.
-
-An object of class \code{character} of length 24.
-
-An object of class \code{character} of length 25.
-
-An object of class \code{character} of length 25.
 }
 \usage{
 c25
-
-c25_claud
-
-c25_old
-
-c25_older
 }
 \description{
-Predefined color palettes optimized for visualization
+Predefined color palettes optimized for visualization.
 }
 \keyword{datasets}

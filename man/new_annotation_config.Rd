@@ -2,7 +2,8 @@
 % Please edit documentation in R/visualization.R
 \name{new_annotation_config}
 \alias{new_annotation_config}
-\title{Plot Annotation Configuration Class}
+\title{Visualization functions for the topolow package
+Plot Annotation Configuration Class}
 \usage{
 new_annotation_config(
   notable_points = NULL,

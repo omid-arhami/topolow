@@ -4,15 +4,12 @@
 \alias{detect_outliers_mad}
 \title{Detect Outliers Using Median Absolute Deviation}
 \usage{
-detect_outliers_mad(data, k = 3, take_log = FALSE)
+detect_outliers_mad(data, k = 3)
 }
 \arguments{
 \item{data}{Numeric vector of values to analyze}
 
-\item{k}{Numeric threshold for outlier detection (default: 3). Points more than
-k MADs from median are considered outliers.}
-
-\item{take_log}{Logical. Whether to log transform data before (and only for) outlier detection (default: FALSE)}
+\item{k}{Numeric threshold for outlier detection (default: 3).}
 }
 \value{
 A list containing:
@@ -23,7 +20,7 @@ A list containing:
 \item mad: Median absolute deviation
 \item n_outliers: Number of outliers detected
 }
-}
+}#' @importFrom stats median mad
 }
 \description{
 Detects outliers in numeric data using the Median Absolute Deviation (MAD) method.
@@ -31,16 +28,7 @@ This robust method is less sensitive to extreme values than standard deviation
 and works well for non-normally distributed data.
 }
 \details{
-The function:
-\enumerate{
-\item Calculates median and MAD of the data
-\item Uses scaled MAD (constant = 1.4826) for normal distribution consistency
-\item Identifies points > k MADs from median as outliers
-\item Returns both outlier mask and summary statistics
-}
-
-MAD scaling constant 1.4826 is calculated as 1/Phi^(-1)(3/4), where Phi is the
-standard normal CDF. This makes MAD consistent with standard deviation for
-normal distributions.
+The function calculates the median and MAD of the data and identifies points
+that are more than \code{k} MADs from the median as outliers.
 }
 \keyword{internal}

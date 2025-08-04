@@ -7,19 +7,22 @@
 calculate_weighted_marginals(samples)
 }
 \arguments{
-\item{samples}{Data frame containing:
-- log_N, log_k0, log_cooling_rate, log_c_repulsion: Parameter columns
-- NLL: Negative log-likelihood column}
+\item{samples}{A data frame containing parameter samples (e.g., \code{log_N}, \code{log_k0})
+and a negative log-likelihood column named \code{NLL}.}
 }
 \value{
-Named list of marginal distributions, each containing:
+A named list where each element is a density object (a list with \code{x}
+and \code{y} components) corresponding to a model parameter.
 \item{x}{Vector of parameter values}
 \item{y}{Vector of density estimates}
 }
 \description{
-Calculates marginal distributions for each parameter with weights derived from
-log-likelihoods.
+Calculates the marginal probability distribution for each model parameter. The
+distributions are weighted by the likelihood of each sample, making this useful for
+identifying the most probable parameter values from a set of Monte Carlo samples.
 }
 \details{
-Uses kernel density estimation weighted by normalized likelihoods.
+This function uses the \code{weighted_kde} helper to perform kernel density
+estimation for each parameter, with weights derived from the normalized
+likelihoods of the samples.
 }
