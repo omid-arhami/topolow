@@ -24,6 +24,8 @@
 
 ### From CRAN
 
+(Download version 2 from GitHub to use the wizard function Euclidify.)
+
 ```r
 install.packages("topolow")
 ```
