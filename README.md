@@ -23,6 +23,7 @@
 ## Installation
 
 ### From CRAN
+[![](https://cranlogs.r-pkg.org/badges/topolow)](https://cran.r-project.org/package=topolow)
 
 (Download version 2 from GitHub to use the wizard function Euclidify.)
 
@@ -39,16 +40,6 @@ if (!require("devtools")) install.packages("devtools")
 # Install topolow
 devtools::install_github("omid-arhami/topolow")
 ```
-
-### Optional Dependencies
-
-For 3D visualization capabilities, install the `rgl` package:
-
-```r
-install.packages("rgl")
-```
-
-Note for macOS users: The `rgl` package requires XQuartz. Download from https://www.xquartz.org/, install, and restart your computer.
 
 ## Quick Start
 
@@ -550,6 +541,15 @@ Key parameters of `euclidean_embedding()` for manual optimization:
 
 topolow can be used on a single HPC system and leverage the larger number of cores by increasing `max_cores` parameters. Distributed processing using SLURM is supported in versions prior to 1.0.0.
 
+### Optional Dependencies
+
+For 3D visualization capabilities, install the `rgl` package:
+
+```r
+install.packages("rgl")
+```
+
+Note for macOS users: The `rgl` package requires XQuartz. Download from https://www.xquartz.org/, install, and restart your computer.
 
 ## Documentation
 
