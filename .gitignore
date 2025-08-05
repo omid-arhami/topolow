@@ -8,3 +8,4 @@
 .DS_Store
 inst/doc
 *.Rcheck/
+cran-comments.md

@@ -971,8 +971,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
         dt <- positions$year[i] - positions$year[past_idx]
         dx <- positions$V1[i] - positions$V1[past_idx]
         dy <- positions$V2[i] - positions$V2[past_idx]
-        w  <- exp(-(dx^2 + dy^2)/(2*sigma_x^2)) *
-          exp(- (dt^2)/(2*sigma_t^2))
+        w  <- exp(-(dx^2 + dy^2)/(2*sigma_x^2)) * exp(- (dt^2)/(2*sigma_t^2))
         v1[i] <- sum(w * (dx / dt)) / sum(w)
         v2[i] <- sum(w * (dy / dt)) / sum(w)
       } else {
@@ -1604,8 +1603,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
         dt <- positions$year[i] - positions$year[past_idx]
         dx <- positions$V1[i] - positions$V1[past_idx]
         dy <- positions$V2[i] - positions$V2[past_idx]
-        w  <- exp(-(dx^2 + dy^2)/(2*sigma_x^2)) *
-          exp(- (dt^2)/(2*sigma_t^2)) 
+        w  <- exp(-(dx^2 + dy^2)/(2*sigma_x^2)) * exp(- (dt^2)/(2*sigma_t^2)) 
         v1[i] <- sum(w * (dx / dt)) / sum(w)
         v2[i] <- sum(w * (dy / dt)) / sum(w)
       } else {

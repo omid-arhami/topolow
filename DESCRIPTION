@@ -4,7 +4,7 @@ Version: 2.0.0
 Authors@R: 
     person("Omid", "Arhami", , "omid.arhami@uga.edu", role = c("aut", "cre", "cph"),
            comment = c(ORCID = "0009-0005-2681-6598"))
-Description: A robust implementation of Topolow algorithm. It embeds objects into a low-dimensional Euclidean space from a matrix of pairwise dissimilarities, even when the data do not satisfy metric or Euclidean axioms. The package is particularly well-suited for sparse, incomplete, and censored (thresholded) datasets such as antigenic relationships. The core is a physics-inspired, gradient-free optimization framework that models objects as particles in a physical system, where observed dissimilarities define spring rest lengths and unobserved pairs exert repulsive forces. Methods are described in Arhami and Rohani (2025). The package incorporates functions specific to antigenic mapping to transform cross-reactivity and binding affinity measurements into accurate spatial representations in a phenotype space.
+Description: A robust implementation of Topolow algorithm. It embeds objects into a low-dimensional Euclidean space from a matrix of pairwise dissimilarities, even when the data do not satisfy metric or Euclidean axioms. The package is particularly well-suited for sparse, incomplete, and censored (thresholded) datasets such as antigenic relationships. The core is a physics-inspired, gradient-free optimization framework that models objects as particles in a physical system, where observed dissimilarities define spring rest lengths and unobserved pairs exert repulsive forces. The package also provides functions specific to antigenic mapping to transform cross-reactivity and binding affinity measurements into accurate spatial representations in a phenotype space.
     Key features include:
     * Robust Embedding from Sparse Data: Effectively creates complete and consistent maps (in optimal dimensions) even with high proportions of missing data (e.g., >95%).
     * Physics-Inspired Optimization: Models objects (e.g., antigens, landmarks) as particles connected by springs (for measured dissimilarities) and subject to repulsive forces (for missing dissimilarities), and simulates the physical system using laws of mechanics, reducing the need for complex gradient computations.
@@ -12,7 +12,7 @@ Description: A robust implementation of Topolow algorithm. It embeds objects int
     * Noise and Bias Reduction: Naturally mitigates experimental noise and bias through its network-based, error-dampening mechanism.
     * Antigenic Velocity Calculation (for antigenic data): Introduces and quantifies "antigenic velocity," a vector that describes the rate and direction of antigenic drift for each pathogen isolate. This can help identify cluster transitions and potential lineage replacements.
     * Broad Applicability: Analyzes data from various objects that their dissimilarity may be of interest, ranging from complex biological measurements such as continuous and relational phenotypes, antibody-antigen interactions, and protein folding to abstract concepts, such as customer perception of different brands.
-    Methods are described in Arhami and Rohani (2025) <doi:10.1093/bioinformatics/btaf372>.
+    Methods are described in the context of bioinformatics applications in Arhami and Rohani (2025a) <doi:10.1093/bioinformatics/btaf372>, and mathematical proofs and Euclidean embedding details are in Arhami and Rohani (2025b) <doi:10.48550/arXiv.2508.01733>.
 License: BSD_3_clause + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

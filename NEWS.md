@@ -65,6 +65,8 @@ The easy-to-use function `Euclidify` was added to implement all the workflow nee
   - `p_dist_mat` --> `predicted_dissimilarity_matrix`
   - **Migration**: Update parameter names in function calls
 * **`long_to_matrix`** was renamed to `titers_list_to_matrix` since it is specific to viral titer data processing.
+* Function `process_antigenic_data` accepts a data frame as input, instead of the previous form of a file path.
+* In `process_antigenic_data`, `is_titer` became `is_similarity` for clearity for broader audience. Parameter `id_prefix` was removed.
 
 ## New Features
 
@@ -86,7 +88,7 @@ The easy-to-use function `Euclidify` was added to implement all the workflow nee
 * Enhanced input validation and error messages in `create_cv_folds()`
 * `input_dissimilarities` parameter now optional in `error_calculator_comparison()`
 * `initial_parameter_optimization` saves/returns the parameters in log scale, consistent with other function
-
+* A vignette was added
 
 ## Deprecation Timeline
 

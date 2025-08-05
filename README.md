@@ -485,7 +485,7 @@ threshold_matrix <- matrix(c(0, ">64", "<40", ">64", 0, "20", "<40", "20", 0), n
 
 ## Performance Advantages
 
-Based on empirical evaluations in the Bioinformatics paper (Arhami and Rohani, 2025):
+Based on empirical evaluations in the Bioinformatics paper (Arhami and Rohani, 2025 https://doi.org/10.1093/bioinformatics/btaf372):
 
 - **50-1000% improved accuracy** over MDS on simulated datasets with varying missingness
 - **56% improvement** on dengue virus antigenic data
@@ -583,6 +583,23 @@ Omid Arhami, Pejman Rohani, Topolow: a mapping algorithm for antigenic cross-rea
     doi = {10.1093/bioinformatics/btaf372},
     url = {https://doi.org/10.1093/bioinformatics/btaf372},
     eprint = {https://academic.oup.com/bioinformatics/article-pdf/41/7/btaf372/63582086/btaf372.pdf},
+}
+```
+
+Pre-print of the article explaining Euclidean embedding and mathematical properties of the algorithm with evaluations:
+
+Omid Arhami, Pejman Rohani, Topolow: Force-Directed Euclidean Embedding of Dissimilarity Data with Robustness Against Non-Metricity and Sparsity, arXiv:2508.01733, https://doi.org/10.48550/arXiv.2508.01733
+
+```bibtex
+@misc{arhami2025topolowforcedirectedeuclideanembedding,
+      title={Topolow: Force-Directed Euclidean Embedding of Dissimilarity Data with Robustness Against Non-Metricity and Sparsity}, 
+      author={Omid Arhami and Pejman Rohani},
+      year={2025},
+      eprint={2508.01733},
+      archivePrefix={arXiv},
+      primaryClass={cs.CG},
+      doi={10.48550/arXiv.2508.01733},
+      url={https://arxiv.org/abs/2508.01733}, 
 }
 ```
 

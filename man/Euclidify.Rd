@@ -27,7 +27,7 @@ Euclidify(
 NA values for missing measurements and threshold indicators (< or >).}
 
 \item{output_dir}{Character. Directory for saving optimization files and results.
-Required - no default provided per CRAN guidelines.}
+Required - no default.}
 
 \item{ndim_range}{Integer vector of length 2. Range for number of dimensions
 (minimum, maximum). Default: c(2, 10)}
