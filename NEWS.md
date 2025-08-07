@@ -19,7 +19,7 @@
 
 # topolow 2.0.0 (2025-07-30)
 
-The easy-to-use function `Euclidify` was added to implement all the workflow neede to get the main output automatically. 
+The wizard function `Euclidify` was added to run all the workflow needed to get the main output automatically. 
 
 ## Deprecations
 
