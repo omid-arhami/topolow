@@ -1,6 +1,8 @@
-# Topolow: Force-Directed Euclidean Embedding of Dissimilarity Data
+# Topolow: Force-Directed Euclidean Embedding of Dissimilarity Data (Version 2)
 
 ## Overview
+
+[Changes from version 1 and migration: https://github.com/omid-arhami/topolow/blob/main/NEWS.md]
 
 `topolow` is an R package that implements a novel, physics-inspired algorithm for **Euclidean embedding** of potentially non-metric, sparse, and noisy dissimilarity data. The algorithm converts dissimilarity matrices into valid Euclidean coordinate systems, making the data compatible with standard statistical and machine learning tools like PCA, clustering, and regression.
 
