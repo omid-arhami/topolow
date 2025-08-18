@@ -567,7 +567,7 @@ help(package = "topolow")
 
 ## Citation
 
-If you use this package, please cite:
+If you use this package, please cite either the original introduction of topolow (with applications in the context of viral evolution) :
 
 Omid Arhami, Pejman Rohani, Topolow: a mapping algorithm for antigenic cross-reactivity and binding affinity assays, *Bioinformatics*, Volume 41, Issue 7, July 2025, btaf372, https://doi.org/10.1093/bioinformatics/btaf372
 
@@ -589,7 +589,7 @@ Omid Arhami, Pejman Rohani, Topolow: a mapping algorithm for antigenic cross-rea
 }
 ```
 
-Pre-print of the article explaining Euclidean embedding and mathematical properties of the algorithm with evaluations:
+Or, the pre-print explaining mathematical properties of the algorithm, Euclidean embedding, and evaluations:
 
 Omid Arhami, Pejman Rohani, Topolow: Force-Directed Euclidean Embedding of Dissimilarity Data with Robustness Against Non-Metricity and Sparsity, arXiv:2508.01733, https://doi.org/10.48550/arXiv.2508.01733
 
