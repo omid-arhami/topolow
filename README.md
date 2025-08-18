@@ -152,7 +152,7 @@ antigenic_matrix <- results$matrix
 antigenic_map <- Euclidify(
   dissimilarity_matrix = antigenic_matrix,
   ndim_range = c(3, 6),
-  folds = 10,
+  folds = 5,
   output_dir = tempdir(),
   verbose = "standard"
 )
@@ -161,7 +161,6 @@ antigenic_map <- Euclidify(
 positions_df <- data.frame(
   V1 = antigenic_map$positions[, 1],
   V2 = antigenic_map$positions[, 2],
-  V3 = antigenic_map$positions[, 3],
   name = rownames(antigenic_map$positions),
   year = as.numeric(sub(".*/([0-9]+).*", "\\1", rownames(antigenic_map$positions))),
   antigen = grepl("^V/", rownames(antigenic_map$positions)),
