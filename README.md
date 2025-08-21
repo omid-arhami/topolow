@@ -27,8 +27,6 @@
 ### From CRAN
 [![](https://cranlogs.r-pkg.org/badges/topolow)](https://cran.r-project.org/package=topolow)
 
-(Download version 2 from GitHub to use the wizard function Euclidify.)
-
 ```r
 install.packages("topolow")
 ```
