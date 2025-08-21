@@ -1,0 +1,5 @@
+# WORDLIST for topolow package
+# Add technical terms and proper nouns that R CMD check flags as misspelled
+
+Topolow
+bioinformatics

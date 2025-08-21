@@ -4,6 +4,7 @@ Version: 2.0.0
 Authors@R: 
     person("Omid", "Arhami", , "omid.arhami@uga.edu", role = c("aut", "cre", "cph"),
            comment = c(ORCID = "0009-0005-2681-6598"))
+Maintainer: Omid Arhami <omid.arhami@uga.edu>
 Description: A robust implementation of Topolow algorithm. It embeds objects into a low-dimensional Euclidean space from a matrix of pairwise dissimilarities, even when the data do not satisfy metric or Euclidean axioms. The package is particularly well-suited for sparse, incomplete, and censored (thresholded) datasets such as antigenic relationships. The core is a physics-inspired, gradient-free optimization framework that models objects as particles in a physical system, where observed dissimilarities define spring rest lengths and unobserved pairs exert repulsive forces. The package also provides functions specific to antigenic mapping to transform cross-reactivity and binding affinity measurements into accurate spatial representations in a phenotype space.
     Key features include:
     * Robust Embedding from Sparse Data: Effectively creates complete and consistent maps (in optimal dimensions) even with high proportions of missing data (e.g., >95%).

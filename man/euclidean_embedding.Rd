@@ -7,7 +7,7 @@
 euclidean_embedding(
   dissimilarity_matrix,
   ndim,
-  mapping_max_iter,
+  mapping_max_iter = 1000,
   k0,
   cooling_rate,
   c_repulsion,

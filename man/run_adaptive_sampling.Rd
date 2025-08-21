@@ -72,8 +72,8 @@ if (nzchar(initial_file)) {
     scenario_name = "adaptive_test_example",
     dissimilarity_matrix = dissim_mat,
     output_dir = temp_out_dir,
-    max_cores = 2, # Use 2 cores for a quick example
-    num_samples = 2,
+    max_cores = 1,
+    num_samples = 1,
     verbose = FALSE
   )
 

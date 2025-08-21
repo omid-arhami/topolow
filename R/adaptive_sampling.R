@@ -62,7 +62,7 @@
 #' # 1. Create a simple synthetic dataset for the example
 #' synth_coords <- matrix(rnorm(60), nrow = 20, ncol = 3)
 #' dist_mat <- coordinates_to_matrix(synth_coords)
-#'
+#' 
 #' # 2. Run the optimization on the synthetic data
 #' results <- initial_parameter_optimization(
 #'   dissimilarity_matrix = dist_mat,
@@ -75,7 +75,7 @@
 #'   c_repulsion_min = 0.001, c_repulsion_max = 0.05,
 #'   cooling_rate_min = 0.001, cooling_rate_max = 0.02,
 #'   num_samples = 4,
-#'   max_cores = 2,
+#'   max_cores = 1,  # Avoid parallel processing in check environment
 #'   verbose = FALSE
 #' )
 #' }
@@ -443,8 +443,8 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
 #'     scenario_name = "adaptive_test_example",
 #'     dissimilarity_matrix = dissim_mat,
 #'     output_dir = temp_out_dir,
-#'     max_cores = 2, # Use 2 cores for a quick example
-#'     num_samples = 2,
+#'     max_cores = 1,
+#'     num_samples = 1,
 #'     verbose = FALSE
 #'   )
 #'
@@ -565,6 +565,7 @@ run_adaptive_sampling <- function(initial_samples_file,
   # Launch parallel runs
   if (.Platform$OS.type == "windows") {
     cl <- parallel::makeCluster(num_parallel_jobs)
+    on.exit(parallel::stopCluster(cl), add = TRUE)
     # Export necessary variables and load the topolow package in each worker
     parallel::clusterExport(cl, c("adaptive_MC_sampling", "temps", "dissimilarity_matrix",
                                   "mapping_max_iter", "relative_epsilon", "folds",
@@ -678,7 +679,7 @@ adaptive_MC_sampling <- function(samples_file,
     if (.Platform$OS.type == "windows") {
       if (verbose) cat("Using parallel cluster for Windows\n")
       cl <- parallel::makeCluster(num_cores)
-      on.exit(parallel::stopCluster(cl))
+      on.exit(parallel::stopCluster(cl), add = TRUE)
       # Export necessary objects to the cluster
       parallel::clusterExport(cl, c("dissimilarity_matrix", "mapping_max_iter",
                                     "relative_epsilon", "folds"),
@@ -1630,7 +1631,7 @@ likelihood_function <- function(dissimilarity_matrix, mapping_max_iter,
   if(num_cores > 1 && folds > 1) {
     if(.Platform$OS.type == "windows") {
       cl <- parallel::makeCluster(min(num_cores, folds))
-      on.exit(parallel::stopCluster(cl))
+      on.exit(parallel::stopCluster(cl), add = TRUE)
 
       # Export required variables to the cluster
       parallel::clusterExport(cl,

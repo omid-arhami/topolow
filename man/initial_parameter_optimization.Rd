@@ -115,7 +115,7 @@ results <- initial_parameter_optimization(
   c_repulsion_min = 0.001, c_repulsion_max = 0.05,
   cooling_rate_min = 0.001, cooling_rate_max = 0.02,
   num_samples = 4,
-  max_cores = 2,
+  max_cores = 1,  # Avoid parallel processing in check environment
   verbose = FALSE
 )
 }
