@@ -109,3 +109,8 @@ result <- create_topolow_map(distance_matrix = my_matrix,
 result <- euclidean_embedding(dissimilarity_matrix = my_matrix,  # parameter name changed
   # ... other parameters (unchanged)
 )
+```
+
+# topolow 2.0.1 (2025-08-30)
+
+Included figures in the vignette.
