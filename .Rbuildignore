@@ -12,3 +12,5 @@
 ^\.github$
 ^CRAN-SUBMISSION$
 ^inst/examples$
+^doc$
+^Meta$

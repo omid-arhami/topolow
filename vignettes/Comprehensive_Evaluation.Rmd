@@ -10,12 +10,62 @@ output:
     fig_width: 10
     fig_height: 8
 vignette: >
-  %\VignetteIndexEntry{Comparative Analysis of Embedding Methods for Non-Euclidean Dissimilarity Data}
+  %\VignetteIndexEntry{Comparative Analysis of Embedding Methods for Non-Euclidean Dissimilarity Data: A Comprehensive Evaluation of Topolow}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  warning = FALSE, 
+  message = FALSE,
+  fig.width = 8, 
+  fig.height = 6,
+  collapse = TRUE,
+  comment = "#>",
+  cache = FALSE
+)
+library(topolow)
 
+# Function to check and load packages with informative messages
+check_and_load_package <- function(package_name) {
+  if (!requireNamespace(package_name, quietly = TRUE)) {
+    message("Package ", package_name, " not found. Please install it with:")
+    message("install.packages('", package_name, "')")
+    return(FALSE)
+  } else {
+    library(package_name, character.only = TRUE)
+    return(TRUE)
+  }
+}
+
+# Load required libraries
+required_packages <- c("topolow", "ggplot2", "dplyr", "reshape2", 
+                      "scales", "MASS")
+
+# Check for optional packages
+optional_packages <- c("smacof", "RANN")
+
+missing_packages <- character(0)
+for(pkg in required_packages) {
+  if(!check_and_load_package(pkg)) {
+    missing_packages <- c(missing_packages, pkg)
+  }
+}
+
+# Load optional packages quietly
+for(pkg in optional_packages) {
+  check_and_load_package(pkg)
+}
+
+if(length(missing_packages) > 0) {
+  stop("Please install missing packages: ", paste(missing_packages, collapse = ", "))
+}
+
+# Set seed for reproducibility
+set.seed(42)
+```
 
 # Abstract
 
@@ -37,7 +87,89 @@ We evaluate three distinct embedding approaches:
 
 This three-method comparison allows us to understand both the theoretical limits of embedding accuracy and the practical differences in optimization stability between deterministic and stochastic methods.
 
+```{r utility_functions, eval=FALSE}
+# Enhanced statistical testing with effect sizes
+enhanced_statistical_comparison <- function(topolow_errors, other_errors, method_name) {
+  valid_topolow <- topolow_errors[!is.na(topolow_errors)]
+  valid_other <- other_errors[!is.na(other_errors)]
+  
+  if(length(valid_other) < 2 || length(valid_topolow) < 2) {
+    cat("Insufficient data for statistical comparison with", method_name, "\n")
+    return(NULL)
+  }
+  
+  # T-test
+  t_result <- t.test(valid_topolow, valid_other)
+  
+  # Effect size (Cohen's d)
+  pooled_sd <- sqrt(((length(valid_topolow) - 1) * var(valid_topolow) + 
+                     (length(valid_other) - 1) * var(valid_other)) / 
+                    (length(valid_topolow) + length(valid_other) - 2))
+  
+  cohens_d <- (mean(valid_topolow) - mean(valid_other)) / pooled_sd
+  
+  cat("\n--- Statistical Comparison (Topolow vs", method_name, ") ---\n")
+  cat("- Welch's t-statistic:", round(t_result$statistic, 3), "\n")
+  cat("- p-value:", format(t_result$p.value, scientific = TRUE, digits = 3), "\n")
+  cat("- Cohen's d (effect size):", round(cohens_d, 3), "\n")
+  cat("- Effect size interpretation:", 
+      if(abs(cohens_d) < 0.2) "Negligible" 
+      else if(abs(cohens_d) < 0.5) "Small"
+      else if(abs(cohens_d) < 0.8) "Medium" 
+      else "Large", "\n")
+  
+  return(list(t_test = t_result, cohens_d = cohens_d))
+}
 
+# Calculate data quality metrics
+calculate_data_quality_metrics <- function(distance_matrix) {
+  total_possible <- nrow(distance_matrix) * (nrow(distance_matrix) - 1) / 2
+  total_available <- sum(!is.na(distance_matrix[upper.tri(distance_matrix)]))
+  completeness <- total_available / total_possible
+  
+  available_distances <- distance_matrix[!is.na(distance_matrix)]
+  
+  metrics <- list(
+    completeness = completeness,
+    n_objects = nrow(distance_matrix),
+    n_available_distances = total_available,
+    distance_range = range(available_distances),
+    distance_mean = mean(available_distances),
+    distance_sd = sd(available_distances),
+    distance_cv = sd(available_distances) / mean(available_distances)
+  )
+  return(metrics)
+}
+
+# Coordinate validation
+validate_coordinates <- function(coords, method_name, n_objects, target_dims) {
+  if(is.null(coords)) {
+    cat("WARNING:", method_name, "returned NULL coordinates\n")
+    return(FALSE)
+  }
+  if(any(!is.finite(coords))) {
+    cat("WARNING:", method_name, "has non-finite coordinates\n")
+    return(FALSE)
+  }
+  if(nrow(coords) != n_objects || ncol(coords) != target_dims) {
+    cat("WARNING:", method_name, "has incorrect dimensions\n")
+    return(FALSE)
+  }
+  return(TRUE)
+}
+
+# Missing data imputation
+improved_missing_data_imputation <- function(dist_matrix) {
+  available_distances <- dist_matrix[!is.na(dist_matrix)]
+  if(length(available_distances) == 0) {
+    median_distance <- 1.0
+  } else {
+    median_distance <- median(available_distances, na.rm = TRUE)
+  }
+  dist_matrix[is.na(dist_matrix)] <- median_distance
+  return(list(matrix = dist_matrix, imputation_value = median_distance))
+}
+```
 
 # Data Generation Methodologies
 
@@ -47,8 +179,7 @@ We employ two distinct data generation methods to create non-Euclidean datasets 
 
 This approach creates non-Euclidean data by systematically distorting a high-dimensional clustered dataset through non-linear transformations and asymmetric noise injection.
 
-
-``` r
+```{r distorted_euclidean_generator, eval=FALSE}
 #' Generate Non-Euclidean Data by Distorting Clustered Points
 #'
 #' Creates non-Euclidean data through systematic distortion of clustered high-dimensional points.
@@ -139,8 +270,7 @@ t = 1.5 * pi * (1 + 2runif)
 
 Marsland, "Machine Learning: An Algorithmic Perspective", 2nd edition, Chapter 6, 2014
 
-
-``` r
+```{r swiss_roll_generator, eval=FALSE}
 #' Generate Non-Euclidean Data from a Swiss Roll Manifold
 #'
 #' Creates data points on a Swiss Roll manifold where geodesic distances
@@ -255,8 +385,7 @@ Our analysis follows a standardized pipeline for each dataset type:
 5. **Performance Evaluation** and statistical analysis
 6. **Distance Preservation Assessment**
 
-
-``` r
+```{r analysis_pipeline, eval=FALSE}
 #' Comprehensive analysis pipeline for embedding method comparison
 #'
 #' @param data_gen_func Function to generate the dataset
@@ -547,8 +676,7 @@ run_comprehensive_analysis <- function(data_gen_func, dataset_name, n_objects = 
 
 We begin our analysis with the Synthesized non-Euclidean dataset, which represents a controlled deviation from metric properties through systematic transformations.
 
-
-``` r
+```{r distorted_analysis, eval=FALSE, results='hide', fig.show='hold'}
 # Run analysis for Synthesized non-Euclidean data
 distorted_results <- run_comprehensive_analysis(
   generate_distorted_euclidean_data, 
@@ -558,6 +686,29 @@ distorted_results <- run_comprehensive_analysis(
 )
 ```
 
+```{r distorted_summary, eval=FALSE, echo=FALSE}
+cat("=== Synthesized non-Euclidean DATA ANALYSIS SUMMARY ===\n")
+cat("Dataset characteristics:\n")
+cat("- Objects:", distorted_results$data_characteristics$n_objects, "\n")
+cat("- Missing data:", round(distorted_results$data_characteristics$missing_percentage, 1), "%\n")
+cat("- Non-Euclidean deviation score:", round(distorted_results$data_characteristics$deviation_score, 4), "\n")
+cat("- Dimensions for 90% variance:", distorted_results$data_characteristics$dims_90_percent, "\n")
+cat("- Target embedding dimensions:", distorted_results$target_dims, "\n\n")
+
+cat("Performance Summary:\n")
+if(sum(distorted_results$valid_topolow_results) > 0) {
+  cat("- Topolow mean error:", 
+      round(mean(distorted_results$topolow_errors[distorted_results$valid_topolow_results]), 2), 
+      "±", round(sd(distorted_results$topolow_errors[distorted_results$valid_topolow_results]), 2), "\n")
+}
+if(!is.na(distorted_results$classical_mds_error)) {
+  cat("- Classical MDS error:", round(distorted_results$classical_mds_error, 2), "\n")
+}
+if(sum(distorted_results$valid_iterative_results) > 0) {
+  cat("- Iterative MDS mean error:", round(mean(distorted_results$iterative_mds_errors[distorted_results$valid_iterative_results]), 2), 
+      "±", round(sd(distorted_results$iterative_mds_errors[distorted_results$valid_iterative_results]), 2), "\n")
+}
+```
 
 ```
 #> === Synthesized non-Euclidean DATA ANALYSIS SUMMARY ===
@@ -575,18 +726,121 @@ distorted_results <- run_comprehensive_analysis(
 
 ## Eigenvalue Spectrum Analysis - Synthesized non-Euclidean
 
-![plot of chunk distorted_eigenvalues](https://github.com/omid-arhami/topolow/blob/main/vignettes/figure/distorted_eigenvalues-1.png)
+```{r distorted_eigenvalues, eval=FALSE, echo=FALSE}
+# Create eigenvalue visualization for distorted data
+D_squared <- distorted_results$complete_distances^2
+n <- nrow(D_squared)
+J <- diag(n) - (1/n) * matrix(1, n, n)
+B <- -0.5 * J %*% D_squared %*% J
+eigenvals <- eigen(B, symmetric = TRUE)$values
+
+eigenval_df <- data.frame(
+  index = 1:length(eigenvals),
+  eigenvalue = eigenvals,
+  type = ifelse(eigenvals > 1e-12, "Positive",
+               ifelse(eigenvals < -1e-12, "Negative", "Zero"))
+)
+
+p_eigen_distorted <- ggplot(eigenval_df, aes(x = index, y = eigenvalue, fill = type)) +
+  geom_bar(stat = "identity", alpha = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 1, color = "black") +
+  scale_fill_manual(values = c("Positive" = "steelblue", "Negative" = "red", "Zero" = "gray")) +
+  labs(
+    title = "Eigenvalue Spectrum: Synthesized non-Euclidean Data",
+    subtitle = paste("Deviation Score:", round(distorted_results$data_characteristics$deviation_score, 4), 
+                     "| Non-Euclidean Variance:", round(distorted_results$data_characteristics$negative_variance_fraction * 100, 1), "%"),
+    x = "Eigenvalue Index (sorted descending)", 
+    y = "Eigenvalue",
+    fill = "Eigenvalue Type"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(size = 12, face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+print(p_eigen_distorted)
+```
+
+```{r distorted_eigenvalues-1, echo=FALSE, out.width="100%"}
+# Include pre-generated figure from man/figures
+knitr::include_graphics("../man/figures/distorted_eigenvalues-1.png")
+```
 
 ## Performance Comparison - Synthesized non-Euclidean
 
-![plot of chunk distorted_performance](https://github.com/omid-arhami/topolow/blob/main/vignettes/figure/distorted_performance-1.png)
+```{r distorted_performance, eval=FALSE, echo=FALSE}
+# Create performance comparison for distorted data
+results_df_distorted <- data.frame()
+
+if(sum(distorted_results$valid_topolow_results) > 0) {
+  topolow_df <- data.frame(
+    Run = which(distorted_results$valid_topolow_results),
+    Method = "Topolow",
+    Total_Error = distorted_results$topolow_errors[distorted_results$valid_topolow_results],
+    Method_Type = "Stochastic",
+    Dataset = "Synthesized non-Euclidean"
+  )
+  results_df_distorted <- rbind(results_df_distorted, topolow_df)
+}
+
+if(!is.na(distorted_results$classical_mds_error)) {
+  classical_df <- data.frame(
+    Run = 1,
+    Method = "Classical MDS",
+    Total_Error = distorted_results$classical_mds_error,
+    Method_Type = "Deterministic",
+    Dataset = "Synthesized non-Euclidean"
+  )
+  results_df_distorted <- rbind(results_df_distorted, classical_df)
+}
+
+if(sum(distorted_results$valid_iterative_results) > 0) {
+  iterative_df <- data.frame(
+    Run = which(distorted_results$valid_iterative_results),
+    Method = "Iterative MDS",
+    Total_Error = distorted_results$iterative_mds_errors[distorted_results$valid_iterative_results],
+    Method_Type = "Stochastic",
+    Dataset = "Synthesized non-Euclidean"
+  )
+  results_df_distorted <- rbind(results_df_distorted, iterative_df)
+}
+
+if(nrow(results_df_distorted) > 0) {
+  p_performance_distorted <- ggplot(results_df_distorted, aes(x = Method, y = Total_Error, fill = Method_Type)) +
+    geom_boxplot(alpha = 0.7, outlier.shape = NA) +
+    geom_jitter(width = 0.2, alpha = 0.7, size = 2.5) +
+    scale_fill_manual(values = c("Stochastic" = "steelblue", "Deterministic" = "darkorange")) +
+    labs(
+      title = "Embedding Performance: Synthesized non-Euclidean Data",
+      subtitle = paste("Non-Euclidean Score:", round(distorted_results$data_characteristics$deviation_score, 4), 
+                       "| Missing Data:", round(distorted_results$data_characteristics$missing_percentage, 1), "%"),
+      y = "Sum of Absolute Distance Errors (L1 Norm)",
+      x = "Method",
+      fill = "Method Type"
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 12, face = "bold"),
+      panel.grid.minor = element_blank(),
+      legend.position = "bottom"
+    )
+  
+  print(p_performance_distorted)
+}
+```
+
+```{r distorted_performance-1, echo=FALSE, out.width="100%"}
+# Include pre-generated figure from man/figures
+knitr::include_graphics("../man/figures/distorted_performance-1.png")
+```
 
 # Results: Swiss Roll Manifold Data
 
 Next, we analyze the Swiss Roll manifold dataset, which represents geodesic distances that are inherently non-Euclidean in the embedding space.
 
-
-``` r
+```{r swiss_analysis, eval=FALSE, results='hide', fig.show='hold'}
 # Run analysis for Swiss Roll data
 swiss_results <- run_comprehensive_analysis(
   generate_swiss_roll_data, 
@@ -596,6 +850,28 @@ swiss_results <- run_comprehensive_analysis(
 )
 ```
 
+```{r swiss_summary, eval=FALSE, echo=FALSE}
+cat("=== SWISS ROLL MANIFOLD DATA ANALYSIS SUMMARY ===\n")
+cat("Dataset characteristics:\n")
+cat("- Objects:", swiss_results$data_characteristics$n_objects, "\n")
+cat("- Missing data:", round(swiss_results$data_characteristics$missing_percentage, 1), "%\n")
+cat("- Non-Euclidean deviation score:", round(swiss_results$data_characteristics$deviation_score, 4), "\n")
+cat("- Dimensions for 90% variance:", swiss_results$data_characteristics$dims_90_percent, "\n")
+cat("- Target embedding dimensions:", swiss_results$target_dims, "\n\n")
+
+cat("Performance Summary:\n")
+if(sum(swiss_results$valid_topolow_results) > 0) {
+  cat("- Topolow mean error:", round(mean(swiss_results$topolow_errors[swiss_results$valid_topolow_results]), 2), 
+      "±", round(sd(swiss_results$topolow_errors[swiss_results$valid_topolow_results]), 2), "\n")
+}
+if(!is.na(swiss_results$classical_mds_error)) {
+  cat("- Classical MDS error:", round(swiss_results$classical_mds_error, 2), "\n")
+}
+if(sum(swiss_results$valid_iterative_results) > 0) {
+  cat("- Iterative MDS mean error:", round(mean(swiss_results$iterative_mds_errors[swiss_results$valid_iterative_results]), 2), 
+      "±", round(sd(swiss_results$iterative_mds_errors[swiss_results$valid_iterative_results]), 2), "\n")
+}
+```
 
 ```
 #> === SWISS ROLL MANIFOLD DATA ANALYSIS SUMMARY ===
@@ -613,17 +889,172 @@ swiss_results <- run_comprehensive_analysis(
 
 ## Eigenvalue Spectrum Analysis - Swiss Roll
 
-![plot of chunk swiss_eigenvalues](https://github.com/omid-arhami/topolow/blob/main/vignettes/figure/swiss_eigenvalues-1.png)
+```{r swiss_eigenvalues, eval=FALSE, echo=FALSE}
+# Create eigenvalue visualization for Swiss Roll data
+D_squared <- swiss_results$complete_distances^2
+n <- nrow(D_squared)
+J <- diag(n) - (1/n) * matrix(1, n, n)
+B <- -0.5 * J %*% D_squared %*% J
+eigenvals <- eigen(B, symmetric = TRUE)$values
+
+eigenval_df <- data.frame(
+  index = 1:length(eigenvals),
+  eigenvalue = eigenvals,
+  type = ifelse(eigenvals > 1e-12, "Positive",
+               ifelse(eigenvals < -1e-12, "Negative", "Zero"))
+)
+
+p_eigen_swiss <- ggplot(eigenval_df, aes(x = index, y = eigenvalue, fill = type)) +
+  geom_bar(stat = "identity", alpha = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 1, color = "black") +
+  scale_fill_manual(values = c("Positive" = "steelblue", "Negative" = "red", "Zero" = "gray")) +
+  labs(
+    title = "Eigenvalue Spectrum: Swiss Roll Manifold Data",
+    subtitle = paste("Deviation Score:", round(swiss_results$data_characteristics$deviation_score, 4), 
+                     "| Non-Euclidean Variance:", round(swiss_results$data_characteristics$negative_variance_fraction * 100, 1), "%"),
+    x = "Eigenvalue Index (sorted descending)", 
+    y = "Eigenvalue",
+    fill = "Eigenvalue Type"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(size = 12, face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+print(p_eigen_swiss)
+```
+
+```{r swiss_eigenvalues-1, echo=FALSE, out.width="100%"}
+# Include pre-generated figure from man/figures
+knitr::include_graphics("../man/figures/swiss_eigenvalues-1.png")
+```
 
 ## Performance Comparison - Swiss Roll
 
-![plot of chunk swiss_performance](https://github.com/omid-arhami/topolow/blob/main/vignettes/figure/swiss_performance-1.png)
+```{r swiss_performance, eval=FALSE, echo=FALSE}
+# Create performance comparison for Swiss Roll data
+results_df_swiss <- data.frame()
+
+if(sum(swiss_results$valid_topolow_results) > 0) {
+  topolow_df <- data.frame(
+    Run = which(swiss_results$valid_topolow_results),
+    Method = "Topolow",
+    Total_Error = swiss_results$topolow_errors[swiss_results$valid_topolow_results],
+    Method_Type = "Stochastic",
+    Dataset = "Swiss Roll"
+  )
+  results_df_swiss <- rbind(results_df_swiss, topolow_df)
+}
+
+if(!is.na(swiss_results$classical_mds_error)) {
+  classical_df <- data.frame(
+    Run = 1,
+    Method = "Classical MDS",
+    Total_Error = swiss_results$classical_mds_error,
+    Method_Type = "Deterministic",
+    Dataset = "Swiss Roll"
+  )
+  results_df_swiss <- rbind(results_df_swiss, classical_df)
+}
+
+if(sum(swiss_results$valid_iterative_results) > 0) {
+  iterative_df <- data.frame(
+    Run = which(swiss_results$valid_iterative_results),
+    Method = "Iterative MDS",
+    Total_Error = swiss_results$iterative_mds_errors[swiss_results$valid_iterative_results],
+    Method_Type = "Stochastic",
+    Dataset = "Swiss Roll"
+  )
+  results_df_swiss <- rbind(results_df_swiss, iterative_df)
+}
+
+if(nrow(results_df_swiss) > 0) {
+  p_performance_swiss <- ggplot(results_df_swiss, aes(x = Method, y = Total_Error, fill = Method_Type)) +
+    geom_boxplot(alpha = 0.7, outlier.shape = NA) +
+    geom_jitter(width = 0.2, alpha = 0.7, size = 2.5) +
+    scale_fill_manual(values = c("Stochastic" = "steelblue", "Deterministic" = "darkorange")) +
+    labs(
+      title = "Embedding Performance: Swiss Roll Manifold Data",
+      subtitle = paste("Non-Euclidean Score:", round(swiss_results$data_characteristics$deviation_score, 4), 
+                       "| Missing Data:", round(swiss_results$data_characteristics$missing_percentage, 1), "%"),
+      y = "Sum of Absolute Distance Errors (L1 Norm)",
+      x = "Method",
+      fill = "Method Type"
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 12, face = "bold"),
+      panel.grid.minor = element_blank(),
+      legend.position = "bottom"
+    )
+  
+  print(p_performance_swiss)
+}
+```
+
+```{r swiss_performance-1, echo=FALSE, out.width="100%"}
+# Include pre-generated figure from man/figures
+knitr::include_graphics("../man/figures/swiss_performance-1.png")
+```
 
 # Comparative Analysis Across Dataset Types
 
 ## Combined Performance Analysis
 
-![plot of chunk combined_analysis](https://github.com/omid-arhami/topolow/blob/main/vignettes/figure/combined_analysis-1.png)
+```{r combined_analysis, eval=FALSE, echo=FALSE}
+# Combine results from both datasets
+combined_results <- rbind(
+  if(nrow(results_df_distorted) > 0) results_df_distorted else data.frame(),
+  if(nrow(results_df_swiss) > 0) results_df_swiss else data.frame()
+)
+
+if(nrow(combined_results) > 0) {
+  # Overall performance comparison
+  p_combined_performance <- ggplot(combined_results, aes(x = Method, y = Total_Error)) +
+    geom_boxplot(alpha = 0.7, fill = "lightblue") +
+    geom_point(position = position_jitter(width = 0.2), 
+               size = 2, alpha = 0.8, color = "darkblue") +
+    facet_wrap(~ Dataset, scales = "free_y") +
+    labs(
+      title = "Comparative Performance Across Dataset Types",
+      subtitle = "Error comparison for three methods on Synthesized non-Euclidean and Swiss Roll manifold data",
+      y = "Sum of Absolute Distance Errors (L1 Norm)",
+      x = "Method"
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 12, face = "bold"),
+      panel.grid.minor = element_blank(),
+      strip.text = element_text(face = "bold", size = 10),
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+  
+  print(p_combined_performance)
+  
+  # Summary statistics by method and dataset
+  summary_stats <- combined_results %>%
+    group_by(Method, Dataset, Method_Type) %>%
+    summarise(
+      Count = n(),
+      Mean_Error = mean(Total_Error),
+      SD_Error = sd(Total_Error),
+      Min_Error = min(Total_Error),
+      Max_Error = max(Total_Error),
+      .groups = 'drop'
+    )
+  
+  cat("\n=== COMBINED PERFORMANCE SUMMARY ===\n")
+  print(summary_stats)
+}
+```
+
+```{r combined_analysis-1, echo=FALSE, out.width="100%"}
+# Include pre-generated figure from man/figures
+knitr::include_graphics("../man/figures/combined_analysis-1.png")
+```
+
 
 ```
 #> 
@@ -641,6 +1072,31 @@ swiss_results <- run_comprehensive_analysis(
 
 ## Statistical Comparisons
 
+```{r statistical_analysis, eval=FALSE, echo=FALSE}
+cat("\n=== STATISTICAL ANALYSIS ===\n")
+
+# Statistical comparisons for Synthesized non-Euclidean data
+if(sum(distorted_results$valid_topolow_results) > 0 && 
+   sum(distorted_results$valid_iterative_results) > 0) {
+  cat("\nSynthesized non-Euclidean Data:\n")
+  enhanced_statistical_comparison(
+    distorted_results$topolow_errors[distorted_results$valid_topolow_results],
+    distorted_results$iterative_mds_errors[distorted_results$valid_iterative_results],
+    "Iterative MDS"
+  )
+}
+
+# Statistical comparisons for Swiss Roll data
+if(sum(swiss_results$valid_topolow_results) > 0 && 
+   sum(swiss_results$valid_iterative_results) > 0) {
+  cat("\nSwiss Roll Manifold Data:\n")
+  enhanced_statistical_comparison(
+    swiss_results$topolow_errors[swiss_results$valid_topolow_results],
+    swiss_results$iterative_mds_errors[swiss_results$valid_iterative_results],
+    "Iterative MDS"
+  )
+}
+```
 
 ```
 #> 
@@ -697,13 +1153,111 @@ swiss_results <- run_comprehensive_analysis(
 
 ## Distance Preservation Analysis
 
+```{r distance_preservation, eval=FALSE, echo=FALSE}
+# Distance preservation analysis for both datasets
+analyze_distance_preservation <- function(results, dataset_name) {
+  cat("\n=== DISTANCE PRESERVATION:", toupper(dataset_name), "===\n")
+  
+  # Get best performing runs
+  best_methods <- list()
+  
+  if(sum(results$valid_topolow_results) > 0) {
+    best_topolow_idx <- which.min(results$topolow_errors[results$valid_topolow_results])
+    actual_topolow_idx <- which(results$valid_topolow_results)[best_topolow_idx]
+    best_methods$topolow <- results$topolow_results[[actual_topolow_idx]]
+  }
+  
+  if(!is.na(results$classical_mds_error)) {
+    best_methods$classical <- results$classical_mds_result
+  }
+  
+  if(sum(results$valid_iterative_results) > 0) {
+    best_iterative_idx <- which.min(results$iterative_mds_errors[results$valid_iterative_results])
+    actual_iterative_idx <- which(results$valid_iterative_results)[best_iterative_idx]
+    best_methods$iterative <- results$iterative_mds_results[[actual_iterative_idx]]
+  }
+  
+  if(length(best_methods) > 0) {
+    # Calculate correlations
+    upper_tri_mask <- upper.tri(results$complete_distances)
+    true_distances_vector <- results$complete_distances[upper_tri_mask]
+    
+    distance_comparison_list <- list()
+    preservation_stats <- data.frame()
+    
+    for(method_name in names(best_methods)) {
+      embedded_distances <- as.matrix(dist(best_methods[[method_name]]))
+      embedded_distances_vector <- embedded_distances[upper_tri_mask]
+      
+      correlation <- cor(true_distances_vector, embedded_distances_vector, use = "complete.obs")
+      rsq <- summary(lm(embedded_distances_vector ~ true_distances_vector))$r.squared
+      
+      method_display_name <- switch(method_name,
+                                   "topolow" = "Topolow",
+                                   "classical" = "Classical MDS", 
+                                   "iterative" = "Iterative MDS")
+      
+      preservation_stats <- rbind(preservation_stats, data.frame(
+        Method = method_display_name,
+        Dataset = dataset_name,
+        Correlation = correlation,
+        R_squared = rsq
+      ))
+      
+      distance_comparison_list[[method_name]] <- data.frame(
+        True_Distance = true_distances_vector,
+        Embedded_Distance = embedded_distances_vector,
+        Method = method_display_name,
+        Dataset = dataset_name
+      )
+    }
+    
+    distance_comparison_df <- do.call(rbind, distance_comparison_list)
+    
+    # Create distance preservation plot
+    p_distance_preservation <- ggplot(distance_comparison_df, 
+                                     aes(x = True_Distance, y = Embedded_Distance, color = Method)) +
+      geom_point(alpha = 0.6, size = 1.5) +
+      geom_smooth(method = "lm", se = FALSE, linewidth = 1) +
+      geom_abline(intercept = 0, slope = 1, color = "black", linetype = "dashed", alpha = 0.7) +
+      facet_wrap(~Method, scales = "free_x") +
+      coord_cartesian(ylim = c(0, NA)) +
+      labs(
+        title = paste("Distance Preservation:", dataset_name),
+        x = "Original Non-Euclidean Distance",
+        y = "Embedded Euclidean Distance"
+      ) +
+      theme_minimal() +
+      theme(
+        plot.title = element_text(size = 12, face = "bold"),
+        legend.position = "none",
+        panel.grid.minor = element_blank()
+      )
+      
+    print(p_distance_preservation)
+    
+    cat("\nDistance Preservation Statistics:\n")
+    print(preservation_stats)
+    
+    return(preservation_stats)
+  }
+}
+
+# Analyze both datasets
+distorted_preservation <- analyze_distance_preservation(distorted_results, "Synthesized non-Euclidean")
+swiss_preservation <- analyze_distance_preservation(swiss_results, "Swiss Roll")
+```
 
 ```
 #> 
 #> === DISTANCE PRESERVATION: SYNTHESIZED NON-EUCLIDEAN ===
 ```
 
-![plot of chunk distance_preservation](https://github.com/omid-arhami/topolow/blob/main/vignettes/figure/distance_preservation-1.png)
+```{r distance_preservation-1, echo=FALSE, out.width="100%"}
+# Include pre-generated figure from man/figures
+knitr::include_graphics("../man/figures/distance_preservation-1.png")
+```
+
 
 ```
 #> 
@@ -716,7 +1270,10 @@ swiss_results <- run_comprehensive_analysis(
 #> === DISTANCE PRESERVATION: SWISS ROLL ===
 ```
 
-![plot of chunk distance_preservation](https://github.com/omid-arhami/topolow/blob/main/vignettes/figure/distance_preservation-2.png)
+```{r distance_preservation-2, echo=FALSE, out.width="100%"}
+# Include pre-generated figure from man/figures
+knitr::include_graphics("../man/figures/distance_preservation-2.png")
+```
 
 ```
 #> 
@@ -737,8 +1294,8 @@ Our comprehensive analysis reveals several important insights about the performa
 
 The eigenvalue spectrum analysis provides crucial context for interpreting method performance:
 
-- **Synthesized non-Euclidean Data**: Shows deviation score of 0.6034, indicating moderate non-Euclidean structure
-- **Swiss Roll Data**: Shows deviation score of 0.2945, reflecting the manifold's inherent geometric properties
+- **Synthesized non-Euclidean Data**: Shows deviation score of [run round(distorted_results$data_characteristics$deviation_score, 4) to see], indicating moderate non-Euclidean structure
+- **Swiss Roll Data**: Shows deviation score of [run round(swiss_results$data_characteristics$deviation_score, 4) to see]`, reflecting the manifold's inherent geometric properties
 
 ### 2. Method Performance Characteristics
 
@@ -752,6 +1309,24 @@ The eigenvalue spectrum analysis provides crucial context for interpreting metho
 
 The correlation analysis reveals how well each method preserves the original distance relationships. However, correlation is not a sufficient measure of accuracy and needs to be interpreted joint with measures of error such as MAE.
 
+```{r preservation_summary, eval=FALSE, echo=FALSE}
+if(exists("distorted_preservation") && exists("swiss_preservation")) {
+  combined_preservation <- rbind(distorted_preservation, swiss_preservation)
+  
+  cat("Distance Preservation Summary (Correlation with Original Distances):\n")
+  print(combined_preservation)
+  
+  # Calculate mean correlations by method
+  mean_correlations <- combined_preservation %>%
+    group_by(Method) %>%
+    summarise(Mean_Correlation = mean(Correlation, na.rm = TRUE),
+              Mean_R_squared = mean(R_squared, na.rm = TRUE),
+              .groups = 'drop')
+  
+  cat("\nMean Performance Across Dataset Types:\n")
+  print(mean_correlations)
+}
+```
 
 ```
 #> Distance Preservation Summary (Correlation with Original Distances):
@@ -771,7 +1346,6 @@ The correlation analysis reveals how well each method preserves the original dis
 #> 2 Iterative MDS            0.855          0.734
 #> 3 Topolow                  0.936          0.879
 ```
-
 ## Methodological Implications
 
 ### For Sparse Data
@@ -835,6 +1409,9 @@ This analysis provides a rigorous foundation for understanding when and how to a
 
 # Session Information
 
+```{r session_info, echo=FALSE}
+sessionInfo()
+```
 
 ```
 #> R version 4.3.3 (2024-02-29)
