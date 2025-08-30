@@ -575,11 +575,11 @@ distorted_results <- run_comprehensive_analysis(
 
 ## Eigenvalue Spectrum Analysis - Synthesized non-Euclidean
 
-![plot of chunk distorted_eigenvalues](figure/distorted_eigenvalues-1.png)
+![plot of chunk distorted_eigenvalues](https://github.com/omid-arhami/topolow/blob/main/vignettes/figure/distorted_eigenvalues-1.png)
 
 ## Performance Comparison - Synthesized non-Euclidean
 
-![plot of chunk distorted_performance](figure/distorted_performance-1.png)
+![plot of chunk distorted_performance](https://github.com/omid-arhami/topolow/blob/main/vignettes/figure/distorted_performance-1.png)
 
 # Results: Swiss Roll Manifold Data
 
@@ -613,17 +613,17 @@ swiss_results <- run_comprehensive_analysis(
 
 ## Eigenvalue Spectrum Analysis - Swiss Roll
 
-![plot of chunk swiss_eigenvalues](figure/swiss_eigenvalues-1.png)
+![plot of chunk swiss_eigenvalues](https://github.com/omid-arhami/topolow/blob/main/vignettes/figure/swiss_eigenvalues-1.png)
 
 ## Performance Comparison - Swiss Roll
 
-![plot of chunk swiss_performance](figure/swiss_performance-1.png)
+![plot of chunk swiss_performance](https://github.com/omid-arhami/topolow/blob/main/vignettes/figure/swiss_performance-1.png)
 
 # Comparative Analysis Across Dataset Types
 
 ## Combined Performance Analysis
 
-![plot of chunk combined_analysis](figure/combined_analysis-1.png)
+![plot of chunk combined_analysis](https://github.com/omid-arhami/topolow/blob/main/vignettes/figure/combined_analysis-1.png)
 
 ```
 #> 
@@ -703,7 +703,7 @@ swiss_results <- run_comprehensive_analysis(
 #> === DISTANCE PRESERVATION: SYNTHESIZED NON-EUCLIDEAN ===
 ```
 
-![plot of chunk distance_preservation](figure/distance_preservation-1.png)
+![plot of chunk distance_preservation](https://github.com/omid-arhami/topolow/blob/main/vignettes/figure/distance_preservation-1.png)
 
 ```
 #> 
@@ -716,7 +716,7 @@ swiss_results <- run_comprehensive_analysis(
 #> === DISTANCE PRESERVATION: SWISS ROLL ===
 ```
 
-![plot of chunk distance_preservation](figure/distance_preservation-2.png)
+![plot of chunk distance_preservation](https://github.com/omid-arhami/topolow/blob/main/vignettes/figure/distance_preservation-2.png)
 
 ```
 #> 
