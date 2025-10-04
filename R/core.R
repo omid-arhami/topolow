@@ -731,7 +731,7 @@ summary.topolow <- function(object, ...) {
 #' @description
 #' A user-friendly wrapper function that automatically optimizes parameters and 
 #' performs Euclidean embedding on a dissimilarity matrix. This function handles
-#' the entire workflow from parameter optimization to final embedding.
+#' the entire workflow from parameter optimization to final embedding,  with comprehensive diagnostic tracking and visualization.
 #'
 #' @param dissimilarity_matrix Square symmetric dissimilarity matrix. Can contain
 #'        NA values for missing measurements and threshold indicators (< or >).
@@ -748,18 +748,29 @@ summary.topolow <- function(object, ...) {
 #' @param n_initial_samples Integer. Number of samples for initial parameter 
 #'        optimization. Default: 100
 #' @param n_adaptive_samples Integer. Number of samples for adaptive refinement.
-#'        Default: 250  
+#'        Default: 150
 #' @param max_cores Integer. Maximum number of cores to use. Default: NULL (auto-detect)
 #' @param folds Integer. Number of cross-validation folds. Default: 20
 #' @param mapping_max_iter Integer. Maximum iterations for final embedding. 
-#'        Half this value is used for parameter search. Default: 1000
+#'        Half this value is used for parameter search. Default: 500
+#' @param opt_subsample Integer or NULL. If specified, uses subsampling during parameter
+#'   optimization (both initial and adaptive) to reduce computational cost. Randomly
+#'   samples this many points for each parameter evaluation. Final embedding always
+#'   uses the full dataset. Default: NULL (no subsampling).
+#'   Recommended for large datasets (>300 points). See \code{\link{initial_parameter_optimization}}
+#'   for details.
 #' @param clean_intermediate Logical. Whether to remove intermediate files. Default: TRUE
 #' @param verbose Character. Verbosity level: "off" (no output), "standard" (progress updates),
 #'        or "full" (detailed output including from internal functions). Default: "standard"
 #' @param fallback_to_defaults Logical. Whether to use default parameters if 
-#'        optimization fails. Default: TRUE
+#'        optimization fails. Default: FALSE
 #' @param save_results Logical. Whether to save the final positions as CSV. Default: FALSE
-#'
+#' @param create_diagnostic_plots Logical. Whether to create diagnostic and trace plots
+#'        showing the parameter optimization process and embedding quality. Default: FALSE
+#' @param diagnostic_plot_types Character vector. Which plot types to create.
+#'        Options: "all", "parameter_search", "convergence", "quality", "cv_errors".
+#'        Default: "all"
+#' 
 #' @return A list containing:
 #'   \item{positions}{Matrix of optimized coordinates}
 #'   \item{est_distances}{Matrix of estimated distances}
@@ -768,6 +779,9 @@ summary.topolow <- function(object, ...) {
 #'   \item{optimization_summary}{Summary of the optimization process}
 #'   \item{data_characteristics}{Summary of input data characteristics}
 #'   \item{runtime}{Total runtime in seconds}
+#'   \item{all_samples}{Data frame of all parameter evaluations (if create_diagnostic_plots=TRUE)}
+#'   \item{diagnostic_plots}{List of ggplot objects (if create_diagnostic_plots=TRUE)}
+#'   \item{dissimilarity_matrix}{Input dissimilarity matrix (if create_diagnostic_plots=TRUE)}
 #'
 #' @examples
 #' # Example 1: Basic usage with small matrix
@@ -841,6 +855,36 @@ summary.topolow <- function(object, ...) {
 #' )
 #' }
 #'
+#' # Example 6: Basic usage
+#' test_data <- data.frame(
+#'   object = rep(paste0("Obj", 1:4), each = 4),
+#'   reference = rep(paste0("Ref", 1:4), 4),
+#'   score = sample(c(1, 2, 4, 8, 16, 32, 64, "<1", ">12"), 16, replace = TRUE)
+#' )
+#' dist_mat <- list_to_matrix(
+#'   data = test_data,
+#'   object_col = "object",
+#'   reference_col = "reference",
+#'   value_col = "score",
+#'   is_similarity = TRUE
+#' )
+#' \dontrun{
+#' # Basic usage with diagnostics
+#' result <- Euclidify(
+#'   dissimilarity_matrix = dist_mat,
+#'   output_dir = tempdir(),
+#'   create_diagnostic_plots = TRUE
+#' )
+#' 
+#' # View diagnostic report
+#' report <- create_diagnostic_report(result)
+#' cat(report, sep = "\n")
+#' 
+#' # Access specific diagnostic plots
+#' print(result$diagnostic_plots$parameter_search)
+#' print(result$diagnostic_plots$convergence)
+#' }
+#' 
 #' @export
 Euclidify <- function(dissimilarity_matrix,
                       output_dir,
@@ -853,10 +897,13 @@ Euclidify <- function(dissimilarity_matrix,
                       max_cores = NULL,
                       folds = 20,
                       mapping_max_iter = 500,
+                      opt_subsample = NULL,
                       clean_intermediate = TRUE,
                       verbose = "standard",
                       fallback_to_defaults = FALSE,
-                      save_results = FALSE) {
+                      save_results = FALSE,
+                      create_diagnostic_plots = FALSE,
+                      diagnostic_plot_types = "all") {
   
   # Start timing
   start_time <- Sys.time()
@@ -933,7 +980,7 @@ Euclidify <- function(dissimilarity_matrix,
   
   # Calculate non-Euclidean character
   n <- nrow(dissimilarity_matrix)
-  # Convert to numeric matrix properly (fixing the bug)
+  # Convert to numeric matrix for eigen decomposition
   dissim_numeric <- matrix(suppressWarnings(as.numeric(as.vector(dissimilarity_matrix))), 
                            nrow = n, ncol = n)
   dissim_numeric[is.na(dissim_numeric)] <- median(dissim_numeric, na.rm = TRUE)
@@ -952,7 +999,7 @@ Euclidify <- function(dissimilarity_matrix,
     deviation_score <- 1.0
   }
   
-  # Determine optimal dimensions based on eigenvalues
+  # Suggest optimal dimensions based on eigenvalues
   cumulative_variance <- cumsum(positive_eigenvals) / sum(positive_eigenvals)
   dims_90_percent <- which(cumulative_variance >= 0.90)[1]
   if (is.na(dims_90_percent)) dims_90_percent <- length(positive_eigenvals)
@@ -1004,6 +1051,7 @@ Euclidify <- function(dissimilarity_matrix,
       num_samples = n_initial_samples,
       max_cores = max_cores,
       folds = folds,
+      opt_subsample = opt_subsample,
       verbose = verbose_internal,
       write_files = TRUE,
       output_dir = optimization_dir
@@ -1024,7 +1072,7 @@ Euclidify <- function(dissimilarity_matrix,
       
       if (file.exists(samples_file)) {
         if (verbose_main) cat("\nStep 3: Adaptive parameter refinement...\n")
-
+        
         tryCatch({
           run_adaptive_sampling(
             initial_samples_file = samples_file,
@@ -1043,11 +1091,11 @@ Euclidify <- function(dissimilarity_matrix,
           if (verbose_main) cat("  Continuing with initial optimization results\n")
           optimization_summary$adaptive_error <- e$message
         })
-
+        
         # Step 4: Extract optimal parameters (improved handling)
         final_params_file <- file.path(optimization_dir, "model_parameters",
-                                        "auto_optimization_model_parameters.csv")
-
+                                       "auto_optimization_model_parameters.csv")
+        
         if (file.exists(final_params_file)) {
           final_params <- tryCatch({
             results <- read.csv(final_params_file, stringsAsFactors = FALSE)
@@ -1055,7 +1103,7 @@ Euclidify <- function(dissimilarity_matrix,
             # More robust cleaning
             results <- results %>%
               filter(!is.na(.data$NLL) & !is.na(.data$Holdout_MAE) & 
-                      is.finite(.data$NLL) & is.finite(.data$Holdout_MAE)) %>%
+                       is.finite(.data$NLL) & is.finite(.data$Holdout_MAE)) %>%
               na.omit()
             
             if (nrow(results) > 5) {  # Only apply outlier cleaning if we have enough data
@@ -1101,7 +1149,7 @@ Euclidify <- function(dissimilarity_matrix,
                 cat("    - Cross-validation MAE:", round(optimal_params$CV_MAE, 4), "\n")
                 cat("  We recommend saving these parameters to set better ranges and \n")
                 cat("  reduced iterations in future runs. It saves time.\n")
-
+                
                 # Issue warning if parameters are too close (0.05 of the corresponding range) to their range limits 
                 if (abs(optimal_params$ndim - ndim_range[1]) < 0.05 * (ndim_range[2] - ndim_range[1]) ||
                     abs(optimal_params$k0 - k0_range[1]) < 0.05 * (k0_range[2] - k0_range[1]) ||
@@ -1135,8 +1183,8 @@ Euclidify <- function(dissimilarity_matrix,
       # Initial results are now in log scale, so we need to extract them properly
       valid_results <- initial_results %>%
         filter(!is.na(.data$Holdout_MAE) & !is.na(.data$log_N) & !is.na(.data$log_k0) & 
-              !is.na(.data$log_cooling_rate) & !is.na(.data$log_c_repulsion) &
-              is.finite(.data$Holdout_MAE))
+                 !is.na(.data$log_cooling_rate) & !is.na(.data$log_c_repulsion) &
+                 is.finite(.data$Holdout_MAE))
       
       if (nrow(valid_results) > 0) {
         best_idx <- which.min(valid_results[["Holdout_MAE"]])
@@ -1151,7 +1199,7 @@ Euclidify <- function(dissimilarity_matrix,
       }
     }
   }
-
+  
   # Warn if no optimal parameters found and stop the operation
   if (is.null(optimal_params) && !fallback_to_defaults) {
     if (verbose_main) {
@@ -1230,12 +1278,7 @@ Euclidify <- function(dissimilarity_matrix,
     cat("  Iterations:", embedding_result$iter, "\n")
     cat("  Convergence achieved:", embedding_result$convergence$achieved, "\n")
   }
-  
-  # Clean up intermediate files
-  if (clean_intermediate) {
-    unlink(optimization_dir, recursive = TRUE)
-    if (verbose_main) cat("\nCleaned up intermediate files\n")
-  }
+
   
   # Prepare final results (without redundant embedding_result)
   results <- list(
@@ -1265,6 +1308,69 @@ Euclidify <- function(dissimilarity_matrix,
     cat("Total runtime:", round(as.numeric(results$runtime), 1), "seconds\n")
     cat("Final embedding dimensions:", optimal_params$ndim, "\n")
     cat("Final MAE:", round(embedding_result$mae, 4), "\n")
+  }
+  
+  # Create diagnostic plots if requested
+  if (create_diagnostic_plots) {
+    if (verbose_main) cat("\nGenerating diagnostic plots...\n")
+    
+    # Read the parameter samples that were already saved
+    samples_file <- file.path(optimization_dir, "model_parameters", 
+                              "auto_optimization_model_parameters.csv")
+    
+    if (!file.exists(samples_file)) {
+      if (verbose_main) {
+        cat("  ERROR: Parameter samples file not found at:", samples_file, "\n")
+        cat("  Checking directory contents:\n")
+        param_dir <- file.path(optimization_dir, "model_parameters")
+        if (dir.exists(param_dir)) {
+          cat("  Files in", param_dir, ":\n")
+          print(list.files(param_dir))
+        } else {
+          cat("  Directory doesn't exist:", param_dir, "\n")
+        }
+      }
+    } else {
+      all_samples <- read.csv(samples_file, stringsAsFactors = FALSE)
+      
+      # Create diagnostic plots directory
+      diag_dir <- file.path(output_dir, "diagnostics")
+      dir.create(diag_dir, recursive = TRUE, showWarnings = FALSE)
+      
+      # Prepare data for diagnostic plots
+      results$all_samples <- all_samples  # Store for later use
+      results$dissimilarity_matrix <- dissimilarity_matrix  # Needed for quality plots
+      
+      # Call diagnostic plotting function
+      tryCatch({
+        results$diagnostic_plots <- plot_euclidify_diagnostics(
+          euclidify_result = results,
+          plot_types = diagnostic_plot_types,
+          save_plots = TRUE,
+          output_dir = diag_dir,
+          return_plots = TRUE
+        )
+        
+        # Also create text report
+        report_file <- file.path(diag_dir, "diagnostic_report.txt")
+        create_diagnostic_report(results, output_file = report_file)
+        
+        if (verbose_main) {
+          cat("  Diagnostic plots saved to:", diag_dir, "\n")
+          cat("  Diagnostic report saved to:", report_file, "\n")
+        }
+      }, error = function(e) {
+        if (verbose_main) {
+          cat("  Warning: Could not create diagnostic plots:", e$message, "\n")
+        }
+      })
+    }
+  }
+  
+  # Clean up intermediate files
+  if (clean_intermediate) {
+    unlink(optimization_dir, recursive = TRUE)
+    if (verbose_main) cat("\nCleaned up intermediate files\n")
   }
   
   return(results)

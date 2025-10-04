@@ -13,6 +13,7 @@ adaptive_MC_sampling(
   folds = 20,
   num_cores = 1,
   scenario_name,
+  opt_subsample = NULL,
   verbose = FALSE
 )
 }
@@ -29,11 +30,15 @@ adaptive_MC_sampling(
 
 \item{folds}{Number of cross-validation folds.}
 
-\item{num_cores}{Number of cores for parallel processing.}
+\item{num_cores}{Number of cores for parallel processing within this job.}
 
 \item{scenario_name}{Name for output files, used for context.}
 
-\item{verbose}{Logical. If TRUE, prints progress messages.}
+\item{opt_subsample}{Integer or NULL. If specified, subsamples the data for
+this adaptive sampling job. A single subsample is created at the start and
+reused for all iterations within this job for consistency. Default: NULL.}
+
+\item{verbose}{Logical. If TRUE, prints progress messages. Default: FALSE.}
 }
 \value{
 A \code{data.frame} containing all samples (initial and newly generated)
@@ -46,5 +51,28 @@ Core implementation of the adaptive Monte Carlo sampling algorithm. This interna
 function explores the parameter space by updating the sampling distribution
 based on evaluated likelihoods. It is called by the main \code{run_adaptive_sampling}
 function.
+}
+\details{
+The function performs these steps:
+\enumerate{
+\item Reads existing samples from the samples file
+\item If \code{opt_subsample} is specified, creates a single subsample for this job
+\item Calculates weighted marginal distributions for each parameter
+\item For each iteration:
+\itemize{
+\item Samples new parameter values from the marginal distributions
+\item Evaluates the parameter set via cross-validation
+\item Appends results to the samples file
+\item Updates the marginal distributions
+}
+}
+
+The adaptive aspect comes from using likelihood-weighted KDE on previous samples
+to concentrate new samples in high-likelihood regions.
+
+\strong{Subsampling behavior}: When \code{opt_subsample} is used, a single subsample
+is created at the start of this job and reused for all iterations. This ensures
+consistency within the job while still allowing different jobs (in
+\code{run_adaptive_sampling}) to explore different subsamples.
 }
 \keyword{internal}

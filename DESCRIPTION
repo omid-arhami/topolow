@@ -1,6 +1,6 @@
 Package: topolow
 Title: Force-Directed Euclidean Embedding of Dissimilarity Data
-Version: 2.0.1
+Version: 2.1.0
 Authors@R: 
     person("Omid", "Arhami", , "omid.arhami@uga.edu", role = c("aut", "cre", "cph"),
            comment = c(ORCID = "0009-0005-2681-6598"))
@@ -31,6 +31,7 @@ Imports:
     filelock,
     lhs,
     rlang,
+    gridExtra,
 Suggests:
     coda (>= 0.19-4),
     Rtsne,
@@ -43,7 +44,7 @@ Suggests:
     scales,
     ggrepel,
     plotly (>= 4.10.0),
-    gridExtra,
+    viridisLite,
     covr,
     knitr,
     rmarkdown,

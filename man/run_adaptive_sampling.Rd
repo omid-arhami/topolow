@@ -2,7 +2,7 @@
 % Please edit documentation in R/adaptive_sampling.R
 \name{run_adaptive_sampling}
 \alias{run_adaptive_sampling}
-\title{Performs adaptive Monte Carlo sampling}
+\title{Run Adaptive Monte Carlo Sampling for Parameter Refinement}
 \usage{
 run_adaptive_sampling(
   initial_samples_file,
@@ -10,43 +10,72 @@ run_adaptive_sampling(
   dissimilarity_matrix,
   max_cores = NULL,
   num_samples = 10,
-  mapping_max_iter = 1000,
+  mapping_max_iter = 500,
   relative_epsilon = 1e-04,
   folds = 20,
+  opt_subsample = NULL,
   output_dir,
   verbose = FALSE
 )
 }
 \arguments{
-\item{initial_samples_file}{Character. Path to a CSV file containing initial samples.}
+\item{initial_samples_file}{Character. Path to a CSV file containing initial samples
+(typically from \code{\link{initial_parameter_optimization}}).}
 
 \item{scenario_name}{Character. Name for the output files.}
 
 \item{dissimilarity_matrix}{Matrix. The input dissimilarity matrix.}
 
-\item{max_cores}{Integer. Number of cores to use for parallel execution. If NULL, uses all available cores minus 1.}
+\item{max_cores}{Integer. Number of cores to use for parallel execution. If NULL,
+uses all available cores minus 1.}
 
-\item{num_samples}{Integer. Number of new samples to generate via adaptive
-sampling.}
+\item{num_samples}{Integer. Number of new samples to generate via adaptive sampling
+per parallel job. Default: 10.}
 
 \item{mapping_max_iter}{Integer. Maximum number of map optimization iterations.}
 
-\item{relative_epsilon}{Numeric. Convergence threshold for relative change in error. Default is 1e-4.}
+\item{relative_epsilon}{Numeric. Convergence threshold for relative change in error.
+Default: 1e-4.}
 
-\item{folds}{Integer. Number of cross-validation folds.}
+\item{folds}{Integer. Number of cross-validation folds. Default: 20.}
+
+\item{opt_subsample}{Integer or NULL. If specified, randomly samples this many
+points from the dissimilarity matrix for each adaptive sampling iteration to
+reduce computational cost. The function automatically validates that subsampled
+data forms a connected graph. Default: NULL (use full data).
+
+\strong{Important Notes:}
+\itemize{
+\item If connectivity cannot be achieved, sample size is adaptively increased
+\item Each parallel job uses a different subsample
+\item Recommended: use same value as in \code{initial_parameter_optimization}
+\item The actual subsample size used is reported in output columns
+}}
 
 \item{output_dir}{Character. Required directory for output files.}
 
-\item{verbose}{Logical. Whether to print progress messages. Default is FALSE.}
+\item{verbose}{Logical. Whether to print progress messages. Default: FALSE.}
 }
 \value{
-No return value. Called for its side effect of writing results to a CSV file in \code{output_dir}.
+No return value. Called for its side effect of writing results to a CSV file
+in \code{output_dir}.
 }
 \description{
-Performs adaptive Monte Carlo sampling to explore and refine the parameter space,
-running locally in parallel. Samples are drawn adaptively based on previously
-evaluated likelihoods to focus sampling in high-likelihood regions. Results from all
-parallel jobs accumulate in a single output file.
+Refines parameter estimates using adaptive Monte Carlo sampling. This function
+uses initial parameter samples and iteratively generates new samples concentrated
+in high-likelihood regions of parameter space. Multiple parallel jobs explore
+different regions simultaneously. Results from all parallel jobs accumulate in a
+single output file.
+}
+\details{
+The function runs multiple parallel jobs, each performing adaptive sampling
+starting from the initial samples. The jobs are independent and can be run
+simultaneously. Results from all jobs are combined with the initial samples
+and written to a single output file.
+
+If \code{opt_subsample} is used, each parallel job will independently subsample
+the data, ensuring diversity in the parameter evaluations while maintaining
+computational efficiency.
 }
 \examples{
 \donttest{
@@ -61,11 +90,11 @@ initial_file <- system.file(
 # This function requires a writable directory for its results.
 temp_out_dir <- tempdir()
 
-# 3. Create a sample dissimilarity matrix for the function to use
-dissim_mat <- matrix(runif(100, 1, 10), 10, 10)
+# 3. Create a sample dissimilarity matrix
+dissim_mat <- matrix(runif(900, 1, 10), 30, 30)
 diag(dissim_mat) <- 0
 
-# 4. Run the adaptive sampling only if the example file is found
+# 4. Run adaptive sampling (full data)
 if (nzchar(initial_file)) {
   run_adaptive_sampling(
     initial_samples_file = initial_file,
@@ -76,13 +105,28 @@ if (nzchar(initial_file)) {
     num_samples = 1,
     verbose = FALSE
   )
-
-  # 5. Verify output files were created
-  print("Output files from adaptive sampling:")
-  print(list.files(temp_out_dir, recursive = TRUE))
-
-  # 6. Clean up the temporary directory
-  unlink(temp_out_dir, recursive = TRUE)
 }
+
+# 5. Run adaptive sampling with subsampling
+if (nzchar(initial_file)) {
+  run_adaptive_sampling(
+    initial_samples_file = initial_file,
+    scenario_name = "adaptive_test_subsample",
+    dissimilarity_matrix = dissim_mat,
+    output_dir = temp_out_dir,
+    max_cores = 1,
+    num_samples = 1,
+    opt_subsample = 15,  # Use only 8 points
+    verbose = TRUE
+  )
 }
+
+# Clean up
+unlink(temp_out_dir, recursive = TRUE)
+}
+
+}
+\seealso{
+\code{\link{adaptive_MC_sampling}} for the underlying sampling algorithm,
+\code{\link{initial_parameter_optimization}} for generating initial samples.
 }

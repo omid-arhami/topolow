@@ -307,19 +307,19 @@ test_that("Euclidify handles missing data correctly", {
 
 
 test_that("Euclidify handles threshold indicators correctly", {
-  test_mat <- create_test_dissimilarity_matrix(10, with_thresholds = TRUE)
+  test_mat <- create_test_dissimilarity_matrix(60, with_thresholds = TRUE)
   temp_dir <- tempfile()
   dir.create(temp_dir)
   
   result <- Euclidify(
     dissimilarity_matrix = test_mat,
     output_dir = temp_dir,
-    ndim_range = c(2, 6),
-    n_initial_samples = 10,
-    n_adaptive_samples = 12,
+    ndim_range = c(2, 4),
+    n_initial_samples = 15,
+    n_adaptive_samples = 15,
     max_cores = 1,
     folds = 5,
-    mapping_max_iter = 50,
+    mapping_max_iter = 5,
     verbose = "off",
     fallback_to_defaults = TRUE
   )

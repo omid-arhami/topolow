@@ -4,6 +4,7 @@
 #' Parameter Space Sampling and Optimization Functions for topolow
 #'
 
+
 #' Initial Parameter Optimization using Latin Hypercube Sampling
 #'
 #' @description
@@ -22,11 +23,20 @@
 #' @details
 #' The function performs these steps:
 #' 1. Generates LHS samples in the parameter space (original scale for sampling).
-#' 2. Creates k-fold splits of the input data.
-#' 3. For each parameter set, it trains the model on each fold's training set and evaluates
-#'    on the validation set, calculating a pooled MAE and NLL across all folds.
-#' 4. Computations are run locally in parallel.
-#' 5. **NEW**: Automatically log-transforms the final results for direct use with adaptive sampling.
+#' 2. If \code{opt_subsample} is specified, each parameter evaluation gets a different
+#'    random subsample for robustness testing.
+#' 3. For each parameter set, \code{likelihood_function} is called which internally
+#'    creates k-fold splits and evaluates via cross-validation.
+#' 4. Parameter evaluations are processed in batches for memory efficiency.
+#' 5. Computations are run in parallel within each batch.
+#' 6. Automatically log-transforms the final results for direct use with adaptive sampling.
+#'
+#' **Note on Cross-Validation with Subsampling:**
+#' When \code{opt_subsample} is used, each parameter evaluation receives a different
+#' random subsample. Since the underlying data differs between evaluations, each evaluation
+#' also gets its own CV fold structure (created internally by \code{likelihood_function}).
+#' This approach tests parameter robustness across different data samples and fold structures,
+#' which is appropriate for the exploration phase of parameter optimization.
 #'
 #' @param dissimilarity_matrix Matrix. Input dissimilarity matrix. Must be square and symmetric.
 #' @param mapping_max_iter Integer. Maximum number of optimization iterations for each map.
@@ -40,20 +50,35 @@
 #' @param num_samples Integer. Number of LHS samples to generate. Default: 20.
 #' @param max_cores Integer. Maximum number of cores for parallel processing. Default: NULL (uses all but one).
 #' @param folds Integer. Number of cross-validation folds. Default: 20.
+#' @param opt_subsample Integer or NULL. If specified, randomly samples this many
+#'   points from the dissimilarity matrix for each parameter evaluation to reduce
+#'   computational cost. The function automatically validates that subsampled data
+#'   forms a connected graph. Each parameter evaluation uses a different random
+#'   subsample for robustness. Default: NULL (use full data).
+#'
+#'   **Notes:**
+#'   \itemize{
+#'     \item If connectivity cannot be achieved, sample size is adaptively increased
+#'     \item Minimum recommended: \code{opt_subsample >= max(100, folds)}
+#'     \item Each parameter set gets a different subsample, but all CV folds within
+#'       that parameter set use the same subsample
+#'     \item The actual subsample size used is reported in output columns
+#'   }
 #' @param verbose Logical. Whether to print progress messages. Default: FALSE.
 #' @param write_files Logical. Whether to save results to a CSV file. Default: FALSE.
 #' @param output_dir Character. Directory for output files. Required if `write_files` is TRUE.
 #'
 #' @return A `data.frame` containing the log-transformed parameter sets and their performance metrics.
-#'   Columns include: `log_N`, `log_k0`, `log_cooling_rate`, `log_c_repulsion`, `Holdout_MAE`, and `NLL`.
+#'   Columns include: `log_N`, `log_k0`, `log_cooling_rate`, `log_c_repulsion`, `Holdout_MAE`, `NLL`,
+#'   and if \code{opt_subsample} was used: `opt_subsample`,`original_n_points`.
 #'
-#' @note 
+#' @note
 #' \strong{Breaking Change in v2.0.0:} This function now returns log-transformed parameters directly.
 #' The returned data frame has columns `log_N`, `log_k0`, `log_cooling_rate`, `log_c_repulsion`
 #' instead of the original scale parameters. This eliminates the need to call `log_transform_parameters()`
 #' separately before using `run_adaptive_sampling()`.
-#' 
-#' \strong{Breaking Change in v2.0.0:} The parameter \code{distance_matrix} has been renamed to 
+#'
+#' \strong{Breaking Change in v2.0.0:} The parameter \code{distance_matrix} has been renamed to
 #' \code{dissimilarity_matrix}. Please update your code accordingly.
 #'
 #' @examples
@@ -62,8 +87,8 @@
 #' # 1. Create a simple synthetic dataset for the example
 #' synth_coords <- matrix(rnorm(60), nrow = 20, ncol = 3)
 #' dist_mat <- coordinates_to_matrix(synth_coords)
-#' 
-#' # 2. Run the optimization on the synthetic data
+#'
+#' # 2. Run the optimization on the synthetic data (full data)
 #' results <- initial_parameter_optimization(
 #'   dissimilarity_matrix = dist_mat,
 #'   mapping_max_iter = 100,
@@ -75,35 +100,70 @@
 #'   c_repulsion_min = 0.001, c_repulsion_max = 0.05,
 #'   cooling_rate_min = 0.001, cooling_rate_max = 0.02,
 #'   num_samples = 4,
-#'   max_cores = 1,  # Avoid parallel processing in check environment
+#'   max_cores = 1,
 #'   verbose = FALSE
+#' )
+#'
+#' # 3. With subsampling for faster computation
+#' results_sub <- initial_parameter_optimization(
+#'   dissimilarity_matrix = dist_mat,
+#'   mapping_max_iter = 100,
+#'   relative_epsilon = 1e-3,
+#'   convergence_counter = 2,
+#'   scenario_name = "test_opt_subsampled",
+#'   N_min = 2, N_max = 5,
+#'   k0_min = 1, k0_max = 10,
+#'   c_repulsion_min = 0.001, c_repulsion_max = 0.05,
+#'   cooling_rate_min = 0.001, cooling_rate_max = 0.02,
+#'   num_samples = 4,
+#'   max_cores = 1,
+#'   folds = 10,
+#'   opt_subsample = 15,  # Use only 15 points
+#'   verbose = TRUE
 #' )
 #' }
 #'
-#' @seealso \code{\link{euclidean_embedding}} for the core optimization algorithm.
+#' @seealso \code{\link{euclidean_embedding}} for the core optimization algorithm,
+#' \code{\link{subsample_dissimilarity_matrix}} for subsampling details.
 #'
 #' @importFrom lhs maximinLHS
 #' @importFrom stats qunif complete.cases aggregate
-#' @importFrom parallel detectCores mclapply makeCluster clusterExport clusterEvalQ parLapply stopCluster
+#' @importFrom parallel detectCores makeCluster stopCluster clusterExport clusterEvalQ parLapply mclapply
+#' @importFrom future availableCores
 #' @export
 initial_parameter_optimization <- function(dissimilarity_matrix,
-                                          mapping_max_iter = 1000,
-                                          relative_epsilon,
-                                          convergence_counter,
-                                          scenario_name,
-                                          N_min, N_max,
-                                          k0_min, k0_max,
-                                          c_repulsion_min, c_repulsion_max,
-                                          cooling_rate_min, cooling_rate_max,
-                                          num_samples = 20,
-                                          max_cores = NULL,
-                                          folds = 20,
-                                          verbose = FALSE,
-                                          write_files = FALSE,
-                                          output_dir) {
-  # --- Input Validation ---
-  if (!is.matrix(dissimilarity_matrix)) stop("dissimilarity_matrix must be a matrix")
-  if (nrow(dissimilarity_matrix) != ncol(dissimilarity_matrix)) stop("dissimilarity_matrix must be square")
+                                           mapping_max_iter = 500,
+                                           relative_epsilon,
+                                           convergence_counter,
+                                           scenario_name,
+                                           N_min,
+                                           N_max,
+                                           k0_min,
+                                           k0_max,
+                                           c_repulsion_min,
+                                           c_repulsion_max,
+                                           cooling_rate_min,
+                                           cooling_rate_max,
+                                           num_samples = 20,
+                                           max_cores = NULL,
+                                           folds = 20,
+                                           opt_subsample = NULL,
+                                           verbose = FALSE,
+                                           write_files = FALSE,
+                                           output_dir) {
+  # ==========================================================================
+  # INPUT VALIDATION
+  # ==========================================================================
+  
+  # Matrix validation
+  if (!is.matrix(dissimilarity_matrix)) {
+    stop("dissimilarity_matrix must be a matrix")
+  }
+  if (nrow(dissimilarity_matrix) != ncol(dissimilarity_matrix)) {
+    stop("dissimilarity_matrix must be square")
+  }
+  matrix_size <- nrow(dissimilarity_matrix)
+  
   # Validate integer parameters
   integer_params <- list(
     mapping_max_iter = mapping_max_iter,
@@ -113,7 +173,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
     num_samples = num_samples,
     folds = folds
   )
-
+  
   for (param_name in names(integer_params)) {
     param_value <- integer_params[[param_name]]
     if (!is.numeric(param_value) ||
@@ -122,7 +182,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
       stop(sprintf("%s must be a positive integer", param_name))
     }
   }
-
+  
   # Validate numeric parameters
   numeric_params <- list(
     relative_epsilon = relative_epsilon,
@@ -133,72 +193,107 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
     cooling_rate_min = cooling_rate_min,
     cooling_rate_max = cooling_rate_max
   )
-
+  
   for (param_name in names(numeric_params)) {
     param_value <- numeric_params[[param_name]]
-    if (!is.numeric(param_value) || param_value <= 0) {
+    if (!is.numeric(param_value) || length(param_value) != 1 ||
+        is.na(param_value) || param_value <= 0) {
       stop(sprintf("%s must be a positive number", param_name))
     }
   }
-
+  
   # Validate ranges
-  if (N_min > N_max) {
-    stop("N_min must be less than N_max")
-  }
-  if (k0_min >= k0_max) {
-    stop("k0_min must be less than k0_max")
-  }
-  if (c_repulsion_min >= c_repulsion_max) {
-    stop("c_repulsion_min must be less than c_repulsion_max")
-  }
-  if (cooling_rate_min >= cooling_rate_max) {
-    stop("cooling_rate_min must be less than cooling_rate_max")
-  }
-
+  if (N_min > N_max) stop("N_min must be less than N_max")
+  if (k0_min >= k0_max) stop("k0_min must be less than k0_max")
+  if (c_repulsion_min >= c_repulsion_max) stop("c_repulsion_min must be less than c_repulsion_max")
+  if (cooling_rate_min >= cooling_rate_max) stop("cooling_rate_min must be less than cooling_rate_max")
+  
   # Validate logical parameters
-  logical_params <- list(
-    verbose = verbose,
-    write_files = write_files
-  )
-
+  logical_params <- list(verbose = verbose, write_files = write_files)
   for (param_name in names(logical_params)) {
     param_value <- logical_params[[param_name]]
     if (!is.logical(param_value) || length(param_value) != 1) {
       stop(sprintf("%s must be a single logical value", param_name))
     }
   }
-
+  
   # Validate scenario name
   if (!is.character(scenario_name) || length(scenario_name) != 1) {
     stop("scenario_name must be a single character string")
   }
-
+  
   # Check for output_dir if writing files
   if (write_files && missing(output_dir)) {
     stop("An 'output_dir' must be provided when 'write_files' is TRUE.", call. = FALSE)
   }
-
-  # --- Parallel Processing Setup ---
+  
+  # Validate opt_subsample
+  use_subsampling <- FALSE
+  if (!is.null(opt_subsample)) {
+    if (!is.numeric(opt_subsample) || length(opt_subsample) != 1 ||
+        opt_subsample < 5) {
+      stop("opt_subsample must be NULL or a numeric value >= 5")
+    }
+    opt_subsample <- as.integer(floor(opt_subsample))
+    
+    if (opt_subsample >= matrix_size) {
+      if (verbose) {
+        cat(sprintf("opt_subsample (%d) >= matrix size (%d). Using full matrix.\n",
+                    opt_subsample, matrix_size))
+      }
+      opt_subsample <- NULL
+    } else {
+      use_subsampling <- TRUE
+      
+      # Warn if subsample seems too small
+      recommended_min <- max(50, folds)
+      if (opt_subsample < recommended_min) {
+        warning(sprintf(
+          paste0("opt_subsample (%d) is smaller than recommended minimum (%d). ",
+                 "This may lead to connectivity issues or unreliable results."),
+          opt_subsample, recommended_min
+        ), call. = FALSE)
+      }
+    }
+  }
+  
+  # ==========================================================================
+  # PARALLEL PROCESSING SETUP
+  # ==========================================================================
   available_cores <- future::availableCores()
   if (is.null(max_cores)) {
     max_cores <- max(1, available_cores - 1, na.rm = TRUE)
   } else {
     max_cores <- min(max_cores, available_cores)
   }
-  if (verbose) cat(sprintf("Processing %d samples with a maximum of %d cores\n", num_samples, max_cores))
-
-  # --- Directory Setup (if writing files) ---
+  
+  if (verbose) {
+    cat(sprintf("Processing %d parameter samples with up to %d cores\n",
+                num_samples, max_cores))
+    if (use_subsampling) {
+      cat(sprintf("Using subsampling: %d points (from %d total)\n",
+                  opt_subsample, matrix_size))
+    }
+  }
+  
+  # ==========================================================================
+  # DIRECTORY SETUP (if writing files)
+  # ==========================================================================
   param_dir <- NULL
   run_topolow_dir <- NULL
   if (write_files) {
     param_dir <- file.path(output_dir, "model_parameters")
     run_topolow_dir <- file.path(output_dir, "init_param_optimization")
     for (dir_path in c(param_dir, run_topolow_dir)) {
-      if (!dir.exists(dir_path)) dir.create(dir_path, recursive = TRUE, showWarnings = FALSE)
+      if (!dir.exists(dir_path)) {
+        dir.create(dir_path, recursive = TRUE, showWarnings = FALSE)
+      }
     }
   }
-
-  # --- LHS Parameter Sampling (in original scale for embedding) ---
+  
+  # ==========================================================================
+  # LHS PARAMETER SAMPLING
+  # ==========================================================================
   lhs_samples <- lhs::maximinLHS(n = num_samples, k = 4)
   lhs_params <- data.frame(
     N = floor(stats::qunif(lhs_samples[,1], min = N_min, max = N_max + 1)),
@@ -206,150 +301,225 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
     c_repulsion = stats::qunif(lhs_samples[,3], min = c_repulsion_min, max = c_repulsion_max),
     cooling_rate = stats::qunif(lhs_samples[,4], min = cooling_rate_min, max = cooling_rate_max)
   )
-
-  # --- Cross-Validation Fold Creation ---
-  matrix_list <- vector("list", folds)
-  for (i in 1:folds) {
-    matrix_list[[i]] <- list(
-      truth_matrix = dissimilarity_matrix,
-      train_matrix = NULL
-    )
-  }
-  num_elements <- sum(!is.na(dissimilarity_matrix))
-  holdout_size <- floor(num_elements / (folds * 2)) # Factor of 2 for symmetry
-  D_train_tracker <- dissimilarity_matrix # A copy to track available elements
-
-  for(i in 1:folds) {
-    if(verbose) cat(sprintf("Creating fold %d/%d\n", i, folds))
-    valid_indices <- which(!is.na(D_train_tracker))
-    if(length(valid_indices) < holdout_size) {
-        warning(paste("Not enough data points to create", folds, "folds with holdout size", holdout_size))
-        break
-    }
-    random_indices <- sample(valid_indices, size = holdout_size)
-
-    input_matrix <- dissimilarity_matrix
-    rows_cols <- arrayInd(random_indices, .dim = dim(input_matrix))
-    input_matrix[rows_cols] <- NA
-    input_matrix[rows_cols[,c(2,1)]] <- NA # Maintain symmetry
-
-    matrix_list[[i]][[2]] <- input_matrix
-    D_train_tracker[rows_cols] <- NA
-    D_train_tracker[rows_cols[,c(2,1)]] <- NA
-  }
-
-
-  # --- Worker Function for Parallel Execution ---
-  process_combination <- function(i) {
-    sample_idx <- ((i - 1) %% num_samples) + 1
-    fold_idx <- floor((i - 1) / num_samples) + 1
-
-    params <- lhs_params[sample_idx, ]
-    fold_data <- matrix_list[[fold_idx]]
-
+  
+  # ==========================================================================
+  # PARAMETER EVALUATION FUNCTION (PROCESSES ONE PARAMETER SET)
+  # ==========================================================================
+  # Store reference to full matrix for subsampling
+  full_dissimilarity_matrix <- dissimilarity_matrix
+  
+  process_param_set <- function(i) {
     tryCatch({
-      res_train <- euclidean_embedding(
-        dissimilarity_matrix = fold_data$train_matrix,
-        ndim = params$N,
-        k0 = params$k0,
-        cooling_rate = params$cooling_rate,
-        c_repulsion = params$c_repulsion,
+      # Get parameters for this evaluation
+      N <- lhs_params$N[i]
+      k0 <- lhs_params$k0[i]
+      c_repulsion <- lhs_params$c_repulsion[i]
+      cooling_rate <- lhs_params$cooling_rate[i]
+      
+      if (verbose) {
+        cat(sprintf("\nEvaluating sample %d/%d: N=%d, k0=%.3f, c_rep=%.4f, cool=%.4f\n",
+                    i, num_samples, N, k0, c_repulsion, cooling_rate))
+      }
+      
+      # ======================================================================
+      # SUBSAMPLING (if enabled)
+      # ======================================================================
+      local_matrix <- full_dissimilarity_matrix
+      
+      if (use_subsampling) {
+        if (verbose) {
+          cat(sprintf("  Subsampling to %d points...\n", opt_subsample))
+        }
+        
+        subsample_result <- subsample_dissimilarity_matrix(
+          dissimilarity_matrix = full_dissimilarity_matrix,
+          sample_size = opt_subsample,
+          max_attempts = 5,
+          verbose = verbose
+        )
+        
+        if (!subsample_result$is_connected) {
+          if (verbose) {
+            cat("  X Failed to obtain connected subsample. Skipping this parameter set.\n")
+          }
+          return(NULL)
+        }
+        
+        local_matrix <- subsample_result$subsampled_matrix
+        
+        # Sanity check the subsampled data
+        sanity_result <- sanity_check_subsample(
+          local_matrix,
+          folds = folds,
+          verbose = verbose
+        )
+        
+        if (!sanity_result$all_checks_passed && verbose) {
+          cat("  [!] Subsample sanity checks raised warnings (proceeding anyway)\n")
+        }
+      }
+      
+      # ======================================================================
+      # CROSS-VALIDATION EVALUATION
+      # ======================================================================
+      result <- likelihood_function(
+        dissimilarity_matrix = local_matrix,
         mapping_max_iter = mapping_max_iter,
         relative_epsilon = relative_epsilon,
-        convergence_counter = convergence_counter,
-        verbose = FALSE,
-        write_positions_to_csv = FALSE
+        N = N,
+        k0 = k0,
+        cooling_rate = cooling_rate,
+        c_repulsion = c_repulsion,
+        folds = folds,
+        num_cores = 1  # Already parallelizing at parameter level
       )
-
-      errors <- error_calculator_comparison(
-        predicted_dissimilarities = res_train$est_distances,
-        true_dissimilarities = fold_data$truth_matrix,
-        input_dissimilarities = fold_data$train_matrix
-      )
-
-      out_sample_errors <- errors$report_df$OutSampleError[!is.na(errors$report_df$OutSampleError)]
-      n_fold_samples <- length(out_sample_errors)
-      sum_abs_errors <- sum(abs(out_sample_errors))
-      mae_holdout <- if(n_fold_samples > 0) sum_abs_errors / n_fold_samples else NA
-
-      if(is.finite(mae_holdout) && n_fold_samples > 0) {
-        result <- data.frame(
-          N = params$N, k0 = params$k0, cooling_rate = params$cooling_rate,
-          c_repulsion = params$c_repulsion, Holdout_MAE = mae_holdout,
-          NLL = n_fold_samples * (1 + log(2 * mae_holdout)),
-          temp_n_samples = n_fold_samples, temp_sum_abs_errors = sum_abs_errors
-        )
-        if(write_files) {
-          result_file <- file.path(run_topolow_dir, sprintf("%d_params_%s.csv", i, scenario_name))
-          write.csv(result[, 1:6], result_file, row.names = FALSE)
+      
+      # ======================================================================
+      # CHECK MAE REASONABLENESS
+      # ======================================================================
+      if (!is.na(result$Holdout_MAE) && !is.null(result$Holdout_MAE)) {
+        # Get median of observed dissimilarities for comparison
+        # (handles threshold indicators):
+        observed_dissim <- extract_numeric_values(local_matrix)
+        median_dissim <- median(observed_dissim[!is.na(observed_dissim)])
+        
+        if (!is.na(median_dissim) && result$Holdout_MAE > (2 * median_dissim)) {
+          if (verbose) {
+            cat(sprintf("  [!] High MAE (%.3f) vs median dissimilarity (%.3f). Poor fit suspected.\n",
+                        result$Holdout_MAE, median_dissim))
+          }
         }
-        return(result)
-      } else {
-        return(NULL)
       }
+      
+      # ======================================================================
+      # COMPILE RESULTS
+      # ======================================================================
+      result_row <- data.frame(
+        N = N,
+        k0 = k0,
+        cooling_rate = cooling_rate,
+        c_repulsion = c_repulsion,
+        Holdout_MAE = result$Holdout_MAE,
+        NLL = result$NLL
+      )
+      
+      # Add subsampling metadata if used
+      if (use_subsampling) {
+        result_row$opt_subsample <- opt_subsample
+        result_row$original_n_points <- matrix_size
+      }
+      
+      if (verbose) {
+        cat(sprintf("  [OK] MAE: %.4f, NLL: %.2f\n",
+                    result$Holdout_MAE, result$NLL))
+      }
+      
+      return(result_row)
+      
     }, error = function(e) {
-      if(verbose) cat(sprintf("Error processing combination %d: %s\n", i, e$message))
+      if (verbose) {
+        cat(sprintf("  X Error evaluating sample %d: %s\n", i, e$message))
+      }
       return(NULL)
     })
   }
-
-   # --- Batch Processing and Parallel Execution ---
-  total_combinations <- num_samples * folds
-  if(verbose) cat(sprintf("Total combinations to process: %d\n", total_combinations))
-
-  cores_to_use <- min(total_combinations, max_cores)
-  batch_size <- min(cores_to_use * 10, total_combinations) # Process in manageable chunks
-  num_batches <- ceiling(total_combinations / batch_size)
+  
+  # ==========================================================================
+  # PARALLEL EXECUTION WITH BATCHING
+  # ==========================================================================
+  if (verbose) cat("\nStarting parameter evaluations with batching...\n")
+  
+  # Determine batch size for memory management
+  cores_to_use <- min(max_cores, num_samples)
+  batch_size <- min(cores_to_use * 4, num_samples)  # Process 4 per core per batch
+  num_batches <- ceiling(num_samples / batch_size)
+  
+  if (verbose && num_batches > 1) {
+    cat(sprintf("Processing in %d batches (batch size: %d)\n", 
+                num_batches, batch_size))
+  }
+  
   all_results <- list()
-
-  for(batch in 1:num_batches) {
+  
+  for (batch in 1:num_batches) {
     batch_start <- (batch - 1) * batch_size + 1
-    batch_end <- min(batch * batch_size, total_combinations)
+    batch_end <- min(batch * batch_size, num_samples)
     batch_indices <- batch_start:batch_end
-
-    if(verbose) cat(sprintf("Processing batch %d/%d (indices %d-%d) using %d cores\n",
-                           batch, num_batches, batch_start, batch_end, cores_to_use))
-
-    if (cores_to_use > 1) {
+    
+    if (verbose && num_batches > 1) {
+      cat(sprintf("\nProcessing batch %d/%d (samples %d-%d)...\n",
+                  batch, num_batches, batch_start, batch_end))
+    }
+    
+    # Process batch in parallel
+    if (cores_to_use > 1 && length(batch_indices) > 1) {
       if (.Platform$OS.type == "windows") {
-        cl <- parallel::makeCluster(cores_to_use)
+        cl <- parallel::makeCluster(min(cores_to_use, length(batch_indices)))
         on.exit(parallel::stopCluster(cl), add = TRUE)
-        parallel::clusterExport(cl, varlist = ls(envir = environment()), envir = environment())
+        
+        # Load topolow on cluster
         parallel::clusterEvalQ(cl, library(topolow))
-        batch_results <- parallel::parLapply(cl, batch_indices, process_combination)
-      } else { # Unix-like
-        batch_results <- parallel::mclapply(batch_indices, process_combination, mc.cores = cores_to_use)
+        
+        # Export required objects
+        parallel::clusterExport(cl,
+                                c("lhs_params", "full_dissimilarity_matrix", "matrix_size",
+                                  "mapping_max_iter", "relative_epsilon", "folds",
+                                  "use_subsampling", "opt_subsample", "verbose",
+                                  "likelihood_function", "euclidean_embedding",
+                                  "subsample_dissimilarity_matrix",
+                                  "check_matrix_connectivity",
+                                  "analyze_network_structure",
+                                  "sanity_check_subsample"),
+                                envir = environment())
+        
+        batch_results <- parallel::parLapply(cl, batch_indices, process_param_set)
+      } else {
+        # Unix-like systems
+        batch_results <- parallel::mclapply(batch_indices, process_param_set,
+                                            mc.cores = min(cores_to_use, length(batch_indices)))
       }
     } else {
-      batch_results <- lapply(batch_indices, process_combination)
+      # Sequential processing for small batches
+      batch_results <- lapply(batch_indices, process_param_set)
     }
+    
+    # Collect batch results
     all_results <- c(all_results, batch_results)
-    gc() # Garbage collection between batches for memory management
+    
+    # Garbage collection between batches for memory management
+    gc()
+    
+    if (verbose && num_batches > 1) {
+      valid_in_batch <- sum(!sapply(batch_results, is.null))
+      cat(sprintf("Batch %d complete: %d/%d successful\n", 
+                  batch, valid_in_batch, length(batch_indices)))
+    }
   }
-
-  # --- Aggregate and Return Results ---
-  res_df <- do.call(rbind, Filter(Negate(is.null), all_results))
-  if (is.null(res_df) || nrow(res_df) == 0) {
-    warning("No valid results were obtained from parameter optimization.")
-    return(data.frame())
+  
+  # ==========================================================================
+  # AGGREGATE RESULTS
+  # ==========================================================================
+  # Remove NULL results (failed evaluations)
+  valid_results <- Filter(Negate(is.null), all_results)
+  
+  if (length(valid_results) == 0) {
+    stop("No valid parameter evaluations completed successfully. ",
+         "Check your data and parameter ranges.")
   }
-
-  # Pool results across folds for each parameter set
-  pooled_results <- stats::aggregate(
-    cbind(temp_sum_abs_errors, temp_n_samples) ~ N + k0 + cooling_rate + c_repulsion,
-    data = res_df, FUN = sum
-  )
-
-  # Calculate final pooled MAE and NLL
-  pooled_results$Holdout_MAE <- pooled_results$temp_sum_abs_errors / pooled_results$temp_n_samples
-  pooled_results$NLL <- pooled_results$temp_n_samples * (1 + log(2 * pooled_results$Holdout_MAE))
-
-  # Prepare final data frame with original scale parameters
-  final_df <- pooled_results[, c("N", "k0", "cooling_rate", "c_repulsion", "Holdout_MAE", "NLL")]
-
-  #  Log Transform Parameters
-  # Validate that parameter columns are numeric and positive for log transformation
+  
+  if (verbose && length(valid_results) < num_samples) {
+    cat(sprintf("\nWarning: Only %d/%d parameter evaluations completed successfully.\n",
+                length(valid_results), num_samples))
+  }
+  
+  # Combine into data frame
+  final_df <- do.call(rbind, valid_results)
+  
+  # ==========================================================================
+  # LOG-TRANSFORM PARAMETERS
+  # ==========================================================================
   params_to_transform <- c("N", "k0", "cooling_rate", "c_repulsion")
+  
   for (param in params_to_transform) {
     if (!is.numeric(final_df[[param]])) {
       final_df[[param]] <- suppressWarnings(as.numeric(final_df[[param]]))
@@ -362,62 +532,101 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
            ". Log transform requires positive values.")
     }
   }
-
-  # Create log-transformed columns
-  final_df_log <- final_df
-  for (param in params_to_transform) {
-    log_param <- paste0("log_", param)
-    final_df_log[[log_param]] <- log(final_df[[param]])
-  }
-
-  # Remove original columns and reorder to standard format
-  final_df_log <- final_df_log[, !names(final_df_log) %in% params_to_transform, drop = FALSE]
   
-  # Reorder columns to standard format
-  desired_order <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion", "Holdout_MAE", "NLL")
-  if(all(desired_order %in% names(final_df_log))) {
-    final_df_log <- final_df_log[, desired_order, drop = FALSE]
-  }
-
+  # Create log-transformed columns
+  final_df$log_N <- log(final_df$N)
+  final_df$log_k0 <- log(final_df$k0)
+  final_df$log_cooling_rate <- log(final_df$cooling_rate)
+  final_df$log_c_repulsion <- log(final_df$c_repulsion)
+  
+  # Reorder columns: log-transformed params first, then MAE, NLL, then metadata
+  base_cols <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion",
+                 "Holdout_MAE", "NLL")
+  metadata_cols <- setdiff(names(final_df), c(base_cols, params_to_transform))
+  final_df <- final_df[, c(base_cols, metadata_cols)]
+  
+  # ==========================================================================
+  # SAVE RESULTS (if requested)
+  # ==========================================================================
   if (write_files) {
-    final_file_path <- file.path(param_dir, paste0(scenario_name, "_model_parameters.csv"))
-    if (file.exists(final_file_path)) {
-      existing_data <- read.csv(final_file_path, stringsAsFactors = FALSE)
-      combined      <- rbind(existing_data, final_df_log)
-      write.csv(combined, final_file_path, row.names = FALSE)
-    } else {
-      write.csv(final_df_log, final_file_path, row.names = FALSE)
-    }
-    if(verbose) {
-      cat("Log-transformed results saved to:", final_file_path, "\n")
-      cat("Parameters: ", paste(params_to_transform, collapse = ", "), "\n")
+    output_file <- file.path(param_dir,
+                             paste0(scenario_name, "_model_parameters.csv"))
+    write.csv(final_df, output_file, row.names = FALSE)
+    if (verbose) {
+      cat(sprintf("\n[OK] Results saved to: %s\n", output_file))
     }
   }
-
-  return(final_df_log)
+  
+  # ==========================================================================
+  # SUMMARY OUTPUT
+  # ==========================================================================
+  if (verbose) {
+    cat("\n" , "=== Optimization Summary ===", "\n")
+    cat(sprintf("Successful evaluations: %d/%d\n",
+                length(valid_results), num_samples))
+    cat(sprintf("Best MAE: %.4f\n", min(final_df$Holdout_MAE, na.rm = TRUE)))
+    cat(sprintf("Best NLL: %.2f\n", min(final_df$NLL, na.rm = TRUE)))
+    if (use_subsampling) {
+      cat(sprintf("Subsampling used: %d points (from %d)\n",
+                  opt_subsample, matrix_size))
+      
+    }
+    cat("\n")
+  }
+  
+  return(final_df)
 }
 
-#' Performs adaptive Monte Carlo sampling
+
+#' Run Adaptive Monte Carlo Sampling for Parameter Refinement
 #'
 #' @description
-#' Performs adaptive Monte Carlo sampling to explore and refine the parameter space,
-#' running locally in parallel. Samples are drawn adaptively based on previously
-#' evaluated likelihoods to focus sampling in high-likelihood regions. Results from all
-#' parallel jobs accumulate in a single output file.
+#' Refines parameter estimates using adaptive Monte Carlo sampling. This function
+#' uses initial parameter samples and iteratively generates new samples concentrated
+#' in high-likelihood regions of parameter space. Multiple parallel jobs explore
+#' different regions simultaneously. Results from all parallel jobs accumulate in a 
+#' single output file.
 #'
-#' @param initial_samples_file Character. Path to a CSV file containing initial samples.
-#' @param dissimilarity_matrix Matrix. The input dissimilarity matrix.
-#' @param mapping_max_iter Integer. Maximum number of map optimization iterations.
-#' @param relative_epsilon Numeric. Convergence threshold for relative change in error. Default is 1e-4.
-#' @param folds Integer. Number of cross-validation folds.
-#' @param max_cores Integer. Number of cores to use for parallel execution. If NULL, uses all available cores minus 1.
-#' @param num_samples Integer. Number of new samples to generate via adaptive
-#' sampling.
+#'
+#' @param initial_samples_file Character. Path to a CSV file containing initial samples
+#'   (typically from \code{\link{initial_parameter_optimization}}).
 #' @param scenario_name Character. Name for the output files.
-#' @param output_dir Character. Required directory for output files.
-#' @param verbose Logical. Whether to print progress messages. Default is FALSE.
+#' @param dissimilarity_matrix Matrix. The input dissimilarity matrix.
+#' @param max_cores Integer. Number of cores to use for parallel execution. If NULL,
+#'   uses all available cores minus 1.
+#' @param num_samples Integer. Number of new samples to generate via adaptive sampling
+#'   per parallel job. Default: 10.
+#' @param mapping_max_iter Integer. Maximum number of map optimization iterations.
+#' @param relative_epsilon Numeric. Convergence threshold for relative change in error.
+#'   Default: 1e-4.
+#' @param folds Integer. Number of cross-validation folds. Default: 20.
+#' @param opt_subsample Integer or NULL. If specified, randomly samples this many
+#'   points from the dissimilarity matrix for each adaptive sampling iteration to
+#'   reduce computational cost. The function automatically validates that subsampled
+#'   data forms a connected graph. Default: NULL (use full data).
 #'
-#' @return No return value. Called for its side effect of writing results to a CSV file in `output_dir`.
+#'   **Important Notes:**
+#'   \itemize{
+#'     \item If connectivity cannot be achieved, sample size is adaptively increased
+#'     \item Each parallel job uses a different subsample
+#'     \item Recommended: use same value as in \code{initial_parameter_optimization}
+#'     \item The actual subsample size used is reported in output columns
+#'   }
+#' @param output_dir Character. Required directory for output files.
+#' @param verbose Logical. Whether to print progress messages. Default: FALSE.
+#'
+#' @return No return value. Called for its side effect of writing results to a CSV file
+#'   in \code{output_dir}.
+#'
+#' @details
+#' The function runs multiple parallel jobs, each performing adaptive sampling
+#' starting from the initial samples. The jobs are independent and can be run
+#' simultaneously. Results from all jobs are combined with the initial samples
+#' and written to a single output file.
+#'
+#' If \code{opt_subsample} is used, each parallel job will independently subsample
+#' the data, ensuring diversity in the parameter evaluations while maintaining
+#' computational efficiency.
 #'
 #' @examples
 #' \donttest{
@@ -432,11 +641,11 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
 #' # This function requires a writable directory for its results.
 #' temp_out_dir <- tempdir()
 #'
-#' # 3. Create a sample dissimilarity matrix for the function to use
-#' dissim_mat <- matrix(runif(100, 1, 10), 10, 10)
+#' # 3. Create a sample dissimilarity matrix
+#' dissim_mat <- matrix(runif(900, 1, 10), 30, 30)
 #' diag(dissim_mat) <- 0
 #'
-#' # 4. Run the adaptive sampling only if the example file is found
+#' # 4. Run adaptive sampling (full data)
 #' if (nzchar(initial_file)) {
 #'   run_adaptive_sampling(
 #'     initial_samples_file = initial_file,
@@ -447,186 +656,338 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
 #'     num_samples = 1,
 #'     verbose = FALSE
 #'   )
-#'
-#'   # 5. Verify output files were created
-#'   print("Output files from adaptive sampling:")
-#'   print(list.files(temp_out_dir, recursive = TRUE))
-#'
-#'   # 6. Clean up the temporary directory
-#'   unlink(temp_out_dir, recursive = TRUE)
 #' }
+#'
+#' # 5. Run adaptive sampling with subsampling
+#' if (nzchar(initial_file)) {
+#'   run_adaptive_sampling(
+#'     initial_samples_file = initial_file,
+#'     scenario_name = "adaptive_test_subsample",
+#'     dissimilarity_matrix = dissim_mat,
+#'     output_dir = temp_out_dir,
+#'     max_cores = 1,
+#'     num_samples = 1,
+#'     opt_subsample = 15,  # Use only 8 points
+#'     verbose = TRUE
+#'   )
 #' }
+#'
+#' # Clean up
+#' unlink(temp_out_dir, recursive = TRUE)
+#' }
+#'
+#' @seealso \code{\link{adaptive_MC_sampling}} for the underlying sampling algorithm,
+#' \code{\link{initial_parameter_optimization}} for generating initial samples.
+#'
 #' @importFrom utils read.csv write.csv write.table
-#' @importFrom parallel detectCores makeCluster clusterExport clusterEvalQ parLapply stopCluster mclapply
+#' @importFrom future availableCores
+#' @importFrom parallel detectCores makeCluster stopCluster clusterExport clusterEvalQ parLapply mclapply
 #' @export
 run_adaptive_sampling <- function(initial_samples_file,
                                   scenario_name,
                                   dissimilarity_matrix,
                                   max_cores = NULL,
                                   num_samples = 10,
-                                  mapping_max_iter = 1000,
+                                  mapping_max_iter = 500,
                                   relative_epsilon = 1e-4,
                                   folds = 20,
+                                  opt_subsample = NULL,
                                   output_dir,
                                   verbose = FALSE) {
-  # --- CAPTURE ORIGINAL COLUMN ORDER ---
+  # ==========================================================================
+  # CAPTURE ORIGINAL COLUMN ORDER (CRITICAL FOR CRAN)
+  # ==========================================================================
   orig_cols <- names(read.csv(initial_samples_file,
                               stringsAsFactors = FALSE,
                               nrows = 1))
+  
   # Parameter names
   par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
   
-  # --- Input Validation ---
+  # ==========================================================================
+  # INPUT VALIDATION
+  # ==========================================================================
+  
+  # Validate output_dir (CRAN requirement: must be user-specified)
   if (missing(output_dir) || !is.character(output_dir) || length(output_dir) != 1) {
     stop("'output_dir' must be a character string specifying the directory.", call. = FALSE)
   }
-  # Validate num_samples
-  if (!is.numeric(num_samples) || num_samples < 1 || num_samples != round(num_samples)) {
-    stop("num_samples must be a positive integer")
-  }
-  for (p in c("mapping_max_iter", "folds")) {
-    v <- get(p)
-    if (!is.numeric(v) || v < 1 || v != round(v)) stop(sprintf("%s must be a positive integer", p))
-  }
-
-  if(!is.matrix(dissimilarity_matrix)) {
+  
+  # Validate dissimilarity matrix
+  if (!is.matrix(dissimilarity_matrix)) {
     stop("dissimilarity_matrix must be a matrix")
   }
-  if (!is.numeric(relative_epsilon) || relative_epsilon <= 0) stop("relative_epsilon must be positive")
-  if (!is.character(scenario_name) || length(scenario_name) != 1) stop("scenario_name must be a single string")
-
-  # Determine available cores and number of parallel jobs
+  if (nrow(dissimilarity_matrix) != ncol(dissimilarity_matrix)) {
+    stop("dissimilarity_matrix must be square")
+  }
+  matrix_size <- nrow(dissimilarity_matrix)
+  
+  # Validate initial samples file
+  if (!file.exists(initial_samples_file)) {
+    stop("initial_samples_file not found: ", initial_samples_file)
+  }
+  
+  # Read and validate initial samples
+  init <- read.csv(initial_samples_file, stringsAsFactors = FALSE)
+  req <- c(par_names, "NLL")
+  if (!all(req %in% names(init))) {
+    stop("Missing columns in initial samples: ",
+         paste(setdiff(req, names(init)), collapse = ", "))
+  }
+  
+  # Filter valid rows
+  init <- init[complete.cases(init[, req]) & 
+                 apply(init[, req], 1, function(x) all(is.finite(x))), ]
+  if (nrow(init) == 0) {
+    stop("No valid initial samples after filtering")
+  }
+  
+  # Validate opt_subsample
+  use_subsampling <- FALSE
+  if (!is.null(opt_subsample)) {
+    if (!is.numeric(opt_subsample) || length(opt_subsample) != 1 ||
+        opt_subsample < 10) {
+      stop("opt_subsample must be NULL or a numeric value >= 10")
+    }
+    opt_subsample <- as.integer(floor(opt_subsample))
+    
+    if (opt_subsample >= matrix_size) {
+      if (verbose) {
+        cat(sprintf("opt_subsample (%d) >= matrix size (%d). Using full matrix.\n",
+                    opt_subsample, matrix_size))
+      }
+      opt_subsample <- NULL
+    } else {
+      use_subsampling <- TRUE
+      
+      # Warn if subsample seems too small
+      recommended_min <- max(50, folds)
+      if (opt_subsample < recommended_min) {
+        warning(sprintf(
+          paste0("opt_subsample (%d) is smaller than recommended minimum (%d). ",
+                 "This may lead to connectivity issues or unreliable results."),
+          opt_subsample, recommended_min
+        ), call. = FALSE)
+      }
+    }
+  }
+  
+  # ==========================================================================
+  # PARALLEL PROCESSING SETUP (using future package)
+  # ==========================================================================
+  
   available_cores <- future::availableCores()
   if (is.null(max_cores)) {
-    # Use all cores minus 1 to avoid bogging down the system
-    num_parallel_jobs <- max(1, available_cores - 1)
+    max_cores <- max(1, available_cores - 1)
   } else {
-    # Validate max_cores
-    if (!is.numeric(max_cores) || max_cores < 1 || max_cores != round(max_cores)) {
-      stop("max_cores must be a positive integer")
-    }
-    # Limit to available cores
-    num_parallel_jobs <- min(max_cores, available_cores)
+    max_cores <- min(max_cores, available_cores)
   }
+  num_parallel_jobs <- max_cores
   
-  # Calculate iterations per job
-  iterations <- ceiling(num_samples / num_parallel_jobs)
+  # iterations = num_samples per job (following original naming)
+  iterations <- num_samples
   
   if (verbose) {
-    cat(sprintf("Using %d cores for parallel execution\n", num_parallel_jobs))
-    cat(sprintf("Calculating iterations per job: %d samples / %d jobs = %d iterations per job\n",
-                num_samples, num_parallel_jobs, iterations))
-    cat(sprintf("This will produce approximately %d total new samples\n",
-                iterations * num_parallel_jobs))
+    cat(sprintf("Running %d parallel jobs on %d cores\n",
+                num_parallel_jobs, max_cores))
+    cat(sprintf("Each job will generate %d new samples\n", iterations))
+    cat(sprintf("Total new samples: %d\n", iterations * num_parallel_jobs))
+    if (use_subsampling) {
+      cat(sprintf("Using subsampling: %d points per job (from %d total)\n",
+                  opt_subsample, matrix_size))
+    }
   }
-
-  # Setup directories
+  
+  # ==========================================================================
+  # DIRECTORY SETUP (FOLLOWING ORIGINAL PATTERN)
+  # ==========================================================================
+  
+  # Use original directory naming convention
   adaptive_dir <- file.path(output_dir, "adaptive_sampling_jobs")
-  param_dir    <- file.path(output_dir, "model_parameters")
-
+  param_dir <- file.path(output_dir, "model_parameters")
+  
+  # Create directories if they don't exist
   for (dir in c(adaptive_dir, param_dir)) {
     if (!dir.exists(dir)) {
       dir.create(dir, recursive = TRUE, showWarnings = FALSE)
     }
   }
-
-  # --- "COMPREHENSIVE CLEANUP"  ---
+  
+  # ==========================================================================
+  # COMPREHENSIVE CLEANUP (CRITICAL FOR CRAN)
+  # ==========================================================================
+  
   if (verbose) cat("Cleaning adaptive sampling jobs directory...\n")
-
-  # List ALL files in the directory
+  
+  # List ALL files in the directory and remove them
   files_to_remove <- list.files(adaptive_dir, full.names = TRUE, recursive = TRUE)
-  if (length(files_to_remove) > 0) file.remove(files_to_remove)
-
-  # Validate initial samples and prepare master file
-  if (!file.exists(initial_samples_file)) stop("initial_samples_file not found: ", initial_samples_file)
-
-  init <- read.csv(initial_samples_file, stringsAsFactors=FALSE)
-  req <- c(par_names, "NLL")
-  if (!all(req %in% names(init))) stop("Missing columns in initial samples: ", paste(setdiff(req, names(init)), collapse=", "))
-  init <- init[complete.cases(init[, req]) & apply(init[, req], 1, function(x) all(is.finite(x))), ]
-  if (nrow(init)==0) stop("No valid initial samples after filtering")
-  results_file <- file.path(param_dir, paste0(scenario_name, "_model_parameters.csv"))
-
-  # Copy initial samples to final destination if it doesn't exist
-  if (!file.exists(results_file)) file.copy(initial_samples_file, results_file)
-
-  # --- LOCAL EXECUTION PATH ---
-  if (verbose) {
-    cat(sprintf("Running %d parallel jobs on %d cores\n",
-                num_parallel_jobs, num_parallel_jobs))
+  if (length(files_to_remove) > 0) {
+    file.remove(files_to_remove)
   }
-
-  # Create temporary files for each parallel job to write to
-  make_temp <- function(i) file.path(adaptive_dir, sprintf("job_%02d_%s.csv", i, scenario_name))
+  
+  # ==========================================================================
+  # SETUP RESULT FILE
+  # ==========================================================================
+  
+  results_file <- file.path(param_dir,
+                            paste0(scenario_name, "_model_parameters.csv"))
+  
+  # Copy initial samples to final destination if it doesn't exist
+  if (!file.exists(results_file)) {
+    file.copy(initial_samples_file, results_file)
+  }
+  
+  # ==========================================================================
+  # CREATE TEMPORARY FILES FOR PARALLEL JOBS (ORIGINAL PATTERN)
+  # ==========================================================================
+  
+  # Use original naming pattern: job_XX_scenario.csv
+  make_temp <- function(i) {
+    file.path(adaptive_dir, sprintf("job_%02d_%s.csv", i, scenario_name))
+  }
   temps <- vapply(seq_len(num_parallel_jobs), make_temp, FUN.VALUE = "")
-  for (i in seq_along(temps)) file.copy(initial_samples_file, temps[i], overwrite = TRUE)
-
+  
+  # Copy initial samples to each temp file
+  for (i in seq_along(temps)) {
+    file.copy(initial_samples_file, temps[i], overwrite = TRUE)
+  }
+  
+  # ==========================================================================
+  # RUN PARALLEL ADAPTIVE SAMPLING JOBS
+  # ==========================================================================
+  
+  if (verbose) cat("\nStarting parallel adaptive sampling jobs...\n")
+  
   # ---------------- Local parallel execution ----------------
-  # Launch parallel runs
+  # Following original pattern for Windows vs Unix
+  
   if (.Platform$OS.type == "windows") {
+    # Windows: use PSOCK cluster
     cl <- parallel::makeCluster(num_parallel_jobs)
     on.exit(parallel::stopCluster(cl), add = TRUE)
-    # Export necessary variables and load the topolow package in each worker
-    parallel::clusterExport(cl, c("adaptive_MC_sampling", "temps", "dissimilarity_matrix",
-                                  "mapping_max_iter", "relative_epsilon", "folds",
-                                  "output_dir", "scenario_name", "iterations"), envir = environment())
+    
+    # Load topolow package in each worker
     parallel::clusterEvalQ(cl, library(topolow))
+    
+    # Export necessary variables (following original pattern)
+    parallel::clusterExport(cl,
+                            c("adaptive_MC_sampling", "temps", "dissimilarity_matrix",
+                              "mapping_max_iter", "relative_epsilon", "folds",
+                              "output_dir", "scenario_name", "iterations",
+                              "opt_subsample","subsample_dissimilarity_matrix",
+                          "check_matrix_connectivity",
+                          "analyze_network_structure",
+                          "sanity_check_subsample"), 
+                            envir = environment())
+    
+    # Run jobs
     parallel::parLapply(cl, seq_along(temps), function(i) {
-      #  adaptive_MC_sampling is an internal function in topolow
       adaptive_MC_sampling(
-        samples_file       = temps[i],
+        samples_file = temps[i],
         dissimilarity_matrix = dissimilarity_matrix,
-        iterations         = iterations,
-        mapping_max_iter   = mapping_max_iter,
-        relative_epsilon   = relative_epsilon,
-        folds              = folds,
-        num_cores          = 1,
-        scenario_name      = scenario_name,
-        verbose            = TRUE)
+        iterations = iterations,
+        mapping_max_iter = mapping_max_iter,
+        relative_epsilon = relative_epsilon,
+        folds = folds,
+        num_cores = 1,
+        scenario_name = scenario_name,
+        opt_subsample = opt_subsample,  # Pass subsampling parameter
+        verbose = FALSE  # Keep individual jobs quiet
+      )
     })
+    
     parallel::stopCluster(cl)
-  } else { # For Unix-like systems (Linux, macOS)
+    
+  } else {
+    # For Unix-like systems (Linux, macOS)
     parallel::mclapply(seq_along(temps), function(i) {
-        # adaptive_MC_sampling is an internal function in topolow
-        adaptive_MC_sampling(
-          samples_file       = temps[i],
-          dissimilarity_matrix= dissimilarity_matrix, 
-          iterations         = iterations,
-          mapping_max_iter   = mapping_max_iter,
-          relative_epsilon   = relative_epsilon,
-          folds              = folds,
-          num_cores          = 1,
-          scenario_name      = scenario_name,
-          verbose            = FALSE # Keep this FALSE for cleaner logs
-        )
+      adaptive_MC_sampling(
+        samples_file = temps[i],
+        dissimilarity_matrix = dissimilarity_matrix,
+        iterations = iterations,
+        mapping_max_iter = mapping_max_iter,
+        relative_epsilon = relative_epsilon,
+        folds = folds,
+        num_cores = 1,
+        scenario_name = scenario_name,
+        opt_subsample = opt_subsample,  # Pass subsampling parameter
+        verbose = FALSE  # Keep individual jobs quiet
+      )
     }, mc.cores = num_parallel_jobs)
   }
-
-  # Gather local results
+  
+  # ==========================================================================
+  # GATHER AND COMBINE RESULTS (FOLLOWING ORIGINAL PATTERN)
+  # ==========================================================================
+  
+  if (verbose) cat("\nLocal parallel jobs complete; gathering results...\n")
+  
+  # Read initial samples to get original row count
   init2 <- read.csv(initial_samples_file, stringsAsFactors = FALSE)
-  n0   <- nrow(init2)
+  n0 <- nrow(init2)
+  
+  # Read new samples from each temp file
   new_list <- lapply(temps, function(f) {
     if (file.exists(f)) {
-        df <- tryCatch(read.csv(f, stringsAsFactors=FALSE), error=function(e) NULL)
-        if (!is.null(df) && nrow(df)>n0) df[(n0+1):nrow(df), , drop=FALSE] else NULL
-    } else {
+      df <- tryCatch(
+        read.csv(f, stringsAsFactors = FALSE),
+        error = function(e) NULL
+      )
+      # Extract only new rows (beyond initial samples)
+      if (!is.null(df) && nrow(df) > n0) {
+        df[(n0 + 1):nrow(df), , drop = FALSE]
+      } else {
         NULL
+      }
+    } else {
+      NULL
     }
   })
+  
+  # Combine all results
   all <- do.call(rbind, c(list(init2), new_list))
-
-  # --- REORDER TO ORIGINAL INPUT HEADER ---
+  
+  # ==========================================================================
+  # REORDER TO ORIGINAL INPUT HEADER (CRITICAL FOR CRAN)
+  # ==========================================================================
+  
   # Ensure all original columns are present before reordering
-  if(all(orig_cols %in% names(all))) {
-    all <- all[, orig_cols, drop=FALSE]
+  if (all(orig_cols %in% names(all))) {
+    all <- all[, orig_cols, drop = FALSE]
   }
-
-  write.csv(all, results_file, row.names=FALSE)
+  
+  # Write final results
+  write.csv(all, results_file, row.names = FALSE)
+  
+  # ==========================================================================
+  # CLEANUP TEMPORARY FILES
+  # ==========================================================================
+  
   file.remove(temps)
-  if (verbose) cat("Local parallel jobs complete; results in", results_file, "\n")
+  
+  if (verbose) {
+    cat("Results written to:", results_file, "\n")
+    cat(sprintf("Total samples: %d (initial: %d, new: %d)\n",
+                nrow(all), n0, nrow(all) - n0))
+    
+    if (use_subsampling) {
+      cat(sprintf("Subsampling was used: %d points per job\n", opt_subsample))
+
+    }
+    
+    # Show best results
+    if ("Holdout_MAE" %in% names(all)) {
+      best_mae <- min(all$Holdout_MAE, na.rm = TRUE)
+      cat(sprintf("Best MAE achieved: %.4f\n", best_mae))
+    }
+    if ("NLL" %in% names(all)) {
+      best_nll <- min(all$NLL, na.rm = TRUE)
+      cat(sprintf("Best NLL achieved: %.2f\n", best_nll))
+    }
+  }
+  
   return(invisible(NULL))
 }
-
 
 
 #' Perform Adaptive Monte Carlo Sampling (Internal)
@@ -634,7 +995,7 @@ run_adaptive_sampling <- function(initial_samples_file,
 #' @description
 #' Core implementation of the adaptive Monte Carlo sampling algorithm. This internal
 #' function explores the parameter space by updating the sampling distribution
-#' based on evaluated likelihoods. It is called by the main `run_adaptive_sampling`
+#' based on evaluated likelihoods. It is called by the main \code{run_adaptive_sampling}
 #' function.
 #'
 #' @param samples_file Path to the CSV file with samples for the current job.
@@ -643,20 +1004,41 @@ run_adaptive_sampling <- function(initial_samples_file,
 #' @param mapping_max_iter Maximum optimization iterations for the embedding.
 #' @param relative_epsilon Convergence threshold for the optimization.
 #' @param folds Number of cross-validation folds.
-#' @param num_cores Number of cores for parallel processing.
+#' @param num_cores Number of cores for parallel processing within this job.
 #' @param scenario_name Name for output files, used for context.
-#' @param verbose Logical. If TRUE, prints progress messages.
+#' @param opt_subsample Integer or NULL. If specified, subsamples the data for
+#'   this adaptive sampling job. A single subsample is created at the start and
+#'   reused for all iterations within this job for consistency. Default: NULL.
+#' @param verbose Logical. If TRUE, prints progress messages. Default: FALSE.
 #'
-#' @return A `data.frame` containing all samples (initial and newly generated)
+#' @return A \code{data.frame} containing all samples (initial and newly generated)
 #' with their parameters and evaluated performance metrics. The data frame includes
-#' columns for the log-transformed parameters, `Holdout_MAE`, and `NLL`.
-#' Returns `NULL` if the results file was not created.
+#' columns for the log-transformed parameters, \code{Holdout_MAE}, and \code{NLL}.
+#' Returns \code{NULL} if the results file was not created.
+#'
+#' @details
+#' The function performs these steps:
+#' 1. Reads existing samples from the samples file
+#' 2. If \code{opt_subsample} is specified, creates a single subsample for this job
+#' 3. Calculates weighted marginal distributions for each parameter
+#' 4. For each iteration:
+#'    - Samples new parameter values from the marginal distributions
+#'    - Evaluates the parameter set via cross-validation
+#'    - Appends results to the samples file
+#'    - Updates the marginal distributions
+#'
+#' The adaptive aspect comes from using likelihood-weighted KDE on previous samples
+#' to concentrate new samples in high-likelihood regions.
+#'
+#' **Subsampling behavior**: When \code{opt_subsample} is used, a single subsample
+#' is created at the start of this job and reused for all iterations. This ensures
+#' consistency within the job while still allowing different jobs (in
+#' \code{run_adaptive_sampling}) to explore different subsamples.
 #'
 #' @keywords internal
 #' @importFrom filelock lock unlock
 #' @importFrom utils read.csv write.table
 #' @importFrom stats na.omit
-#' @importFrom parallel makeCluster stopCluster clusterExport clusterEvalQ parLapply mclapply
 #' @export
 adaptive_MC_sampling <- function(samples_file,
                                  dissimilarity_matrix,
@@ -666,170 +1048,290 @@ adaptive_MC_sampling <- function(samples_file,
                                  folds = 20,
                                  num_cores = 1,
                                  scenario_name,
+                                 opt_subsample = NULL,
                                  verbose = FALSE) {
+  # ==========================================================================
+  # INPUT VALIDATION AND SETUP
+  # ==========================================================================
+  
   # Require filelock for safe concurrent writes
   if (!requireNamespace("filelock", quietly = TRUE)) {
     stop("Package 'filelock' is required for safe concurrent writes. Please install it.")
   }
-
-  # Handle parallel processing setup
-  use_parallelism <- num_cores > 1
-  if (use_parallelism) {
-    if (verbose) cat("Setting up parallel processing\n")
-    if (.Platform$OS.type == "windows") {
-      if (verbose) cat("Using parallel cluster for Windows\n")
-      cl <- parallel::makeCluster(num_cores)
-      on.exit(parallel::stopCluster(cl), add = TRUE)
-      # Export necessary objects to the cluster
-      parallel::clusterExport(cl, c("dissimilarity_matrix", "mapping_max_iter",
-                                    "relative_epsilon", "folds"),
-                              envir = environment())
-      # Load the topolow package in each worker node
-      parallel::clusterEvalQ(cl, { library(topolow) })
-    }
+  
+  if (!file.exists(samples_file)) {
+    stop("samples_file does not exist: ", samples_file)
   }
-
-  # Define parameter and key column names
-  par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
-  key_cols <- c(par_names, "Holdout_MAE", "NLL")
-
-  for (iter in seq_len(iterations)) {
-    if (verbose) cat(sprintf("\nStarting iteration %d of %d\n", iter, iterations))
-
-    # Read current samples from the job-specific file
-    current_samples <- read.csv(samples_file, stringsAsFactors = FALSE)
-    # Clean and validate the numeric data
-    for (col in key_cols[key_cols %in% names(current_samples)]) {
-      current_samples[[col]] <- as.numeric(as.character(current_samples[[col]]))
+  
+  # Store reference to full matrix
+  full_dissimilarity_matrix <- dissimilarity_matrix
+  matrix_size <- nrow(dissimilarity_matrix)
+  
+  # Validate opt_subsample
+  use_subsampling <- FALSE
+  
+  if (!is.null(opt_subsample)) {
+    if (!is.numeric(opt_subsample) || length(opt_subsample) != 1 ||
+        opt_subsample < 10) {
+      stop("opt_subsample must be NULL or a numeric value >= 10")
     }
-    current_samples <- current_samples[apply(current_samples, 1,
-                                             function(row) all(is.finite(row))), ]
-    current_samples <- na.omit(current_samples)
-
-    if (nrow(current_samples) == 0) {
-      warning("No valid samples remaining after filtering. Stopping iteration.")
-      break
-    }
-
-    # Apply burn-in and check for convergence to decide whether to stop sampling
-    if (nrow(current_samples) > 10) {
-      burn_in <- min(round(nrow(current_samples) * 0.3), nrow(current_samples) - 5)
-      current_samples <- current_samples[-seq_len(burn_in), ]
-    }
-    if (nrow(current_samples) > 500) {
-      #  check_gaussian_convergence is part of topolow
-      conv_check <- check_gaussian_convergence(
-        data = current_samples[, par_names],
-        window_size = 500,
-        tolerance = 0.002
-      )
-      if (conv_check$converged) {
-        if (verbose) cat("Convergence achieved at iteration", iter, "\n")
-        break
+    opt_subsample <- as.integer(floor(opt_subsample))
+    
+    if (opt_subsample >= matrix_size) {
+      if (verbose) {
+        cat(sprintf("opt_subsample (%d) >= matrix size (%d). Using full matrix.\n",
+                    opt_subsample, matrix_size))
       }
-    }
-
-    # Generate new candidate samples using Kernel Density Estimation
-    #  generate_kde_samples is an internal helper function in topolow
-    new_samples <- generate_kde_samples(samples = current_samples, n = 1)
-    for (col in par_names) {
-      new_samples[[col]] <- as.numeric(new_samples[[col]])
-    }
-
-    # Define the function to evaluate the likelihood of a single sample
-    evaluate_sample <- function(i) {
-      N <- round(exp(new_samples[i, "log_N"]))
-      k0 <- exp(new_samples[i, "log_k0"])
-      cooling_rate <- exp(new_samples[i, "log_cooling_rate"])
-      c_repulsion <- exp(new_samples[i, "log_c_repulsion"])
-      inner_cores <- if (use_parallelism) 1 else min(folds, num_cores)
-      tryCatch({
-        #  likelihood_function is an internal helper in topolow
-        likelihood_function(
-          dissimilarity_matrix = dissimilarity_matrix, # Pass the generalized matrix
-          mapping_max_iter = mapping_max_iter,
-          relative_epsilon = relative_epsilon,
-          N = N,
-          k0 = k0,
-          cooling_rate = cooling_rate,
-          c_repulsion = c_repulsion,
-          folds = folds,
-          num_cores = inner_cores
-        )
-      }, error = function(e) {
-        if (verbose) cat("Error in likelihood calculation:", e$message, "\n")
-        NA
-      })
-    }
-
-    # Evaluate the new samples using the appropriate parallel method
-    if (use_parallelism) {
-      if (.Platform$OS.type == "windows") {
-        parallel::clusterExport(cl, c("evaluate_sample", "new_samples"), envir = environment())
-        new_likelihoods <- parallel::parLapply(cl, seq_len(nrow(new_samples)), evaluate_sample)
-      } else {
-        new_likelihoods <- parallel::mclapply(seq_len(nrow(new_samples)), evaluate_sample, mc.cores = num_cores)
-      }
+      opt_subsample <- NULL
     } else {
-      # Fallback to sequential processing if not using parallelism
-      new_likelihoods <- lapply(seq_len(nrow(new_samples)), evaluate_sample)
-    }
-
-    # Filter for valid, non-NA results from the likelihood evaluation
-    valid_results <- !sapply(new_likelihoods, is.null) &
-      !sapply(new_likelihoods, function(x) all(is.na(unlist(x))))
-
-    if (any(valid_results)) {
-      likelihoods_mat <- do.call(rbind, lapply(new_likelihoods[valid_results], unlist))
-      new_likelihoods_df <- as.data.frame(likelihoods_mat)
-      colnames(new_likelihoods_df) <- c("Holdout_MAE", "NLL")
-
-      valid_samples <- new_samples[valid_results, , drop = FALSE]
-      valid_samples$Holdout_MAE <- as.numeric(new_likelihoods_df$Holdout_MAE)
-      valid_samples$NLL <- as.numeric(new_likelihoods_df$NLL)
-
-      # Final cleaning of the new samples before writing
-      for (col in key_cols[key_cols %in% names(valid_samples)]) {
-        valid_samples[[col]] <- as.numeric(as.character(valid_samples[[col]]))
-      }
-      valid_samples <- valid_samples[apply(valid_samples, 1, function(row) all(is.finite(row))), ]
-
-      # Safely append valid new samples to the results file using a file lock
-      if (nrow(valid_samples) > 0) {
-        result_file <- samples_file
-        lock_path <- paste0(result_file, ".lock")
-        lock <- filelock::lock(lock_path)
-
-        write.table(valid_samples, result_file,
-                    sep = ",", row.names = FALSE, col.names = !file.exists(result_file),
-                    append = file.exists(result_file), quote = TRUE,
-                    eol = "\n")
-
-        filelock::unlock(lock)
-
-        if (verbose) cat(sprintf("Safely appended %d new valid samples to %s\n",
-                                  nrow(valid_samples), result_file))
-      } else if (verbose) {
-        cat("No valid samples in this iteration\n")
-      }
-    } else if (verbose) {
-      cat("All likelihood evaluations failed in this iteration\n")
+      use_subsampling <- TRUE
     }
   }
+  
+  # ==========================================================================
+  # CREATE SUBSAMPLE (if enabled) - ONCE FOR THIS JOB
+  # ==========================================================================
+  
+  if (use_subsampling) {
+    if (verbose) {
+      cat(sprintf("Creating subsample for this adaptive job: %d points from %d\n",
+                  opt_subsample, matrix_size))
+    }
+    
+    subsample_result <- subsample_dissimilarity_matrix(
+      dissimilarity_matrix = full_dissimilarity_matrix,
+      sample_size = opt_subsample,
+      max_attempts = 5,
+      verbose = verbose
+    )
+    
+    if (!subsample_result$is_connected) {
+      stop(sprintf(
+        paste0("Failed to obtain connected subsample for adaptive sampling job '%s'.\n",
+               "This job will be skipped."),
+        scenario_name
+      ))
+    }
+    
+    # Use this subsample for all iterations in this job
+    dissimilarity_matrix <- subsample_result$subsampled_matrix
+    
+    if (verbose) {
+      cat(sprintf("  Using this subsample for all %d iterations\n", iterations))
+    }
+    
+    # Sanity check
+    sanity_result <- sanity_check_subsample(
+      dissimilarity_matrix,
+      folds = folds,
+      verbose = verbose
+    )
+    
+    if (!sanity_result$all_checks_passed && verbose) {
+      cat("  [!] Subsample sanity checks raised warnings (proceeding anyway)\n")
+    }
+  }
+  
+  # ==========================================================================
+  # ADAPTIVE SAMPLING LOOP
+  # ==========================================================================
+  
+  if (verbose) {
+    cat(sprintf("\nStarting %d adaptive sampling iterations for job '%s'\n",
+                iterations, scenario_name))
+  }
+  
+  for (iter in 1:iterations) {
+    if (verbose) {
+      cat(sprintf("\n--- Iteration %d/%d ---\n", iter, iterations))
+    }
+    
+    # ========================================================================
+    # READ CURRENT SAMPLES
+    # ========================================================================
+    samples <- tryCatch({
+      read.csv(samples_file, stringsAsFactors = FALSE)
+    }, error = function(e) {
+      stop("Failed to read samples file: ", e$message)
+    })
+    
+    # Validate required columns
+    required_cols <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion", "NLL")
+    if (!all(required_cols %in% names(samples))) {
+      stop("Samples file missing required columns: ",
+           paste(setdiff(required_cols, names(samples)), collapse = ", "))
+    }
+    
+    # ========================================================================
+    # CALCULATE WEIGHTED MARGINALS
+    # ========================================================================
+    if (verbose) cat("  Calculating weighted marginals...\n")
+    
+    marginals <- tryCatch({
+      calculate_weighted_marginals(samples)
+    }, error = function(e) {
+      if (verbose) {
+        cat(sprintf("  Warning: Failed to calculate marginals: %s\n", e$message))
+      }
+      return(NULL)
+    })
+    
+    if (is.null(marginals)) {
+      if (verbose) cat("  Skipping iteration due to marginal calculation failure\n")
+      next
+    }
+    
+    # ========================================================================
+    # SAMPLE NEW PARAMETERS
+    # ========================================================================
+    if (verbose) cat("  Sampling new parameter values...\n")
+    
+    # Sample from each marginal distribution
+    log_N_new <- sample(marginals$log_N$x, size = 1,
+                        prob = marginals$log_N$y)
+    log_k0_new <- sample(marginals$log_k0$x, size = 1,
+                         prob = marginals$log_k0$y)
+    log_cooling_rate_new <- sample(marginals$log_cooling_rate$x, size = 1,
+                                   prob = marginals$log_cooling_rate$y)
+    log_c_repulsion_new <- sample(marginals$log_c_repulsion$x, size = 1,
+                                  prob = marginals$log_c_repulsion$y)
+    
+    # Convert back to original scale for embedding
+    N_new <- round(exp(log_N_new))
+    k0_new <- exp(log_k0_new)
+    cooling_rate_new <- exp(log_cooling_rate_new)
+    c_repulsion_new <- exp(log_c_repulsion_new)
+    
+    if (verbose) {
+      cat(sprintf("  New params: N=%d, k0=%.3f, cool=%.4f, c_rep=%.4f\n",
+                  N_new, k0_new, cooling_rate_new, c_repulsion_new))
+    }
+    
+    # ========================================================================
+    # EVALUATE NEW PARAMETERS
+    # ========================================================================
+    if (verbose) cat("  Evaluating via cross-validation...\n")
+    
+    result <- tryCatch({
+      likelihood_function(
+        dissimilarity_matrix = dissimilarity_matrix,  # Uses subsample if set
+        mapping_max_iter = mapping_max_iter,
+        relative_epsilon = relative_epsilon,
+        N = N_new,
+        k0 = k0_new,
+        cooling_rate = cooling_rate_new,
+        c_repulsion = c_repulsion_new,
+        folds = folds,
+        num_cores = num_cores
+      )
+    }, error = function(e) {
+      if (verbose) {
+        cat(sprintf("  X Evaluation failed: %s\n", e$message))
+      }
+      return(NULL)
+    })
+    
+    if (is.null(result) || is.na(result$Holdout_MAE) || is.na(result$NLL)) {
+      if (verbose) cat("  X Evaluation returned invalid results. Skipping.\n")
+      next
+    }
+    
+    # ========================================================================
+    # CHECK MAE REASONABLENESS
+    # ========================================================================
+    #observed_dissim <- as.numeric(dissimilarity_matrix)
+    observed_dissim <- extract_numeric_values(dissimilarity_matrix)
+    median_dissim <- median(observed_dissim[!is.na(observed_dissim)])
+    
+    if (!is.na(median_dissim) && result$Holdout_MAE > (2 * median_dissim)) {
+      if (verbose) {
+        cat(sprintf("  [!] High MAE (%.3f) vs median dissimilarity (%.3f)\n",
+                    result$Holdout_MAE, median_dissim))
+      }
+    }
+    
+    if (verbose) {
+      cat(sprintf("  [OK] MAE: %.4f, NLL: %.2f\n",
+                  result$Holdout_MAE, result$NLL))
+    }
+    
+    # ========================================================================
+    # APPEND NEW SAMPLE TO FILE
+    # ========================================================================
+    
+    # Create new row with log-transformed parameters
+    new_row <- data.frame(
+      log_N = log_N_new,
+      log_k0 = log_k0_new,
+      log_cooling_rate = log_cooling_rate_new,
+      log_c_repulsion = log_c_repulsion_new,
+      Holdout_MAE = result$Holdout_MAE,
+      NLL = result$NLL
+    )
+    
+    # Add subsampling metadata if used
+    if (use_subsampling) {
+      new_row$opt_subsample <- opt_subsample
+      new_row$original_n_points <- matrix_size
+    }
+    
+    # Match columns to existing samples
+    for (col in names(samples)) {
+      if (!(col %in% names(new_row))) {
+        new_row[[col]] <- NA
+      }
+    }
+    new_row <- new_row[, names(samples), drop = FALSE]
+    
+    # Append to file with file locking for thread safety
+    tryCatch({
+      # Use filelock if available for thread-safe writing
+      if (requireNamespace("filelock", quietly = TRUE)) {
+        lock_file <- paste0(samples_file, ".lock")
+        lock <- filelock::lock(lock_file, timeout = 30000)
+        on.exit({
+          if (!is.null(lock)) filelock::unlock(lock)
+          if (file.exists(lock_file)) file.remove(lock_file)
+        }, add = TRUE)
+      }
+      
+      # Append to CSV
+      write.table(new_row, file = samples_file,
+                  sep = ",", append = TRUE,
+                  row.names = FALSE, col.names = FALSE)
+      
+      if (verbose) cat("  [OK] Sample appended to file\n")
+      
+    }, error = function(e) {
+      if (verbose) {
+        cat(sprintf("  X Failed to append sample: %s\n", e$message))
+      }
+    })
+  }
+  
+  # ==========================================================================
+  # FINALIZATION
+  # ==========================================================================
+  
+  if (verbose) {
+    cat(sprintf("\n[OK] Adaptive sampling complete for job '%s'\n", scenario_name))
+    cat(sprintf("  %d iterations completed\n", iterations))
 
-  # Return the full set of samples from the file at the end of the process
-  result_file <- samples_file
-  if (file.exists(result_file)) {
-    final_samples <- read.csv(result_file, stringsAsFactors = FALSE)
-    return(final_samples)
-  } else {
-    warning("No results file was created.")
+  }
+  
+  # Read and return final results
+  final_samples <- tryCatch({
+    read.csv(samples_file, stringsAsFactors = FALSE)
+  }, error = function(e) {
+    if (verbose) cat("Warning: Could not read final samples file\n")
     return(NULL)
-  }
+  })
+  
+  return(final_samples)
 }
 
 
-# New
+
 #' Generate New Parameter Samples Using KDE
 #'
 #' @description
@@ -851,11 +1353,22 @@ generate_kde_samples <- function(samples, n, epsilon = 0) {
   samples <- as.data.frame(lapply(samples, clean_data, k = 3))
   samples <- na.omit(samples)
 
+  # Check if we have enough samples after cleaning
+  if (nrow(samples) < 2) {
+    stop("Insufficient samples remaining after removing NA & outliers (need at least 2)")
+  }
+
   # Calculate importance weights from the Negative Log-Likelihood (NLL)
   log_likes <- -samples$NLL
   # Shift log-likelihoods to be positive for stability
   std_log_likes <- log_likes - min(log_likes) + 0.05
   weights <- std_log_likes / sum(std_log_likes)
+
+   # Check for NA weights
+  if (any(is.na(weights))) {
+    warning("NA values in weights, replacing with uniform weights")
+    weights <- rep(1/nrow(samples), nrow(samples))
+  }
 
   # Define the names of the parameters to be sampled
   par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
@@ -876,9 +1389,24 @@ generate_kde_samples <- function(samples, n, epsilon = 0) {
     # Get the weighted kernel density estimate for the current parameter
     kde <- weighted_kde(samples[[param]], weights)
 
+     # Check for NA or negative values in density estimates
+    if (any(is.na(kde$y)) || any(kde$y < 0)) {
+      warning(paste("Invalid KDE values for parameter", param, "- using uniform sampling"))
+      # Fallback to uniform sampling from the range
+      new_samples[[param]] <- runif(n, min(samples[[param]]), max(samples[[param]]))
+      next
+    }
+
     # Sample from the KDE using inverse transform sampling
     u <- runif(n)
     cdf <- cumsum(kde$y) / sum(kde$y)
+
+    # Final check for NA in CDF
+    if (any(is.na(cdf))) {
+      warning(paste("NA values in CDF for parameter", param, "- using uniform sampling"))
+      new_samples[[param]] <- runif(n, min(samples[[param]]), max(samples[[param]]))
+      next
+    }
 
     # Use linear interpolation to find the sample values from the CDF
     new_samples[[param]] <- approx(cdf, kde$x, u, rule = 2)$y
@@ -888,7 +1416,6 @@ generate_kde_samples <- function(samples, n, epsilon = 0) {
 }
 
 
-# Newed
 #' Weighted Kernel Density Estimation
 #'
 #' @description
@@ -1078,7 +1605,6 @@ profile_likelihood <- function(param, samples, grid_size = 40,
 }
 
 
-# Newed
 #' Create Grid Around Maximum Likelihood Estimate (Internal)
 #'
 #' @description
@@ -1141,7 +1667,6 @@ get_grid <- function(samples, param, num_points, start_factor, end_factor) {
 }
 
 
-# Newed
 #' S3 Constructor for Profile Likelihood Results
 #'
 #' @description
@@ -1169,7 +1694,6 @@ profile_likelihood_result <- function(param_values, ll_values, param_name,
 }
 
 
-# Newed
 #' Parameter Sensitivity Analysis
 #'
 #' @description
@@ -1285,7 +1809,6 @@ parameter_sensitivity_analysis <- function(param, samples, bins = 30,
 }
 
 
-# Newed
 #' Plot Parameter Sensitivity Analysis
 #'
 #' @description
@@ -1430,7 +1953,6 @@ print.parameter_sensitivity <- function(x, ...) {
 }
 
 
-# Newed
 #' Calculate Weighted Marginal Distributions
 #'
 #' @description
@@ -1504,7 +2026,6 @@ calculate_weighted_marginals <- function(samples) {
 }
 
 
-# Newed
 #' Evaluate a Parameter Set with Cross-Validation
 #'
 #' @description
@@ -1677,7 +2198,6 @@ likelihood_function <- function(dissimilarity_matrix, mapping_max_iter,
 }
 
 
-# Newed
 #' Plot Method for profile_likelihood Objects
 #'
 #' @description

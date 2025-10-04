@@ -152,7 +152,7 @@ test_that("adaptive sampling workflow executes", {
   write.csv(samples, temp_samples_path, row.names = FALSE)
 
   # Create test dissimilarity matrix
-  test_mat <- as.matrix(dist(matrix(rnorm(10 * 3), ncol = 3)))
+  test_mat <- as.matrix(dist(matrix(rnorm(100 * 3), ncol = 3)))
 
   # Run adaptive sampling using the temporary file
   # We test the internal function as it's the core of the logic
@@ -162,7 +162,7 @@ test_that("adaptive sampling workflow executes", {
     iterations = 1, # Just one iteration for a quick test
     mapping_max_iter = 10,
     relative_epsilon = 1e-3,
-    folds = 2,
+    folds = 5,
     scenario_name = "test_amc",
     verbose = FALSE
   )
@@ -192,7 +192,7 @@ test_that("adaptive sampling workflow executes", {
   write.csv(samples, temp_samples_path, row.names = FALSE)
 
   # Create test dissimilarity matrix
-  test_mat <- as.matrix(dist(matrix(rnorm(10 * 3), ncol = 3)))
+  test_mat <- as.matrix(dist(matrix(rnorm(100 * 3), ncol = 3)))
 
   # Run adaptive sampling using the temporary file
   # We test the internal function as it's the core of the logic

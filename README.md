@@ -111,6 +111,29 @@ print(est_dist)
 print(result_auto$optimal_params)
 ```
 
+## Performance Optimization with Subsampling
+
+For large datasets (>500 points), parameter optimization can be time-consuming. Topolow supports subsampling during optimization to speed up this process. Final embedding uses all points to create the map.
+
+```r
+# Fast optimization using subsampling
+result <- Euclidify(
+  dissimilarity_matrix = large_data,
+  output_dir = "output",
+  opt_subsample = 300,  # Use 300 points for optimization
+  n_initial_samples = 50,
+  n_adaptive_samples = 150
+)
+```
+
+**Key benefits:**
+- Speedup on parameter optimization
+- Reduced memory usage
+- Final embedding quality preserved
+- Automatic connectivity validation
+
+See `?Euclidify` and `?initial_parameter_optimization` for details.
+
 ## Applications and Examples
 
 ### 1. Antigenic Mapping: Viral Evolution with Temporal Visualization
@@ -534,7 +557,7 @@ Key parameters of `euclidean_embedding()` for manual optimization:
 | Classical MDS | ❌ | ❌ (requires imputation) | ❌ | ✅ | ✅ |
 | Iterative MDS | ❌ | ❌ (requires imputation) | ❌ | ❌ | ❌ |
 | t-SNE | ❌ | ❌ | ❌ | ❌ | ❌ |
-| UMAP | ❌ | ❌ | ❌ | ❌ | ⚠️ |
+| UMAP | ❌ | ❌ | ❌ | ❌ | [!]️ |
 
 ## Using on HPC or SLURM Clusters
 

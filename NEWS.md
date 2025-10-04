@@ -114,3 +114,63 @@ result <- euclidean_embedding(dissimilarity_matrix = my_matrix,  # parameter nam
 # topolow 2.0.1 (2025-08-30)
 
 Included figures in the vignette.
+
+
+# topolow 2.1.0 (2025-10-02)
+
+## New Features
+
+### Subsampling for Computational Efficiency
+
+* **Major Feature**: Added `opt_subsample` parameter to key optimization functions, enabling efficient parameter optimization on large datasets while maintaining final embedding quality.
+
+* **New Functions**:
+  - `check_matrix_connectivity()`: Validates that a dissimilarity matrix forms a connected graph
+  - `subsample_dissimilarity_matrix()`: Creates random subsamples with automatic connectivity validation and adaptive size adjustment
+  - `sanity_check_subsample()`: Validates subsample suitability for cross-validation
+
+* **Enhanced Functions**:
+  - `initial_parameter_optimization()`: Now accepts `opt_subsample` parameter
+  - `run_adaptive_sampling()`: Now accepts `opt_subsample` parameter
+  - `adaptive_MC_sampling()`: Now accepts `opt_subsample` parameter (internal)
+  - `Euclidify()`: Now accepts `opt_subsample` parameter
+
+### How Subsampling Works
+
+When `opt_subsample` is specified:
+1. Each parameter evaluation uses a random subsample of the specified size
+2. Connectivity is automatically validated; disconnected subsamples are rejected
+3. If connectivity fails, sample size needs to be increased
+4. Different parameter evaluations use different subsamples for robustness
+5. **Final embedding always uses the full dataset**
+
+### Performance Benefits
+
+- Speeds up parameter optimization by ~10-50x on large datasets (>500 points)
+- Reduces memory usage proportional to subsample size
+- Parameters found on subsamples generalize well to full data
+
+### Breaking Changes
+
+None. The `opt_subsample` parameter is optional (default: NULL = use full data).
+
+### Other changes
+- Package gridExtra is a required import now.
+
+### Recommendations
+
+- Datasets < 500 points: Use full data (`opt_subsample = NULL`)
+- Datasets > 500 points: Recommended `opt_subsample = 200-500`
+- Always ensure `opt_subsample >= folds` for reliable cross-validation
+
+## Bug Fixes
+
+- Conversion of matrices to numeric in "R/adaptive_sampling.R" are now properly handled by extract_numeric_values() function of the Topolow package.
+
+## Improvements
+
+* Enhanced connectivity checking using igraph
+* Better error messages for disconnected data
+* Adaptive strategies for handling sparse data
+* Comprehensive logging of subsampling operations
+* New diagnostic plots including MCMC exploration and parameter fit traces

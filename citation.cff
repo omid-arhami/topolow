@@ -8,7 +8,7 @@ authors:
   given-names: "Pejman"
   orcid: 0000-0002-7221-3801
 title: "Topolow: A mapping algorithm for antigenic cross-reactivity and binding affinity assays, Bioinformatics, 2025"
-version: 2.0.1
+version: 2.1.0
 doi: https://doi.org/10.1093/bioinformatics/btaf372
 date-released: 2025
 url: "https://www.biorxiv.org/content/10.1101/2025.02.09.637307v1"

@@ -961,11 +961,11 @@ detect_outliers_mad <- function(data, k = 3) {
   process_value <- function(x) {
     if (is.character(x)) {
       if (grepl("^<", x)) {
-        as.numeric(sub("<", "", x))
+        suppressWarnings(as.numeric(sub("<", "", x)))
       } else if (grepl("^>", x)) {
-        as.numeric(sub(">", "", x))
+        suppressWarnings(as.numeric(sub(">", "", x)))
       } else {
-        as.numeric(x)
+        suppressWarnings(as.numeric(x))
       }
     } else {
       as.numeric(x)

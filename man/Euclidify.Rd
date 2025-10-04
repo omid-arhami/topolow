@@ -16,10 +16,13 @@ Euclidify(
   max_cores = NULL,
   folds = 20,
   mapping_max_iter = 500,
+  opt_subsample = NULL,
   clean_intermediate = TRUE,
   verbose = "standard",
   fallback_to_defaults = FALSE,
-  save_results = FALSE
+  save_results = FALSE,
+  create_diagnostic_plots = FALSE,
+  diagnostic_plot_types = "all"
 )
 }
 \arguments{
@@ -45,14 +48,21 @@ Required - no default.}
 optimization. Default: 100}
 
 \item{n_adaptive_samples}{Integer. Number of samples for adaptive refinement.
-Default: 250}
+Default: 150}
 
 \item{max_cores}{Integer. Maximum number of cores to use. Default: NULL (auto-detect)}
 
 \item{folds}{Integer. Number of cross-validation folds. Default: 20}
 
 \item{mapping_max_iter}{Integer. Maximum iterations for final embedding.
-Half this value is used for parameter search. Default: 1000}
+Half this value is used for parameter search. Default: 500}
+
+\item{opt_subsample}{Integer or NULL. If specified, uses subsampling during parameter
+optimization (both initial and adaptive) to reduce computational cost. Randomly
+samples this many points for each parameter evaluation. Final embedding always
+uses the full dataset. Default: NULL (no subsampling).
+Recommended for large datasets (>300 points). See \code{\link{initial_parameter_optimization}}
+for details.}
 
 \item{clean_intermediate}{Logical. Whether to remove intermediate files. Default: TRUE}
 
@@ -60,9 +70,16 @@ Half this value is used for parameter search. Default: 1000}
 or "full" (detailed output including from internal functions). Default: "standard"}
 
 \item{fallback_to_defaults}{Logical. Whether to use default parameters if
-optimization fails. Default: TRUE}
+optimization fails. Default: FALSE}
 
 \item{save_results}{Logical. Whether to save the final positions as CSV. Default: FALSE}
+
+\item{create_diagnostic_plots}{Logical. Whether to create diagnostic and trace plots
+showing the parameter optimization process and embedding quality. Default: FALSE}
+
+\item{diagnostic_plot_types}{Character vector. Which plot types to create.
+Options: "all", "parameter_search", "convergence", "quality", "cv_errors".
+Default: "all"}
 }
 \value{
 A list containing:
@@ -73,11 +90,14 @@ A list containing:
 \item{optimization_summary}{Summary of the optimization process}
 \item{data_characteristics}{Summary of input data characteristics}
 \item{runtime}{Total runtime in seconds}
+\item{all_samples}{Data frame of all parameter evaluations (if create_diagnostic_plots=TRUE)}
+\item{diagnostic_plots}{List of ggplot objects (if create_diagnostic_plots=TRUE)}
+\item{dissimilarity_matrix}{Input dissimilarity matrix (if create_diagnostic_plots=TRUE)}
 }
 \description{
 A user-friendly wrapper function that automatically optimizes parameters and
 performs Euclidean embedding on a dissimilarity matrix. This function handles
-the entire workflow from parameter optimization to final embedding.
+the entire workflow from parameter optimization to final embedding,  with comprehensive diagnostic tracking and visualization.
 }
 \examples{
 # Example 1: Basic usage with small matrix
@@ -149,6 +169,36 @@ result <- Euclidify(
   n_adaptive_samples = 100,
   save_results = TRUE  # Save positions to CSV
 )
+}
+
+# Example 6: Basic usage
+test_data <- data.frame(
+  object = rep(paste0("Obj", 1:4), each = 4),
+  reference = rep(paste0("Ref", 1:4), 4),
+  score = sample(c(1, 2, 4, 8, 16, 32, 64, "<1", ">12"), 16, replace = TRUE)
+)
+dist_mat <- list_to_matrix(
+  data = test_data,
+  object_col = "object",
+  reference_col = "reference",
+  value_col = "score",
+  is_similarity = TRUE
+)
+\dontrun{
+# Basic usage with diagnostics
+result <- Euclidify(
+  dissimilarity_matrix = dist_mat,
+  output_dir = tempdir(),
+  create_diagnostic_plots = TRUE
+)
+
+# View diagnostic report
+report <- create_diagnostic_report(result)
+cat(report, sep = "\n")
+
+# Access specific diagnostic plots
+print(result$diagnostic_plots$parameter_search)
+print(result$diagnostic_plots$convergence)
 }
 
 }

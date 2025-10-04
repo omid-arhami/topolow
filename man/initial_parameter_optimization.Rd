@@ -6,7 +6,7 @@
 \usage{
 initial_parameter_optimization(
   dissimilarity_matrix,
-  mapping_max_iter = 1000,
+  mapping_max_iter = 500,
   relative_epsilon,
   convergence_counter,
   scenario_name,
@@ -21,6 +21,7 @@ initial_parameter_optimization(
   num_samples = 20,
   max_cores = NULL,
   folds = 20,
+  opt_subsample = NULL,
   verbose = FALSE,
   write_files = FALSE,
   output_dir
@@ -51,6 +52,21 @@ initial_parameter_optimization(
 
 \item{folds}{Integer. Number of cross-validation folds. Default: 20.}
 
+\item{opt_subsample}{Integer or NULL. If specified, randomly samples this many
+points from the dissimilarity matrix for each parameter evaluation to reduce
+computational cost. The function automatically validates that subsampled data
+forms a connected graph. Each parameter evaluation uses a different random
+subsample for robustness. Default: NULL (use full data).
+
+\strong{Notes:}
+\itemize{
+\item If connectivity cannot be achieved, sample size is adaptively increased
+\item Minimum recommended: \code{opt_subsample >= max(100, folds)}
+\item Each parameter set gets a different subsample, but all CV folds within
+that parameter set use the same subsample
+\item The actual subsample size used is reported in output columns
+}}
+
 \item{verbose}{Logical. Whether to print progress messages. Default: FALSE.}
 
 \item{write_files}{Logical. Whether to save results to a CSV file. Default: FALSE.}
@@ -59,7 +75,8 @@ initial_parameter_optimization(
 }
 \value{
 A \code{data.frame} containing the log-transformed parameter sets and their performance metrics.
-Columns include: \code{log_N}, \code{log_k0}, \code{log_cooling_rate}, \code{log_c_repulsion}, \code{Holdout_MAE}, and \code{NLL}.
+Columns include: \code{log_N}, \code{log_k0}, \code{log_cooling_rate}, \code{log_c_repulsion}, \code{Holdout_MAE}, \code{NLL},
+and if \code{opt_subsample} was used: \code{opt_subsample},\code{original_n_points}.
 }
 \description{
 Performs parameter optimization using Latin Hypercube Sampling (LHS) combined with
@@ -80,12 +97,21 @@ Initial Parameter Optimization using Latin Hypercube Sampling
 The function performs these steps:
 \enumerate{
 \item Generates LHS samples in the parameter space (original scale for sampling).
-\item Creates k-fold splits of the input data.
-\item For each parameter set, it trains the model on each fold's training set and evaluates
-on the validation set, calculating a pooled MAE and NLL across all folds.
-\item Computations are run locally in parallel.
-\item \strong{NEW}: Automatically log-transforms the final results for direct use with adaptive sampling.
+\item If \code{opt_subsample} is specified, each parameter evaluation gets a different
+random subsample for robustness testing.
+\item For each parameter set, \code{likelihood_function} is called which internally
+creates k-fold splits and evaluates via cross-validation.
+\item Parameter evaluations are processed in batches for memory efficiency.
+\item Computations are run in parallel within each batch.
+\item Automatically log-transforms the final results for direct use with adaptive sampling.
 }
+
+\strong{Note on Cross-Validation with Subsampling:}
+When \code{opt_subsample} is used, each parameter evaluation receives a different
+random subsample. Since the underlying data differs between evaluations, each evaluation
+also gets its own CV fold structure (created internally by \code{likelihood_function}).
+This approach tests parameter robustness across different data samples and fold structures,
+which is appropriate for the exploration phase of parameter optimization.
 }
 \note{
 \strong{Breaking Change in v2.0.0:} This function now returns log-transformed parameters directly.
@@ -103,7 +129,7 @@ separately before using \code{run_adaptive_sampling()}.
 synth_coords <- matrix(rnorm(60), nrow = 20, ncol = 3)
 dist_mat <- coordinates_to_matrix(synth_coords)
 
-# 2. Run the optimization on the synthetic data
+# 2. Run the optimization on the synthetic data (full data)
 results <- initial_parameter_optimization(
   dissimilarity_matrix = dist_mat,
   mapping_max_iter = 100,
@@ -115,12 +141,31 @@ results <- initial_parameter_optimization(
   c_repulsion_min = 0.001, c_repulsion_max = 0.05,
   cooling_rate_min = 0.001, cooling_rate_max = 0.02,
   num_samples = 4,
-  max_cores = 1,  # Avoid parallel processing in check environment
+  max_cores = 1,
   verbose = FALSE
+)
+
+# 3. With subsampling for faster computation
+results_sub <- initial_parameter_optimization(
+  dissimilarity_matrix = dist_mat,
+  mapping_max_iter = 100,
+  relative_epsilon = 1e-3,
+  convergence_counter = 2,
+  scenario_name = "test_opt_subsampled",
+  N_min = 2, N_max = 5,
+  k0_min = 1, k0_max = 10,
+  c_repulsion_min = 0.001, c_repulsion_max = 0.05,
+  cooling_rate_min = 0.001, cooling_rate_max = 0.02,
+  num_samples = 4,
+  max_cores = 1,
+  folds = 10,
+  opt_subsample = 15,  # Use only 15 points
+  verbose = TRUE
 )
 }
 
 }
 \seealso{
-\code{\link{euclidean_embedding}} for the core optimization algorithm.
+\code{\link{euclidean_embedding}} for the core optimization algorithm,
+\code{\link{subsample_dissimilarity_matrix}} for subsampling details.
 }
