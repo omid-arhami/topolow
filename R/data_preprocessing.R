@@ -1294,8 +1294,8 @@ prune_sparse_matrix <- function(dissimilarity_matrix,
                   target_completeness * 100))
     }
     
-    current_threshold <- 5
-    threshold_increment <- 5
+    current_threshold <- 4
+    threshold_increment <- 2
     max_threshold_attempts <- 50
     
     for (attempt in 1:max_threshold_attempts) {

@@ -257,6 +257,81 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
     }
   }
   
+
+  # ==========================================================================
+  # PRE-FLIGHT DATA QUALITY CHECK
+  # ==========================================================================
+  if (verbose) {
+    cat("\nPerforming pre-flight data quality checks...\n")
+    
+    # Check sparsity
+    n_missing <- sum(is.na(dissimilarity_matrix))
+    sparsity <- n_missing / (matrix_size^2)
+    cat(sprintf("  Sparsity: %.1f%% missing values\n", sparsity * 100))
+    
+    # Check connectivity if using subsampling
+    if (use_subsampling && requireNamespace("igraph", quietly = TRUE)) {
+      cat("  Checking full matrix connectivity...\n")
+      full_connectivity <- tryCatch({
+        check_matrix_connectivity(dissimilarity_matrix, min_completeness = 0.01)
+      }, error = function(e) {
+        list(is_connected = NA, completeness = 0)
+      })
+      
+      if (!is.na(full_connectivity$is_connected)) {
+        cat(sprintf("    Full matrix: %s (%d components, %.1f%% complete)\n",
+                    ifelse(full_connectivity$is_connected, "CONNECTED", "DISCONNECTED"),
+                    full_connectivity$n_components,
+                    full_connectivity$completeness * 100))
+        
+        # Warn if very sparse
+        if (sparsity > 0.95) {
+          warning(
+            sprintf(
+              paste0("\n  DATA SPARSITY WARNING:\n",
+                    "  Your matrix is %.1f%% sparse (missing values).\n",
+                    "  Subsampling may create disconnected graphs.\n",
+                    "  Consider pruning with prune_sparse_matrix() first.\n"),
+              sparsity * 100
+            ),
+            call. = FALSE, immediate. = TRUE
+          )
+        }
+        
+        # Test subsample feasibility
+        if (use_subsampling && sparsity > 0.90) {
+          cat("  Testing subsample feasibility...\n")
+          test_subsample <- tryCatch({
+            subsample_dissimilarity_matrix(
+              dissimilarity_matrix = dissimilarity_matrix,
+              sample_size = opt_subsample,
+              max_attempts = 2,
+              verbose = FALSE
+            )
+          }, error = function(e) NULL)
+          
+          if (is.null(test_subsample) || !test_subsample$is_connected) {
+            warning(
+              sprintf(
+                paste0("\n  SUBSAMPLE CONNECTIVITY WARNING:\n",
+                      "  Test subsample (n=%d) failed connectivity check.\n",
+                      "  All %d parameter evaluations may fail.\n",
+                      "  STRONGLY RECOMMEND: Prune matrix before optimization.\n"),
+                opt_subsample, num_samples
+              ),
+              call. = FALSE, immediate. = TRUE
+            )
+          } else {
+            cat(sprintf("    Test subsample: CONNECTED (%.1f%% complete)\n",
+                        test_subsample$completeness * 100))
+          }
+        }
+      }
+    }
+    
+    cat("Pre-flight checks complete.\n\n")
+  }
+
   # ==========================================================================
   # PARALLEL PROCESSING SETUP
   # ==========================================================================
@@ -308,6 +383,15 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
   # Store reference to full matrix for subsampling
   full_dissimilarity_matrix <- dissimilarity_matrix
   
+  # Initialize failure tracking
+  failure_diagnostics <- list(
+    subsample_failures = 0,
+    cv_fold_failures = 0,
+    embedding_failures = 0,
+    other_failures = 0,
+    failure_messages = c()
+  )
+
   process_param_set <- function(i) {
     tryCatch({
       # Get parameters for this evaluation
@@ -331,14 +415,39 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
           cat(sprintf("  Subsampling to %d points...\n", opt_subsample))
         }
         
-        subsample_result <- subsample_dissimilarity_matrix(
-          dissimilarity_matrix = full_dissimilarity_matrix,
-          sample_size = opt_subsample,
-          max_attempts = 5,
-          verbose = verbose
-        )
+        subsample_result <- tryCatch({
+          subsample_dissimilarity_matrix(
+            dissimilarity_matrix = full_dissimilarity_matrix,
+            sample_size = opt_subsample,
+            max_attempts = 5,
+            verbose = verbose
+          )
+        }, error = function(e) {
+          # CHANGE: Track subsample failure with details
+          failure_diagnostics$subsample_failures <<- failure_diagnostics$subsample_failures + 1
+          failure_diagnostics$failure_messages <<- c(
+            failure_diagnostics$failure_messages,
+            sprintf("Sample %d: Subsample failed - %s", i, e$message)
+          )
+          if (verbose) {
+            cat("  X Subsampling failed:", e$message, "\n")
+          }
+          return(NULL)
+        })
         
+        if (is.null(subsample_result)) {
+          return(NULL)
+        }
+
         if (!subsample_result$is_connected) {
+          # Track connectivity failure with details
+          failure_diagnostics$subsample_failures <<- failure_diagnostics$subsample_failures + 1
+          failure_diagnostics$failure_messages <<- c(
+            failure_diagnostics$failure_messages,
+            sprintf("Sample %d: Disconnected subsample (%d components, %.1f%% complete)",
+                    i, subsample_result$n_components, 
+                    subsample_result$completeness * 100)
+          )
           if (verbose) {
             cat("  X Failed to obtain connected subsample. Skipping this parameter set.\n")
           }
@@ -362,21 +471,51 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
       # ======================================================================
       # CROSS-VALIDATION EVALUATION
       # ======================================================================
-      result <- likelihood_function(
-        dissimilarity_matrix = local_matrix,
-        mapping_max_iter = mapping_max_iter,
-        relative_epsilon = relative_epsilon,
-        N = N,
-        k0 = k0,
-        cooling_rate = cooling_rate,
-        c_repulsion = c_repulsion,
-        folds = folds,
-        num_cores = 1  # Already parallelizing at parameter level
-      )
+      result <- tryCatch({
+        likelihood_function(
+          dissimilarity_matrix = local_matrix,
+          mapping_max_iter = mapping_max_iter,
+          relative_epsilon = relative_epsilon,
+          N = N,
+          k0 = k0,
+          cooling_rate = cooling_rate,
+          c_repulsion = c_repulsion,
+          folds = folds,
+          num_cores = 1
+        )
+      }, error = function(e) {
+        # Track CV/embedding failure with details
+        if (grepl("fold|sparse", e$message, ignore.case = TRUE)) {
+          failure_diagnostics$cv_fold_failures <<- failure_diagnostics$cv_fold_failures + 1
+        } else {
+          failure_diagnostics$embedding_failures <<- failure_diagnostics$embedding_failures + 1
+        }
+        failure_diagnostics$failure_messages <<- c(
+          failure_diagnostics$failure_messages,
+          sprintf("Sample %d: Evaluation failed - %s", i, 
+                  substr(e$message, 1, 100))
+        )
+        if (verbose) {
+          cat("  X Evaluation error:", e$message, "\n")
+        }
+        return(list(Holdout_MAE = NA, NLL = NA))
+      })
       
       # ======================================================================
       # CHECK MAE REASONABLENESS
       # ======================================================================
+      # Check if result is valid
+      if (is.null(result) || is.na(result$Holdout_MAE) || is.na(result$NLL)) {
+        if (is.null(result)) {
+          failure_diagnostics$other_failures <<- failure_diagnostics$other_failures + 1
+          failure_diagnostics$failure_messages <<- c(
+            failure_diagnostics$failure_messages,
+            sprintf("Sample %d: Returned NULL result", i)
+          )
+        }
+        return(NULL)
+      }
+
       if (!is.na(result$Holdout_MAE) && !is.null(result$Holdout_MAE)) {
         # Get median of observed dissimilarities for comparison
         # (handles threshold indicators):
@@ -502,11 +641,115 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
   # Remove NULL results (failed evaluations)
   valid_results <- Filter(Negate(is.null), all_results)
   
-  if (length(valid_results) == 0) {
-    stop("No valid parameter evaluations completed successfully. ",
-         "Check your data and parameter ranges.")
-  }
   
+  if (length(valid_results) == 0) {
+    # Provide detailed diagnostic error message
+    cat("\n", rep("=", 80), "\n", sep = "")
+    cat("ERROR: ALL PARAMETER EVALUATIONS FAILED\n")
+    cat(rep("=", 80), "\n\n", sep = "")
+    
+    cat("Failure Summary:\n")
+    cat(sprintf("  - Subsample/connectivity failures: %d/%d (%.1f%%)\n",
+                failure_diagnostics$subsample_failures, num_samples,
+                100 * failure_diagnostics$subsample_failures / num_samples))
+    cat(sprintf("  - CV fold creation failures:       %d/%d (%.1f%%)\n",
+                failure_diagnostics$cv_fold_failures, num_samples,
+                100 * failure_diagnostics$cv_fold_failures / num_samples))
+    cat(sprintf("  - Embedding failures:              %d/%d (%.1f%%)\n",
+                failure_diagnostics$embedding_failures, num_samples,
+                100 * failure_diagnostics$embedding_failures / num_samples))
+    cat(sprintf("  - Other failures:                  %d/%d (%.1f%%)\n",
+                failure_diagnostics$other_failures, num_samples,
+                100 * failure_diagnostics$other_failures / num_samples))
+    
+    cat("\nData Characteristics:\n")
+    cat(sprintf("  - Matrix size: %d x %d\n", matrix_size, matrix_size))
+    cat(sprintf("  - Missing values: %d/%d (%.1f%%)\n",
+                sum(is.na(dissimilarity_matrix)),
+                matrix_size^2,
+                100 * sum(is.na(dissimilarity_matrix)) / matrix_size^2))
+    
+    if (use_subsampling) {
+      cat(sprintf("  - Subsample size: %d (%.1f%% of full matrix)\n",
+                  opt_subsample, 100 * opt_subsample / matrix_size))
+      cat(sprintf("  - CV folds: %d (each removes ~%d points)\n",
+                  folds, floor(opt_subsample / folds)))
+    } else {
+      cat(sprintf("  - CV folds: %d (each removes ~%d points)\n",
+                  folds, floor(matrix_size / folds)))
+    }
+    
+    # Determine primary failure mode
+    primary_issue <- "unknown"
+    if (failure_diagnostics$subsample_failures > num_samples * 0.5) {
+      primary_issue <- "subsampling"
+    } else if (failure_diagnostics$cv_fold_failures > num_samples * 0.5) {
+      primary_issue <- "cv_folds"
+    } else if (failure_diagnostics$embedding_failures > num_samples * 0.5) {
+      primary_issue <- "embedding"
+    }
+    
+    cat("\nLikely Root Cause:\n")
+    if (primary_issue == "subsampling") {
+      cat("  >> DATA TOO SPARSE FOR SUBSAMPLING <<\n\n")
+      cat("  Your data has disconnected components when subsampled.\n")
+      cat("  This happens when observations are too sparse to maintain\n")
+      cat("  connectivity after random sampling.\n\n")
+      cat("Recommended Solutions (in order of preference):\n")
+      cat("  1. Prune sparse matrix BEFORE optimization:\n")
+      cat("       pruned <- prune_sparse_matrix(your_matrix, \n")
+      cat("                                      target_completeness = 0.02,\n")
+      cat("                                      min_points = 1000)\n")
+      cat("       # Then use pruned$pruned_matrix for optimization\n\n")
+      cat("  2. Increase opt_subsample (current: ", opt_subsample, ")\n", sep = "")
+      cat("       Try: opt_subsample = ", ceiling(opt_subsample * 1.5), "\n\n", sep = "")
+      cat("  3. Reduce CV folds (current: ", folds, ")\n", sep = "")
+      cat("       Try: folds = ", max(5, floor(folds / 2)), "\n\n", sep = "")
+      cat("  4. Disable subsampling (use full matrix):\n")
+      cat("       opt_subsample = NULL\n")
+      cat("       Warning: This will be slow with large matrices\n\n")
+      
+    } else if (primary_issue == "cv_folds") {
+      cat("  >> INSUFFICIENT DATA FOR CROSS-VALIDATION <<\n\n")
+      cat("  The matrix becomes too sparse when splitting into CV folds.\n\n")
+      cat("Recommended Solutions:\n")
+      cat("  1. Reduce number of CV folds (current: ", folds, ")\n", sep = "")
+      cat("       Try: folds = ", max(5, floor(folds / 2)), "\n\n", sep = "")
+      cat("  2. Prune sparse matrix to increase density:\n")
+      cat("       pruned <- prune_sparse_matrix(your_matrix,\n")
+      cat("                                      min_connections = 15)\n\n")
+      
+    } else if (primary_issue == "embedding") {
+      cat("  >> EMBEDDING OPTIMIZATION FAILURES <<\n\n")
+      cat("  The optimization process is failing, possibly due to:\n")
+      cat("    - Extreme parameter values\n")
+      cat("    - Non-metric data structure\n")
+      cat("    - Insufficient iterations\n\n")
+      cat("Recommended Solutions:\n")
+      cat("  1. Check parameter ranges are reasonable\n")
+      cat("  2. Increase mapping_max_iter (current: ", mapping_max_iter, ")\n", sep = "")
+      cat("  3. Analyze data structure with analyze_network_structure()\n\n")
+    }
+    
+    # Show first few failure messages for debugging
+    if (length(failure_diagnostics$failure_messages) > 0) {
+      cat("\nFirst Few Failure Messages:\n")
+      cat(rep("-", 80), "\n", sep = "")
+      n_show <- min(5, length(failure_diagnostics$failure_messages))
+      for (msg in failure_diagnostics$failure_messages[1:n_show]) {
+        cat("  ", msg, "\n", sep = "")
+      }
+      if (length(failure_diagnostics$failure_messages) > n_show) {
+        cat(sprintf("  ... and %d more failures\n", 
+                    length(failure_diagnostics$failure_messages) - n_show))
+      }
+    }
+    
+    cat("\n", rep("=", 80), "\n\n", sep = "")
+    
+    stop("No valid parameter evaluations completed successfully. See diagnostic output above.")
+  }
+
   if (verbose && length(valid_results) < num_samples) {
     cat(sprintf("\nWarning: Only %d/%d parameter evaluations completed successfully.\n",
                 length(valid_results), num_samples))
