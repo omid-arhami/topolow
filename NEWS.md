@@ -155,6 +155,7 @@ When `opt_subsample` is specified:
 None. The `opt_subsample` parameter is optional (default: NULL = use full data).
 
 ### Other changes
+- Function `prune_sparse_matrix()` is added to prune sparse dissimilarity matrices to a well-connected subset
 - Package gridExtra is a required import now.
 
 ### Recommendations
