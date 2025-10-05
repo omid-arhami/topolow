@@ -1130,3 +1130,377 @@ log_transform_parameters <- function(samples_file, output_file = NULL) {
   # Return the transformed data frame if not writing to file
   return(samples)
 }
+
+
+
+
+#' Prune Sparse Dissimilarity Matrix to Well-Connected Subset
+#'
+#' @description
+#' Iteratively removes poorly connected points from a sparse dissimilarity matrix
+#' to create a well-connected, denser subset suitable for optimization and subsampling.
+#' This is particularly useful for very sparse datasets (>95% missing) where random
+#' subsampling would create disconnected graphs.
+#'
+#' @param dissimilarity_matrix Square symmetric dissimilarity matrix. Can contain
+#'   NA values and threshold indicators (< or >).
+#' @param min_connections Integer. Minimum number of observed dissimilarities 
+#'   required per point. Points with fewer connections are iteratively removed.
+#'   Default: 4. Higher values create denser but smaller subsets.
+#' @param target_completeness Numeric. Target network completeness (0-1) to achieve.
+#'   If specified, overrides min_connections and adaptively increases the threshold
+#'   until target is reached. Default: NULL.
+#' @param max_iterations Integer. Maximum pruning iterations to prevent infinite loops.
+#'   Default: 100.
+#' @param min_points Integer. Minimum number of points to retain. Stops pruning if
+#'   fewer points remain. Default: 10.
+#' @param ensure_connected Logical. If TRUE, verifies final subset is connected and
+#'   warns if not. Requires igraph package. Default: TRUE.
+#' @param verbose Logical. Print progress messages. Default: TRUE.
+#'
+#' @return A list containing:
+#'   \item{pruned_matrix}{Matrix. The pruned dissimilarity matrix.}
+#'   \item{kept_indices}{Integer vector. Row/column indices of kept points.}
+#'   \item{kept_names}{Character vector. Names of kept points (if original had names).}
+#'   \item{removed_indices}{Integer vector. Indices of removed points.}
+#'   \item{stats}{List of pruning statistics:
+#'     \itemize{
+#'       \item \code{original_size}: Original matrix dimensions
+#'       \item \code{final_size}: Final matrix dimensions  
+#'       \item \code{points_removed}: Number of points removed
+#'       \item \code{percent_removed}: Percentage of points removed
+#'       \item \code{original_completeness}: Original network completeness
+#'       \item \code{final_completeness}: Final network completeness
+#'       \item \code{original_measurements}: Original number of observed values
+#'       \item \code{final_measurements}: Final number of observed values
+#'       \item \code{iterations}: Number of pruning iterations
+#'       \item \code{min_connections_used}: Final min_connections threshold
+#'       \item \code{is_connected}: Whether final subset is connected (if checked)
+#'       \item \code{n_components}: Number of connected components (if checked)
+#'     }
+#'   }
+#'
+#' @details
+#' The function works by:
+#' 1. Counting observed measurements per point (row/column)
+#' 2. Identifying points below the threshold
+#' 3. Removing those points and their measurements
+#' 4. Repeating until all remaining points meet the threshold
+#' 5. Optionally verifying connectivity
+#'
+#' **Choosing min_connections:**
+#' - For very sparse data, start with min_connections = 3-10
+#' - For target completeness, use target_completeness instead
+#'
+#' **Adaptive thresholding with target_completeness:**
+#' If target_completeness is specified, the function:
+#' 1. Starts with min_connections = 4
+#' 2. Prunes the matrix
+#' 3. Checks if completeness target is met
+#' 4. If not, increases min_connections by 1 and repeats
+#' 5. Stops when target is reached or min_points is hit
+#'
+#' @examples
+#' # Create a sparse matrix
+#' set.seed(123)
+#' n <- 1000
+#' mat <- matrix(NA, n, n)
+#' diag(mat) <- 0
+#' # Add only 1% observations
+#' n_obs <- floor(n * n * 0.01)
+#' indices <- sample(which(upper.tri(mat)), n_obs)
+#' mat[indices] <- runif(n_obs, 0, 10)
+#' mat[lower.tri(mat)] <- t(mat)[lower.tri(mat)]
+#'
+#' # Prune with minimum connections
+#' result <- prune_sparse_matrix(mat, min_connections = 15)
+#' print(result$stats)
+#'
+#' # Prune to target completeness
+#' result2 <- prune_sparse_matrix(mat, target_completeness = 0.05)
+#' print(result2$stats)
+#'
+#' @seealso
+#' \code{\link{check_matrix_connectivity}} for checking connectivity,
+#' \code{\link{analyze_network_structure}} for network analysis
+#'
+#' @export
+prune_sparse_matrix <- function(dissimilarity_matrix,
+                                min_connections = 4,
+                                target_completeness = NULL,
+                                max_iterations = 100,
+                                min_points = 10,
+                                ensure_connected = TRUE,
+                                verbose = TRUE) {
+  
+  # ==========================================================================
+  # INPUT VALIDATION
+  # ==========================================================================
+  if (!is.matrix(dissimilarity_matrix)) {
+    stop("dissimilarity_matrix must be a matrix")
+  }
+  
+  if (nrow(dissimilarity_matrix) != ncol(dissimilarity_matrix)) {
+    stop("dissimilarity_matrix must be square")
+  }
+  
+  original_size <- nrow(dissimilarity_matrix)
+  
+  if (original_size < min_points) {
+    stop(sprintf("Matrix size (%d) is smaller than min_points (%d)",
+                 original_size, min_points))
+  }
+  
+  if (!is.numeric(min_connections) || min_connections < 1) {
+    stop("min_connections must be a positive integer")
+  }
+  
+  if (!is.null(target_completeness)) {
+    if (!is.numeric(target_completeness) || 
+        target_completeness <= 0 || target_completeness > 1) {
+      stop("target_completeness must be between 0 and 1")
+    }
+  }
+  
+  # Check for igraph if connectivity check is requested
+  if (ensure_connected && !requireNamespace("igraph", quietly = TRUE)) {
+    warning("igraph package not available. Skipping connectivity check.")
+    ensure_connected <- FALSE
+  }
+  
+  # ==========================================================================
+  # CALCULATE ORIGINAL STATISTICS
+  # ==========================================================================
+  original_measurements <- sum(!is.na(dissimilarity_matrix) & 
+                                 row(dissimilarity_matrix) != col(dissimilarity_matrix)) / 2
+  original_completeness <- (2 * original_measurements) / (original_size * (original_size - 1))
+  
+  if (verbose) {
+    cat("\n", rep("=", 80), "\n", sep = "")
+    cat("SPARSE MATRIX PRUNING\n")
+    cat(rep("=", 80), "\n", sep = "")
+    cat(sprintf("\nOriginal matrix: %d x %d\n", original_size, original_size))
+    cat(sprintf("Original measurements: %d\n", original_measurements))
+    cat(sprintf("Original completeness: %.3f (%.1f%%)\n", 
+                original_completeness, original_completeness * 100))
+  }
+  
+  # ==========================================================================
+  # ADAPTIVE THRESHOLDING (if target_completeness specified)
+  # ==========================================================================
+  if (!is.null(target_completeness)) {
+    if (verbose) {
+      cat(sprintf("\nUsing adaptive thresholding to reach %.1f%% completeness...\n",
+                  target_completeness * 100))
+    }
+    
+    current_threshold <- 5
+    threshold_increment <- 5
+    max_threshold_attempts <- 50
+    
+    for (attempt in 1:max_threshold_attempts) {
+      if (verbose) {
+        cat(sprintf("\nAttempt %d: min_connections = %d\n", 
+                    attempt, current_threshold))
+      }
+      
+      # Try pruning with current threshold
+      temp_result <- prune_sparse_matrix(
+        dissimilarity_matrix = dissimilarity_matrix,
+        min_connections = current_threshold,
+        target_completeness = NULL,  # Disable recursion
+        max_iterations = max_iterations,
+        min_points = min_points,
+        ensure_connected = FALSE,  # Check only at end
+        verbose = FALSE
+      )
+      
+      # Check if target reached
+      if (temp_result$stats$final_completeness >= target_completeness) {
+        if (verbose) {
+          cat(sprintf("  Target reached: %.3f >= %.3f\n",
+                      temp_result$stats$final_completeness,
+                      target_completeness))
+        }
+        
+        # Do final connectivity check if requested
+        if (ensure_connected) {
+          connectivity <- check_matrix_connectivity(
+            temp_result$pruned_matrix,
+            min_completeness = target_completeness
+          )
+          temp_result$stats$is_connected <- connectivity$is_connected
+          temp_result$stats$n_components <- connectivity$n_components
+        }
+        
+        return(temp_result)
+      }
+      
+      # Check if we've hit minimum size
+      if (temp_result$stats$final_size <= min_points) {
+        warning(sprintf(
+          paste0("Reached min_points (%d) before target completeness. ",
+                 "Final completeness: %.3f, Target: %.3f"),
+          min_points, temp_result$stats$final_completeness, target_completeness
+        ))
+        return(temp_result)
+      }
+      
+      if (verbose) {
+        cat(sprintf("  Completeness: %.3f < %.3f, increasing threshold...\n",
+                    temp_result$stats$final_completeness, target_completeness))
+      }
+      
+      current_threshold <- current_threshold + threshold_increment
+    }
+    
+    stop("Could not reach target completeness after maximum attempts")
+  }
+  
+  # ==========================================================================
+  # STANDARD PRUNING (fixed min_connections)
+  # ==========================================================================
+  if (verbose) {
+    cat(sprintf("\nPruning with min_connections = %d\n", min_connections))
+    cat(rep("-", 80), "\n", sep = "")
+  }
+  
+  # Initialize
+  current_matrix <- dissimilarity_matrix
+  kept_indices <- seq_len(original_size)
+  iteration <- 0
+  continue_pruning <- TRUE
+  
+  while (continue_pruning && iteration < max_iterations) {
+    iteration <- iteration + 1
+    current_size <- nrow(current_matrix)
+    
+    # Count connections per point (excluding diagonal)
+    connection_counts <- apply(current_matrix, 1, function(row) {
+      sum(!is.na(row) & row != row[1])  # Exclude diagonal (self-connection)
+    })
+    
+    # Identify poorly connected points
+    poorly_connected <- which(connection_counts < min_connections)
+    n_to_remove <- length(poorly_connected)
+    
+    if (n_to_remove == 0) {
+      # All points meet threshold
+      continue_pruning <- FALSE
+      if (verbose) {
+        cat(sprintf("Iteration %d: All %d points have >= %d connections\n",
+                    iteration, current_size, min_connections))
+      }
+    } else if ((current_size - n_to_remove) < min_points) {
+      # Would drop below minimum
+      warning(sprintf(
+        paste0("Stopping at iteration %d: removing %d points would leave only %d ",
+               "points (min_points = %d)"),
+        iteration, n_to_remove, current_size - n_to_remove, min_points
+      ))
+      continue_pruning <- FALSE
+    } else {
+      # Remove poorly connected points
+      keep_mask <- connection_counts >= min_connections
+      current_matrix <- current_matrix[keep_mask, keep_mask, drop = FALSE]
+      kept_indices <- kept_indices[keep_mask]
+      
+      if (verbose && iteration %% 10 == 0) {
+        cat(sprintf("Iteration %d: Removed %d points, %d remaining\n",
+                    iteration, n_to_remove, nrow(current_matrix)))
+      }
+    }
+    
+    # Safety check
+    if (nrow(current_matrix) == 0) {
+      stop("All points removed during pruning. Try lower min_connections.")
+    }
+  }
+  
+  if (iteration >= max_iterations) {
+    warning(sprintf("Reached max_iterations (%d) before convergence", max_iterations))
+  }
+  
+  # ==========================================================================
+  # CALCULATE FINAL STATISTICS
+  # ==========================================================================
+  final_size <- nrow(current_matrix)
+  final_measurements <- sum(!is.na(current_matrix) & 
+                             row(current_matrix) != col(current_matrix)) / 2
+  final_completeness <- (2 * final_measurements) / (final_size * (final_size - 1))
+  
+  removed_indices <- setdiff(seq_len(original_size), kept_indices)
+  
+  stats <- list(
+    original_size = original_size,
+    final_size = final_size,
+    points_removed = length(removed_indices),
+    percent_removed = (length(removed_indices) / original_size) * 100,
+    original_completeness = original_completeness,
+    final_completeness = final_completeness,
+    original_measurements = original_measurements,
+    final_measurements = final_measurements,
+    completeness_increase = final_completeness / original_completeness,
+    iterations = iteration,
+    min_connections_used = min_connections
+  )
+  
+  # ==========================================================================
+  # CONNECTIVITY CHECK
+  # ==========================================================================
+  if (ensure_connected) {
+    if (verbose) cat("\nChecking connectivity...\n")
+    
+    connectivity <- tryCatch({
+      check_matrix_connectivity(current_matrix, min_completeness = 0.01)
+    }, error = function(e) {
+      warning("Connectivity check failed: ", e$message)
+      list(is_connected = NA, n_components = NA)
+    })
+    
+    stats$is_connected <- connectivity$is_connected
+    stats$n_components <- connectivity$n_components
+    
+    if (!is.na(connectivity$is_connected) && !connectivity$is_connected) {
+      warning(sprintf(
+        "Final matrix has %d disconnected components. Consider increasing min_connections.",
+        connectivity$n_components
+      ))
+    }
+  }
+  
+  # ==========================================================================
+  # PREPARE RETURN OBJECT
+  # ==========================================================================
+  kept_names <- NULL
+  if (!is.null(rownames(dissimilarity_matrix))) {
+    kept_names <- rownames(dissimilarity_matrix)[kept_indices]
+  }
+  
+  if (verbose) {
+    cat("\n", rep("=", 80), "\n", sep = "")
+    cat("PRUNING COMPLETE\n")
+    cat(rep("=", 80), "\n", sep = "")
+    cat(sprintf("\nFinal matrix: %d x %d (%d points removed, %.1f%%)\n",
+                final_size, final_size, stats$points_removed, stats$percent_removed))
+    cat(sprintf("Final measurements: %d\n", final_measurements))
+    cat(sprintf("Final completeness: %.3f (%.1f%%) - %.1fx increase\n",
+                final_completeness, final_completeness * 100, stats$completeness_increase))
+    if (!is.na(stats$is_connected)) {
+      cat(sprintf("Connected: %s", stats$is_connected))
+      if (!stats$is_connected) {
+        cat(sprintf(" (%d components)", stats$n_components))
+      }
+      cat("\n")
+    }
+    cat("\n")
+  }
+  
+  return(list(
+    pruned_matrix = current_matrix,
+    kept_indices = kept_indices,
+    kept_names = kept_names,
+    removed_indices = removed_indices,
+    stats = stats
+  ))
+}

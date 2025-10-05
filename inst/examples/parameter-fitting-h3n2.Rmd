@@ -79,7 +79,7 @@ We'll demonstrate using the Smith et al. 2004 influenza dataset included in topo
 # Load and process H3N2 data of Smith et al 2004
 data(h3n2_data)
 
-write.csv(h3n2_data, "data_files/h3n2_data.csv", row.names = FALSE)
+#write.csv(h3n2_data, "data_files/h3n2_data.csv", row.names = FALSE)
 
 H3N2_2003_data_results <- process_antigenic_data(
   h3n2_data,
@@ -118,13 +118,14 @@ opt_params <- list(
   mapping_max_iter = 500,    # Maximum mapping optimization iterations
   folds = 20,         # Number of CV folds
   num_samples = 5,
+  opt_subsample = 120,
   write_files = FALSE # Only Set to TRUE to save intermediate files
 )
 ```
 
 ```{r eval=FALSE}
-scenario_name = "H3N2_2003_data_AMC302"
-samples_file = "model_parameters/H3N2_2003_data_AMC302_model_parameters.csv"
+scenario_name = "H3N2_2003_data_subsample_AMC2"
+samples_file = "model_parameters/H3N2_2003_data_subsample_AMC2_model_parameters.csv"
 
 # Record start time for timing report
 start_time <- Sys.time()
@@ -146,6 +147,7 @@ results <- initial_parameter_optimization(
   cooling_rate_max = param_ranges$cooling_rate_max,
   num_samples = opt_params$num_samples,
   folds = opt_params$folds,
+  opt_subsample = opt_params$opt_subsample,
   write_files = opt_params$write_files,
   verbose = TRUE
 )
@@ -180,14 +182,13 @@ You can check the console outputs, warnings, or errors in .out and .err files in
 
 ```{r eval=FALSE}
 # Transform samples (with previous code's path)
-scenario_name = "H3N2_2003_data_AMC302"
-samples_file = file.path(output_dir, "model_parameters/H3N2_2003_data_AMC302_model_parameters.csv")
-samples <- log_transform_parameters(samples_file, output_file = samples_file)
+scenario_name = "H3N2_2003_data_subsample_AMC2"
+samples_file = file.path(output_dir, "model_parameters/H3N2_2003_data_subsample_AMC2_model_parameters.csv")
 
 # Setup adaptive sampling parameters
 amc_params <- list(
   num_samples = 2, # Number of new samples to be added to the parameter distribution through AMC (for refinement.) 
-  mapping_max_iter = 1000, # Maximum iterations per map optimization
+  mapping_max_iter = 500, # Maximum iterations per map optimization
   relative_epsilon = 1e-4,
   folds = 20 # Number of CV folds
 )
@@ -203,8 +204,9 @@ run_adaptive_sampling(
   mapping_max_iter = amc_params$mapping_max_iter,
   relative_epsilon = amc_params$relative_epsilon,
   folds = amc_params$folds,
+  opt_subsample = opt_params$opt_subsample,
   output_dir = output_dir,
-  verbose = FALSE
+  verbose = TRUE
 )
 
 # Calculate and report total execution time
