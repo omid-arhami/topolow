@@ -382,17 +382,14 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
   # ==========================================================================
   # Store reference to full matrix for subsampling
   full_dissimilarity_matrix <- dissimilarity_matrix
-  
-  # Initialize failure tracking
-  failure_diagnostics <- list(
-    subsample_failures = 0,
-    cv_fold_failures = 0,
-    embedding_failures = 0,
-    other_failures = 0,
-    failure_messages = c()
-  )
 
   process_param_set <- function(i) {
+    # Initialize return structure with failure tracking
+    failure_info <- list(
+      type = NULL,  # "subsample", "cv_fold", "embedding", "other"
+      message = NULL
+    )
+    
     tryCatch({
       # Get parameters for this evaluation
       N <- lhs_params$N[i]
@@ -405,9 +402,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
                     i, num_samples, N, k0, c_repulsion, cooling_rate))
       }
       
-      # ======================================================================
       # SUBSAMPLING (if enabled)
-      # ======================================================================
       local_matrix <- full_dissimilarity_matrix
       
       if (use_subsampling) {
@@ -423,12 +418,8 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
             verbose = verbose
           )
         }, error = function(e) {
-          # CHANGE: Track subsample failure with details
-          failure_diagnostics$subsample_failures <<- failure_diagnostics$subsample_failures + 1
-          failure_diagnostics$failure_messages <<- c(
-            failure_diagnostics$failure_messages,
-            sprintf("Sample %d: Subsample failed - %s", i, e$message)
-          )
+          failure_info$type <<- "subsample"
+          failure_info$message <<- e$message
           if (verbose) {
             cat("  X Subsampling failed:", e$message, "\n")
           }
@@ -436,27 +427,32 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
         })
         
         if (is.null(subsample_result)) {
-          return(NULL)
+          return(list(
+            result = NULL,
+            failure_type = "subsample",
+            failure_message = failure_info$message,
+            sample_id = i
+          ))
         }
 
         if (!subsample_result$is_connected) {
-          # Track connectivity failure with details
-          failure_diagnostics$subsample_failures <<- failure_diagnostics$subsample_failures + 1
-          failure_diagnostics$failure_messages <<- c(
-            failure_diagnostics$failure_messages,
-            sprintf("Sample %d: Disconnected subsample (%d components, %.1f%% complete)",
-                    i, subsample_result$n_components, 
-                    subsample_result$completeness * 100)
-          )
+          failure_msg <- sprintf("Disconnected subsample (%d components, %.1f%% complete)",
+                                subsample_result$n_components, 
+                                subsample_result$completeness * 100)
           if (verbose) {
-            cat("  X Failed to obtain connected subsample. Skipping this parameter set.\n")
+            cat("  X Failed to obtain connected subsample. Skipping.\n")
           }
-          return(NULL)
+          return(list(
+            result = NULL,
+            failure_type = "subsample",
+            failure_message = failure_msg,
+            sample_id = i
+          ))
         }
         
         local_matrix <- subsample_result$subsampled_matrix
         
-        # Sanity check the subsampled data
+        # Sanity check
         sanity_result <- sanity_check_subsample(
           local_matrix,
           folds = folds,
@@ -468,9 +464,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
         }
       }
       
-      # ======================================================================
       # CROSS-VALIDATION EVALUATION
-      # ======================================================================
       result <- tryCatch({
         likelihood_function(
           dissimilarity_matrix = local_matrix,
@@ -486,53 +480,49 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
       }, error = function(e) {
         # Track CV/embedding failure with details
         if (grepl("fold|sparse", e$message, ignore.case = TRUE)) {
-          failure_diagnostics$cv_fold_failures <<- failure_diagnostics$cv_fold_failures + 1
+          failure_info$type <<- "cv_fold"
         } else {
-          failure_diagnostics$embedding_failures <<- failure_diagnostics$embedding_failures + 1
+          failure_info$type <<- "embedding"
         }
-        failure_diagnostics$failure_messages <<- c(
-          failure_diagnostics$failure_messages,
-          sprintf("Sample %d: Evaluation failed - %s", i, 
-                  substr(e$message, 1, 100))
-        )
+        failure_info$message <<- substr(e$message, 1, 100)
+        
         if (verbose) {
           cat("  X Evaluation error:", e$message, "\n")
         }
         return(list(Holdout_MAE = NA, NLL = NA))
       })
       
-      # ======================================================================
-      # CHECK MAE REASONABLENESS
-      # ======================================================================
       # Check if result is valid
       if (is.null(result) || is.na(result$Holdout_MAE) || is.na(result$NLL)) {
         if (is.null(result)) {
-          failure_diagnostics$other_failures <<- failure_diagnostics$other_failures + 1
-          failure_diagnostics$failure_messages <<- c(
-            failure_diagnostics$failure_messages,
-            sprintf("Sample %d: Returned NULL result", i)
-          )
+          failure_type <- "other"
+          failure_msg <- "Returned NULL result"
+        } else {
+          failure_type <- failure_info$type %||% "other"
+          failure_msg <- failure_info$message %||% "Invalid result (NA MAE or NLL)"
         }
-        return(NULL)
+        return(list(
+          result = NULL,
+          failure_type = failure_type,
+          failure_message = failure_msg,
+          sample_id = i
+        ))
       }
 
+      # Check MAE reasonableness
       if (!is.na(result$Holdout_MAE) && !is.null(result$Holdout_MAE)) {
-        # Get median of observed dissimilarities for comparison
-        # (handles threshold indicators):
         observed_dissim <- extract_numeric_values(local_matrix)
         median_dissim <- median(observed_dissim[!is.na(observed_dissim)])
         
         if (!is.na(median_dissim) && result$Holdout_MAE > (2 * median_dissim)) {
           if (verbose) {
-            cat(sprintf("  [!] High MAE (%.3f) vs median dissimilarity (%.3f). Poor fit suspected.\n",
+            cat(sprintf("  [!] High MAE (%.3f) vs median dissimilarity (%.3f).\n",
                         result$Holdout_MAE, median_dissim))
           }
         }
       }
       
-      # ======================================================================
-      # COMPILE RESULTS
-      # ======================================================================
+      # Compile successful result
       result_row <- data.frame(
         N = N,
         k0 = k0,
@@ -553,13 +543,23 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
                     result$Holdout_MAE, result$NLL))
       }
       
-      return(result_row)
+      return(list(
+        result = result_row,
+        failure_type = NULL,
+        failure_message = NULL,
+        sample_id = i
+      ))
       
     }, error = function(e) {
       if (verbose) {
         cat(sprintf("  X Error evaluating sample %d: %s\n", i, e$message))
       }
-      return(NULL)
+      return(list(
+        result = NULL,
+        failure_type = "other",
+        failure_message = e$message,
+        sample_id = i
+      ))
     })
   }
   
@@ -638,9 +638,40 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
   # ==========================================================================
   # AGGREGATE RESULTS
   # ==========================================================================
-  # Remove NULL results (failed evaluations)
-  valid_results <- Filter(Negate(is.null), all_results)
-  
+
+  # AGGREGATE FAILURE DIAGNOSTICS (this is the key fix)
+  failure_diagnostics <- list(
+    subsample_failures = 0,
+    cv_fold_failures = 0,
+    embedding_failures = 0,
+    other_failures = 0,
+    failure_messages = c()
+  )
+
+  for (res in all_results) {
+    if (!is.null(res$failure_type)) {
+      # Count failure by type
+      if (res$failure_type == "subsample") {
+        failure_diagnostics$subsample_failures <- failure_diagnostics$subsample_failures + 1
+      } else if (res$failure_type == "cv_fold") {
+        failure_diagnostics$cv_fold_failures <- failure_diagnostics$cv_fold_failures + 1
+      } else if (res$failure_type == "embedding") {
+        failure_diagnostics$embedding_failures <- failure_diagnostics$embedding_failures + 1
+      } else {
+        failure_diagnostics$other_failures <- failure_diagnostics$other_failures + 1
+      }
+      
+      # Store message
+      failure_diagnostics$failure_messages <- c(
+        failure_diagnostics$failure_messages,
+        sprintf("Sample %d: %s", res$sample_id, res$failure_message)
+      )
+    }
+  }
+
+  # Remove NULL results (failed evaluations) & extract valid results
+  valid_results <- Filter(function(x) !is.null(x$result), all_results)
+  valid_results <- lapply(valid_results, function(x) x$result)
   
   if (length(valid_results) == 0) {
     # Provide detailed diagnostic error message
