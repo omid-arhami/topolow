@@ -1207,13 +1207,13 @@ log_transform_parameters <- function(samples_file, output_file = NULL) {
 #' mat <- matrix(NA, n, n)
 #' diag(mat) <- 0
 #' # Add only 1% observations
-#' n_obs <- floor(n * n * 0.01)
+#' n_obs <- floor(n * n * 0.15)
 #' indices <- sample(which(upper.tri(mat)), n_obs)
 #' mat[indices] <- runif(n_obs, 0, 10)
 #' mat[lower.tri(mat)] <- t(mat)[lower.tri(mat)]
 #'
 #' # Prune with minimum connections
-#' result <- prune_sparse_matrix(mat, min_connections = 15)
+#' result <- prune_sparse_matrix(mat, min_connections = 2)
 #' print(result$stats)
 #'
 #' # Prune to target completeness
@@ -1296,7 +1296,7 @@ prune_sparse_matrix <- function(dissimilarity_matrix,
     
     current_threshold <- 4
     threshold_increment <- 2
-    max_threshold_attempts <- 50
+    max_threshold_attempts <- 10
     
     for (attempt in 1:max_threshold_attempts) {
       if (verbose) {
