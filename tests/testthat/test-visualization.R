@@ -25,7 +25,7 @@ test_that("plot_network_structure creates a valid plot", {
   expect_true(ggplot2::is_ggplot(p))
 })
 
-test_that("create_diagnostic_plots works with temporary files", {
+test_that("plot_mcmc_diagnostics works with temporary files", {
   # Create dummy chain files in a temporary directory
   temp_dir <- tempdir()
   chain_files <- character(2)
@@ -39,7 +39,7 @@ test_that("create_diagnostic_plots works with temporary files", {
     write.csv(sample_data, chain_files[i], row.names = FALSE)
   }
 
-  p <- create_diagnostic_plots(chain_files, mutual_size = 50, save_plot = FALSE)
+  p <- plot_mcmc_diagnostics(chain_files, mutual_size = 50, save_plot = FALSE)
   # grid.arrange returns a gtable object
   expect_s3_class(p, "gtable")
 

@@ -953,7 +953,7 @@ analyze_convergence <- function(ndim, matrix_type, mutual_size) {
 
   # Create diagnostic plots
   plot_file <- sprintf("synthetic_dim%d_%s_diagnostics.png", ndim, matrix_type)
-  p <- create_diagnostic_plots(chain_files, mutual_size = mutual_size,
+  p <- plot_mcmc_diagnostics(chain_files, mutual_size = mutual_size,
                              output_file = plot_file)
 
   return(list(diagnostics = diag, plot = p))

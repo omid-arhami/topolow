@@ -2174,7 +2174,7 @@ make_interactive <- function(plot, tooltip_vars = NULL) {
 #' @param output_file Character. The path for saving the plot. Required if `save_plot` is TRUE.
 #' @param output_dir Character. The directory for saving output files. Required if `save_plot` is TRUE.
 #' @param save_plot Logical. If TRUE, saves the plot to a file. Default: FALSE.
-#' @param width,height,res Numeric. The dimensions and resolution for the saved plot.
+#' @param width,height,dpi Numeric. The dimensions and resolution for the saved plot.
 #' @return A `ggplot` object of the combined plots.
 #' @examples
 #' # This example uses sample data files that would be included with the package.
@@ -2187,16 +2187,16 @@ make_interactive <- function(plot, tooltip_vars = NULL) {
 #' # Only run the example if the files are found
 #' if (all(nzchar(chain_files))) {
 #'   # Create diagnostic plot without saving to a file
-#'   create_diagnostic_plots(chain_files, mutual_size = 50, save_plot = FALSE)
+#'   plot_mcmc_diagnostics(chain_files, mutual_size = 50, save_plot = FALSE)
 #' }
 #'
 #' @export
-create_diagnostic_plots <- function(chain_files,
+plot_mcmc_diagnostics <- function(chain_files,
                                     mutual_size = 2000,
                                     output_file = "diagnostic_plots.png",
                                     output_dir,
                                     save_plot = FALSE,
-                                    width = 3000, height = 3000, res = 300) {
+                                    width = 3000, height = 3000, dpi = 300) {
                                       # Check if gridextra is available
   if (!requireNamespace("gridExtra", quietly = TRUE)) {
     stop("gridExtra package is required for plotting. Please install with install.packages('gridExtra').")
@@ -2262,8 +2262,8 @@ create_diagnostic_plots <- function(chain_files,
   if (save_plot) {
     full_output_path <- file.path(output_dir, output_file)
     ggsave_white_bg(full_output_path, combined_plot,
-                    width = width / res, height = height / res,
-                    dpi = res, limitsize = FALSE)
+                    width = width / dpi, height = height / dpi,
+                    dpi = dpi, limitsize = FALSE)
   }
 
   return(combined_plot)
@@ -2394,7 +2394,7 @@ plot.topolow_diagnostics <- function(x,
                                         save_plot = FALSE,
                                         ...) {
   # This method is a wrapper around the main plotting function
-  create_diagnostic_plots(chain_files = x$chains, # Pass the actual chain data
+  plot_mcmc_diagnostics(chain_files = x$chains, # Pass the actual chain data
                           mutual_size = x$mutual_size,
                           output_file = output_file,
                           output_dir = if (!missing(output_dir)) output_dir else NULL,
@@ -2555,7 +2555,6 @@ plot_network_structure <- function(network_results, output_file = NULL,
 }
 
 
-# Newed
 #' Plot Fitted vs. True Dissimilarities
 #'
 #' @description

@@ -246,7 +246,7 @@ diagnostics <- calculate_diagnostics(
 print(diagnostics)
 
 # Create and display diagnostic plots
-diag_plots <- create_diagnostic_plots(
+diag_plots <- plot_mcmc_diagnostics(
   chain_files = chain_files,
   mutual_size = mutual_size,
   save_plot = FALSE

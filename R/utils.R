@@ -427,9 +427,9 @@ subsample_dissimilarity_matrix <- function(dissimilarity_matrix,
     
     # Failed this attempt
     if (verbose) {
-      cat(sprintf("  X Not connected (%d components, %.1f%% complete)\n",
-                  connectivity$n_components,
-                  connectivity$completeness * 100))
+      cat(sprintf("  X Not connected (%s components, %.1f%% complete)\n",
+              as.character(connectivity$n_components),
+              connectivity$completeness * 100))
     }
   }
   
@@ -449,7 +449,7 @@ subsample_dissimilarity_matrix <- function(dissimilarity_matrix,
       "  4. Check if your data has inherent disconnected groups"
     ),
     max_attempts, current_sample_size, sample_size, matrix_size,
-    connectivity$n_components, connectivity$completeness * 100,
+    as.character(connectivity$n_components), connectivity$completeness * 100,
     sample_size
   ))
 }

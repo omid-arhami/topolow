@@ -4,7 +4,7 @@
 \alias{create_diagnostic_plots}
 \title{Create Diagnostic Plots for Multiple Sampling Chains}
 \usage{
-create_diagnostic_plots(
+plot_mcmc_diagnostics(
   chain_files,
   mutual_size = 2000,
   output_file = "diagnostic_plots.png",
@@ -47,7 +47,7 @@ chain_files <- c(
 # Only run the example if the files are found
 if (all(nzchar(chain_files))) {
   # Create diagnostic plot without saving to a file
-  create_diagnostic_plots(chain_files, mutual_size = 50, save_plot = FALSE)
+  plot_mcmc_diagnostics(chain_files, mutual_size = 50, save_plot = FALSE)
 }
 
 }

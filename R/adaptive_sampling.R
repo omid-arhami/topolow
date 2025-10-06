@@ -291,7 +291,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
               paste0("\n  DATA SPARSITY WARNING:\n",
                     "  Your matrix is %.1f%% sparse (missing values).\n",
                     "  Subsampling may create disconnected graphs.\n",
-                    "  Consider pruning with prune_sparse_matrix() first.\n"),
+                    "  Consider pruning the dataset first.\n"),
               sparsity * 100
             ),
             call. = FALSE, immediate. = TRUE
@@ -727,11 +727,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
       cat("  This happens when observations are too sparse to maintain\n")
       cat("  connectivity after random sampling.\n\n")
       cat("Recommended Solutions (in order of preference):\n")
-      cat("  1. Prune sparse matrix BEFORE optimization:\n")
-      cat("       pruned <- prune_sparse_matrix(your_matrix, \n")
-      cat("                                      target_completeness = 0.02,\n")
-      cat("                                      min_points = 1000)\n")
-      cat("       # Then use pruned$pruned_matrix for optimization\n\n")
+      cat("  1. Prune sparse matrix BEFORE optimization\n\n")
       cat("  2. Increase opt_subsample (current: ", opt_subsample, ")\n", sep = "")
       cat("       Try: opt_subsample = ", ceiling(opt_subsample * 1.5), "\n\n", sep = "")
       cat("  3. Reduce CV folds (current: ", folds, ")\n", sep = "")
@@ -746,9 +742,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
       cat("Recommended Solutions:\n")
       cat("  1. Reduce number of CV folds (current: ", folds, ")\n", sep = "")
       cat("       Try: folds = ", max(5, floor(folds / 2)), "\n\n", sep = "")
-      cat("  2. Prune sparse matrix to increase density:\n")
-      cat("       pruned <- prune_sparse_matrix(your_matrix,\n")
-      cat("                                      min_connections = 15)\n\n")
+      cat("  2. Prune sparse matrix to increase density:\n\n")
       
     } else if (primary_issue == "embedding") {
       cat("  >> EMBEDDING OPTIMIZATION FAILURES <<\n\n")

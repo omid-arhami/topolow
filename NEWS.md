@@ -118,6 +118,10 @@ Included figures in the vignette.
 
 # topolow 2.1.0 (2025-10-02)
 
+## Breaking Changes
+
+* **`create_diagnostic_plots()`** renamed to `plot_mcmc_diagnostics()` and its parameter `res` renamed to `dpi` for naming consistency
+
 ## New Features
 
 ### Subsampling for Computational Efficiency

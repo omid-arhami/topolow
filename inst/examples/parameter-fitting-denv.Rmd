@@ -275,7 +275,7 @@ mutual_size = 1000  # Number of samples to use from end of chains
 
 
 # Create and display diagnostic plots
-diag_plots <- create_diagnostic_plots(
+diag_plots <- plot_mcmc_diagnostics(
   chain_files = chain_files,
   mutual_size = mutual_size,
   output_file = "denv_data_diagnostic_plots.png"
