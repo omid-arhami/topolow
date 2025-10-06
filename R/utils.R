@@ -401,7 +401,7 @@ subsample_dissimilarity_matrix <- function(dissimilarity_matrix,
       if (verbose) {
         cat(sprintf("  Warning: Connectivity check failed: %s\n", e$message))
       }
-      list(is_connected = FALSE, n_components = NA,
+      list(is_connected = FALSE, n_components = -1,
            completeness = 0, n_points = current_sample_size,
            n_measurements = 0)
     })
