@@ -181,6 +181,8 @@ calculate_diagnostics <- function(chain_files, mutual_size=500) {
 
     # Apply clean_data to all columns of the dataframe
     clean_df <- as.data.frame(lapply(clean_df, clean_data, k = 3))
+    # Remove rows with NAs introduced by clean_data
+    clean_df <- na.omit(clean_df)
     return(clean_df[, par_names, drop=FALSE])
   })
 
