@@ -257,8 +257,7 @@ check_matrix_connectivity <- function(dissimilarity_matrix,
 #'
 #' @description
 #' Randomly samples a subset of points from a dissimilarity matrix, ensuring
-#' the resulting submatrix forms a connected graph. If connectivity cannot be
-#' achieved, the function adaptively increases the subsample size.
+#' the resulting submatrix forms a connected graph.
 #'
 #' @param dissimilarity_matrix Square symmetric dissimilarity matrix.
 #' @param sample_size Integer. Target number of points to sample.

@@ -126,12 +126,13 @@ Included figures in the vignette.
 
 ### Subsampling for Computational Efficiency
 
-* **Major Feature**: Added `opt_subsample` parameter to key optimization functions, enabling efficient parameter optimization on large datasets while maintaining final embedding quality.
+* **Major Feature**: Added the optional `opt_subsample` parameter to key optimization functions, enabling efficient parameter optimization on large datasets while maintaining final embedding quality. Parameter optimization still works reliably with subsampling, because likelihoods of samples of the same size are comparable, allowing us to choose the optimal parameter values.
 
 * **New Functions**:
   - `check_matrix_connectivity()`: Validates that a dissimilarity matrix forms a connected graph
   - `subsample_dissimilarity_matrix()`: Creates random subsamples with automatic connectivity validation and adaptive size adjustment
   - `sanity_check_subsample()`: Validates subsample suitability for cross-validation
+  - `prune_sparse_matrix()`: Prunes sparse dissimilarity matrices to a well-connected subset
 
 * **Enhanced Functions**:
   - `initial_parameter_optimization()`: Now accepts `opt_subsample` parameter
@@ -148,18 +149,15 @@ When `opt_subsample` is specified:
 4. Different parameter evaluations use different subsamples for robustness
 5. **Final embedding always uses the full dataset**
 
+The `opt_subsample` parameter is optional (default: NULL = use full data).
+
 ### Performance Benefits
 
 - Speeds up parameter optimization by ~10-50x on large datasets (>500 points)
 - Reduces memory usage proportional to subsample size
 - Parameters found on subsamples generalize well to full data
 
-### Breaking Changes
-
-None. The `opt_subsample` parameter is optional (default: NULL = use full data).
-
 ### Other changes
-- Function `prune_sparse_matrix()` is added to prune sparse dissimilarity matrices to a well-connected subset
 - Package gridExtra is a required import now.
 
 ### Recommendations
