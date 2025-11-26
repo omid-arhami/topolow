@@ -4,7 +4,6 @@
 #' Parameter Space Sampling and Optimization Functions for topolow
 #'
 
-
 #' Initial Parameter Optimization using Latin Hypercube Sampling
 #'
 #' @description
@@ -21,15 +20,19 @@
 #' eliminating the need to call `log_transform_parameters()` separately.
 #'
 #' @details
-#' The function performs these steps:
-#' 1. Generates LHS samples in the parameter space (original scale for sampling).
-#' 2. If \code{opt_subsample} is specified, each parameter evaluation gets a different
-#'    random subsample for robustness testing.
-#' 3. For each parameter set, \code{likelihood_function} is called which internally
-#'    creates k-fold splits and evaluates via cross-validation.
-#' 4. Parameter evaluations are processed in batches for memory efficiency.
-#' 5. Computations are run in parallel within each batch.
-#' 6. Automatically log-transforms the final results for direct use with adaptive sampling.
+#' The function performs these steps in an epoch-based evolutionary strategy:
+#' 1. **Initialization**: Starts with the user-provided parameter ranges.
+#' 2. **Epoch Loop**: For each epoch:
+#'    a. Generates `num_samples` using LHS within the current parameter ranges.
+#'    b. If `opt_subsample` is specified, each evaluation uses a random subsample.
+#'    c. Evaluates parameter sets via cross-validation (in parallel batches).
+#'    d. **Range Update** (after all but the final epoch):
+#'       - Sorts results by NLL and keeps the top 50%.
+#'       - Updates parameter ranges for the next epoch based on survivors:
+#'         New Min = 0.75 * Min(Survivors), New Max = 1.25 * Max(Survivors).
+#'       - This allows the search to drift and zoom in on optimal regions.
+#' 3. **Finalization**: Automatically log-transforms the results from the **final epoch**
+#'    for direct use with adaptive sampling.
 #'
 #' **Note on Cross-Validation with Subsampling:**
 #' When \code{opt_subsample} is used, each parameter evaluation receives a different
@@ -47,7 +50,10 @@
 #' @param k0_min,k0_max Numeric. Range for the initial spring constant parameter.
 #' @param c_repulsion_min,c_repulsion_max Numeric. Range for the repulsion constant parameter.
 #' @param cooling_rate_min,cooling_rate_max Numeric. Range for the cooling rate parameter.
-#' @param num_samples Integer. Number of LHS samples to generate. Default: 20.
+#' @param num_samples Integer. Number of LHS samples to generate **per epoch**. Default: 20.
+#' @param epochs Integer. Number of optimization epochs. In each epoch, parameters are sampled,
+#'   evaluated, and the best 50% are used to refine the search space for the next epoch.
+#'   Default: 3.
 #' @param max_cores Integer. Maximum number of cores for parallel processing. Default: NULL (uses all but one).
 #' @param folds Integer. Number of cross-validation folds. Default: 20.
 #' @param opt_subsample Integer or NULL. If specified, randomly samples this many
@@ -68,9 +74,9 @@
 #' @param write_files Logical. Whether to save results to a CSV file. Default: FALSE.
 #' @param output_dir Character. Directory for output files. Required if `write_files` is TRUE.
 #'
-#' @return A `data.frame` containing the log-transformed parameter sets and their performance metrics.
-#'   Columns include: `log_N`, `log_k0`, `log_cooling_rate`, `log_c_repulsion`, `Holdout_MAE`, `NLL`,
-#'   and if \code{opt_subsample} was used: `opt_subsample`,`original_n_points`.
+#' @return A `data.frame` containing the log-transformed parameter sets and their performance metrics
+#'   from the **final epoch**. Columns include: `log_N`, `log_k0`, `log_cooling_rate`, `log_c_repulsion`,
+#'   `Holdout_MAE`, `NLL`, and if \code{opt_subsample} was used: `opt_subsample`,`original_n_points`.
 #'
 #' @note
 #' \strong{Breaking Change in v2.0.0:} This function now returns log-transformed parameters directly.
@@ -100,6 +106,7 @@
 #'   c_repulsion_min = 0.001, c_repulsion_max = 0.05,
 #'   cooling_rate_min = 0.001, cooling_rate_max = 0.02,
 #'   num_samples = 4,
+#'   epochs = 2, # Use 2 epochs
 #'   max_cores = 1,
 #'   verbose = FALSE
 #' )
@@ -116,6 +123,7 @@
 #'   c_repulsion_min = 0.001, c_repulsion_max = 0.05,
 #'   cooling_rate_min = 0.001, cooling_rate_max = 0.02,
 #'   num_samples = 4,
+#'   epochs = 1,
 #'   max_cores = 1,
 #'   folds = 10,
 #'   opt_subsample = 15,  # Use only 15 points
@@ -132,7 +140,7 @@
 #' @importFrom future availableCores
 #' @export
 initial_parameter_optimization <- function(dissimilarity_matrix,
-                                           mapping_max_iter = 500,
+                                           mapping_max_iter = 20,
                                            relative_epsilon,
                                            convergence_counter,
                                            scenario_name,
@@ -145,6 +153,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
                                            cooling_rate_min,
                                            cooling_rate_max,
                                            num_samples = 20,
+                                           epochs = 1,
                                            max_cores = NULL,
                                            folds = 20,
                                            opt_subsample = NULL,
@@ -171,6 +180,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
     N_min = N_min,
     N_max = N_max,
     num_samples = num_samples,
+    epochs = epochs,
     folds = folds
   )
   
@@ -343,8 +353,8 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
   }
   
   if (verbose) {
-    cat(sprintf("Processing %d parameter samples with up to %d cores\n",
-                num_samples, max_cores))
+    cat(sprintf("Processing %d parameter samples per epoch for %d epochs (Total: %d) with up to %d cores\n",
+                num_samples, epochs, num_samples * epochs, max_cores))
     if (use_subsampling) {
       cat(sprintf("Using subsampling: %d points (from %d total)\n",
                   opt_subsample, matrix_size))
@@ -367,425 +377,510 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
   }
   
   # ==========================================================================
-  # LHS PARAMETER SAMPLING
+  # INITIALIZE RANGE VARIABLES FOR EPOCHS
   # ==========================================================================
-  lhs_samples <- lhs::maximinLHS(n = num_samples, k = 4)
-  lhs_params <- data.frame(
-    N = floor(stats::qunif(lhs_samples[,1], min = N_min, max = N_max + 1)),
-    k0 = stats::qunif(lhs_samples[,2], min = k0_min, max = k0_max),
-    c_repulsion = stats::qunif(lhs_samples[,3], min = c_repulsion_min, max = c_repulsion_max),
-    cooling_rate = stats::qunif(lhs_samples[,4], min = cooling_rate_min, max = cooling_rate_max)
-  )
+  cur_N_min <- N_min
+  cur_N_max <- N_max
+  cur_k0_min <- k0_min
+  cur_k0_max <- k0_max
+  cur_c_rep_min <- c_repulsion_min
+  cur_c_rep_max <- c_repulsion_max
+  cur_cool_min <- cooling_rate_min
+  cur_cool_max <- cooling_rate_max
   
-  # ==========================================================================
-  # PARAMETER EVALUATION FUNCTION (PROCESSES ONE PARAMETER SET)
-  # ==========================================================================
-  # Store reference to full matrix for subsampling
-  full_dissimilarity_matrix <- dissimilarity_matrix
+  # Initialize result holder
+  final_df <- NULL
 
-  process_param_set <- function(i) {
-    # Initialize return structure with failure tracking
-    failure_info <- list(
-      type = NULL,  # "subsample", "cv_fold", "embedding", "other"
-      message = NULL
+  # ==========================================================================
+  # EPOCH LOOP
+  # ==========================================================================
+  for (epoch in 1:epochs) {
+    
+    if (verbose) {
+      cat(sprintf("\n=== EPOCH %d/%d ===\n", epoch, epochs))
+      cat(sprintf("Parameter ranges:\n"))
+      cat(sprintf("  N: [%d, %d]\n", cur_N_min, cur_N_max))
+      cat(sprintf("  k0: [%.4f, %.4f]\n", cur_k0_min, cur_k0_max))
+      cat(sprintf("  c_rep: [%.4f, %.4f]\n", cur_c_rep_min, cur_c_rep_max))
+      cat(sprintf("  cool: [%.4f, %.4f]\n", cur_cool_min, cur_cool_max))
+    }
+  
+    # ==========================================================================
+    # LHS PARAMETER SAMPLING (FOR CURRENT EPOCH)
+    # ==========================================================================
+    lhs_samples <- lhs::maximinLHS(n = num_samples, k = 4)
+    lhs_params <- data.frame(
+      N = floor(stats::qunif(lhs_samples[,1], min = cur_N_min, max = cur_N_max + 1)),
+      k0 = stats::qunif(lhs_samples[,2], min = cur_k0_min, max = cur_k0_max),
+      c_repulsion = stats::qunif(lhs_samples[,3], min = cur_c_rep_min, max = cur_c_rep_max),
+      cooling_rate = stats::qunif(lhs_samples[,4], min = cur_cool_min, max = cur_cool_max)
     )
     
-    tryCatch({
-      # Get parameters for this evaluation
-      N <- lhs_params$N[i]
-      k0 <- lhs_params$k0[i]
-      c_repulsion <- lhs_params$c_repulsion[i]
-      cooling_rate <- lhs_params$cooling_rate[i]
+    # ==========================================================================
+    # PARAMETER EVALUATION FUNCTION (PROCESSES ONE PARAMETER SET)
+    # ==========================================================================
+    # Store reference to full matrix for subsampling
+    full_dissimilarity_matrix <- dissimilarity_matrix
+  
+    process_param_set <- function(i) {
+      # Initialize return structure with failure tracking
+      failure_info <- list(
+        type = NULL,  # "subsample", "cv_fold", "embedding", "other"
+        message = NULL
+      )
       
-      if (verbose) {
-        cat(sprintf("\nEvaluating sample %d/%d: N=%d, k0=%.3f, c_rep=%.4f, cool=%.4f\n",
-                    i, num_samples, N, k0, c_repulsion, cooling_rate))
-      }
-      
-      # SUBSAMPLING (if enabled)
-      local_matrix <- full_dissimilarity_matrix
-      
-      if (use_subsampling) {
+      tryCatch({
+        # Get parameters for this evaluation
+        N <- lhs_params$N[i]
+        k0 <- lhs_params$k0[i]
+        c_repulsion <- lhs_params$c_repulsion[i]
+        cooling_rate <- lhs_params$cooling_rate[i]
+        
         if (verbose) {
-          cat(sprintf("  Subsampling to %d points...\n", opt_subsample))
+          cat(sprintf("\nEvaluating sample %d/%d (Epoch %d): N=%d, k0=%.3f, c_rep=%.4f, cool=%.4f\n",
+                      i, num_samples, epoch, N, k0, c_repulsion, cooling_rate))
         }
         
-        subsample_result <- tryCatch({
-          subsample_dissimilarity_matrix(
-            dissimilarity_matrix = full_dissimilarity_matrix,
-            sample_size = opt_subsample,
-            max_attempts = 5,
+        # SUBSAMPLING (if enabled)
+        local_matrix <- full_dissimilarity_matrix
+        
+        if (use_subsampling) {
+          if (verbose) {
+            cat(sprintf("  Subsampling to %d points...\n", opt_subsample))
+          }
+          
+          subsample_result <- tryCatch({
+            subsample_dissimilarity_matrix(
+              dissimilarity_matrix = full_dissimilarity_matrix,
+              sample_size = opt_subsample,
+              max_attempts = 5,
+              verbose = verbose
+            )
+          }, error = function(e) {
+            failure_info$type <<- "subsample"
+            failure_info$message <<- e$message
+            if (verbose) {
+              cat("  X Subsampling failed:", e$message, "\n")
+            }
+            return(NULL)
+          })
+          
+          if (is.null(subsample_result)) {
+            return(list(
+              result = NULL,
+              failure_type = "subsample",
+              failure_message = failure_info$message,
+              sample_id = i
+            ))
+          }
+  
+          if (!subsample_result$is_connected) {
+            failure_msg <- sprintf("Disconnected subsample (%d components, %.1f%% complete)",
+                                  subsample_result$n_components, 
+                                  subsample_result$completeness * 100)
+            if (verbose) {
+              cat("  X Failed to obtain connected subsample. Skipping.\n")
+            }
+            return(list(
+              result = NULL,
+              failure_type = "subsample",
+              failure_message = failure_msg,
+              sample_id = i
+            ))
+          }
+          
+          local_matrix <- subsample_result$subsampled_matrix
+          
+          # Sanity check
+          sanity_result <- sanity_check_subsample(
+            local_matrix,
+            folds = folds,
             verbose = verbose
           )
-        }, error = function(e) {
-          failure_info$type <<- "subsample"
-          failure_info$message <<- e$message
-          if (verbose) {
-            cat("  X Subsampling failed:", e$message, "\n")
+          
+          if (!sanity_result$all_checks_passed && verbose) {
+            cat("  [!] Subsample sanity checks raised warnings (proceeding anyway)\n")
           }
-          return(NULL)
+        }
+        
+        # CROSS-VALIDATION EVALUATION
+        result <- tryCatch({
+          likelihood_function(
+            dissimilarity_matrix = local_matrix,
+            mapping_max_iter = mapping_max_iter,
+            relative_epsilon = relative_epsilon,
+            N = N,
+            k0 = k0,
+            cooling_rate = cooling_rate,
+            c_repulsion = c_repulsion,
+            folds = folds,
+            num_cores = 1
+          )
+        }, error = function(e) {
+          # Track CV/embedding failure with details
+          if (grepl("fold|sparse", e$message, ignore.case = TRUE)) {
+            failure_info$type <<- "cv_fold"
+          } else {
+            failure_info$type <<- "embedding"
+          }
+          failure_info$message <<- substr(e$message, 1, 100)
+          
+          if (verbose) {
+            cat("  X Evaluation error:", e$message, "\n")
+          }
+          return(list(Holdout_MAE = NA, NLL = NA))
         })
         
-        if (is.null(subsample_result)) {
-          return(list(
-            result = NULL,
-            failure_type = "subsample",
-            failure_message = failure_info$message,
-            sample_id = i
-          ))
-        }
-
-        if (!subsample_result$is_connected) {
-          failure_msg <- sprintf("Disconnected subsample (%d components, %.1f%% complete)",
-                                subsample_result$n_components, 
-                                subsample_result$completeness * 100)
-          if (verbose) {
-            cat("  X Failed to obtain connected subsample. Skipping.\n")
+        # Check if result is valid
+        if (is.null(result) || is.na(result$Holdout_MAE) || is.na(result$NLL)) {
+          if (is.null(result)) {
+            failure_type <- "other"
+            failure_msg <- "Returned NULL result"
+          } else {
+            failure_type <- failure_info$type %||% "other"
+            failure_msg <- failure_info$message %||% "Invalid result (NA MAE or NLL)"
           }
           return(list(
             result = NULL,
-            failure_type = "subsample",
+            failure_type = failure_type,
             failure_message = failure_msg,
             sample_id = i
           ))
         }
-        
-        local_matrix <- subsample_result$subsampled_matrix
-        
-        # Sanity check
-        sanity_result <- sanity_check_subsample(
-          local_matrix,
-          folds = folds,
-          verbose = verbose
-        )
-        
-        if (!sanity_result$all_checks_passed && verbose) {
-          cat("  [!] Subsample sanity checks raised warnings (proceeding anyway)\n")
+  
+        # Check MAE reasonableness
+        if (!is.na(result$Holdout_MAE) && !is.null(result$Holdout_MAE)) {
+          observed_dissim <- extract_numeric_values(local_matrix)
+          median_dissim <- median(observed_dissim[!is.na(observed_dissim)])
+          
+          if (!is.na(median_dissim) && result$Holdout_MAE > (2 * median_dissim)) {
+            if (verbose) {
+              cat(sprintf("  [!] High MAE (%.3f) vs median dissimilarity (%.3f).\n",
+                          result$Holdout_MAE, median_dissim))
+            }
+          }
         }
-      }
-      
-      # CROSS-VALIDATION EVALUATION
-      result <- tryCatch({
-        likelihood_function(
-          dissimilarity_matrix = local_matrix,
-          mapping_max_iter = mapping_max_iter,
-          relative_epsilon = relative_epsilon,
+        
+        # Compile successful result
+        result_row <- data.frame(
           N = N,
           k0 = k0,
           cooling_rate = cooling_rate,
           c_repulsion = c_repulsion,
-          folds = folds,
-          num_cores = 1
+          Holdout_MAE = result$Holdout_MAE,
+          NLL = result$NLL
         )
-      }, error = function(e) {
-        # Track CV/embedding failure with details
-        if (grepl("fold|sparse", e$message, ignore.case = TRUE)) {
-          failure_info$type <<- "cv_fold"
-        } else {
-          failure_info$type <<- "embedding"
+        
+        # Add subsampling metadata if used
+        if (use_subsampling) {
+          result_row$opt_subsample <- opt_subsample
+          result_row$original_n_points <- matrix_size
         }
-        failure_info$message <<- substr(e$message, 1, 100)
         
         if (verbose) {
-          cat("  X Evaluation error:", e$message, "\n")
+          cat(sprintf("  [OK] MAE: %.4f, NLL: %.2f\n",
+                      result$Holdout_MAE, result$NLL))
         }
-        return(list(Holdout_MAE = NA, NLL = NA))
-      })
-      
-      # Check if result is valid
-      if (is.null(result) || is.na(result$Holdout_MAE) || is.na(result$NLL)) {
-        if (is.null(result)) {
-          failure_type <- "other"
-          failure_msg <- "Returned NULL result"
-        } else {
-          failure_type <- failure_info$type %||% "other"
-          failure_msg <- failure_info$message %||% "Invalid result (NA MAE or NLL)"
+        
+        return(list(
+          result = result_row,
+          failure_type = NULL,
+          failure_message = NULL,
+          sample_id = i
+        ))
+        
+      }, error = function(e) {
+        if (verbose) {
+          cat(sprintf("  X Error evaluating sample %d: %s\n", i, e$message))
         }
         return(list(
           result = NULL,
-          failure_type = failure_type,
-          failure_message = failure_msg,
+          failure_type = "other",
+          failure_message = e$message,
           sample_id = i
         ))
+      })
+    }
+    
+    # ==========================================================================
+    # PARALLEL EXECUTION WITH BATCHING
+    # ==========================================================================
+    if (verbose) cat("\nStarting parameter evaluations with batching...\n")
+    
+    # Determine batch size for memory management
+    cores_to_use <- min(max_cores, num_samples)
+    batch_size <- min(cores_to_use * 4, num_samples)  # Process 4 per core per batch
+    num_batches <- ceiling(num_samples / batch_size)
+    
+    if (verbose && num_batches > 1) {
+      cat(sprintf("Processing in %d batches (batch size: %d)\n", 
+                  num_batches, batch_size))
+    }
+    
+    all_results <- list()
+    
+    for (batch in 1:num_batches) {
+      batch_start <- (batch - 1) * batch_size + 1
+      batch_end <- min(batch * batch_size, num_samples)
+      batch_indices <- batch_start:batch_end
+      
+      if (verbose && num_batches > 1) {
+        cat(sprintf("\nProcessing batch %d/%d (samples %d-%d)...\n",
+                    batch, num_batches, batch_start, batch_end))
       }
-
-      # Check MAE reasonableness
-      if (!is.na(result$Holdout_MAE) && !is.null(result$Holdout_MAE)) {
-        observed_dissim <- extract_numeric_values(local_matrix)
-        median_dissim <- median(observed_dissim[!is.na(observed_dissim)])
+      
+      # Process batch in parallel
+      if (cores_to_use > 1 && length(batch_indices) > 1) {
+        if (.Platform$OS.type == "windows") {
+          cl <- parallel::makeCluster(min(cores_to_use, length(batch_indices)))
+          on.exit(parallel::stopCluster(cl), add = TRUE)
+          
+          # Load topolow on cluster
+          parallel::clusterEvalQ(cl, library(topolow))
+          
+          # Export required objects
+          # IMPORTANT: We export the current 'lhs_params' which changes per epoch
+          parallel::clusterExport(cl,
+                                  c("lhs_params", "full_dissimilarity_matrix", "matrix_size",
+                                    "mapping_max_iter", "relative_epsilon", "folds",
+                                    "use_subsampling", "opt_subsample", "verbose", "epoch", "num_samples",
+                                    "likelihood_function", "euclidean_embedding",
+                                    "subsample_dissimilarity_matrix",
+                                    "check_matrix_connectivity",
+                                    "analyze_network_structure",
+                                    "sanity_check_subsample"),
+                                  envir = environment())
+          
+          batch_results <- parallel::parLapply(cl, batch_indices, process_param_set)
+        } else {
+          # Unix-like systems
+          batch_results <- parallel::mclapply(batch_indices, process_param_set,
+                                              mc.cores = min(cores_to_use, length(batch_indices)))
+        }
+      } else {
+        # Sequential processing for small batches
+        batch_results <- lapply(batch_indices, process_param_set)
+      }
+      
+      # Collect batch results
+      all_results <- c(all_results, batch_results)
+      
+      # Garbage collection between batches for memory management
+      gc()
+      
+      if (verbose && num_batches > 1) {
+        valid_in_batch <- sum(!sapply(batch_results, is.null))
+        cat(sprintf("Batch %d complete: %d/%d successful\n", 
+                    batch, valid_in_batch, length(batch_indices)))
+      }
+    }
+    
+    # ==========================================================================
+    # AGGREGATE RESULTS FOR CURRENT EPOCH
+    # ==========================================================================
+  
+    # AGGREGATE FAILURE DIAGNOSTICS (this is the key fix)
+    failure_diagnostics <- list(
+      subsample_failures = 0,
+      cv_fold_failures = 0,
+      embedding_failures = 0,
+      other_failures = 0,
+      failure_messages = c()
+    )
+  
+    for (res in all_results) {
+      if (!is.null(res$failure_type)) {
+        # Count failure by type
+        if (res$failure_type == "subsample") {
+          failure_diagnostics$subsample_failures <- failure_diagnostics$subsample_failures + 1
+        } else if (res$failure_type == "cv_fold") {
+          failure_diagnostics$cv_fold_failures <- failure_diagnostics$cv_fold_failures + 1
+        } else if (res$failure_type == "embedding") {
+          failure_diagnostics$embedding_failures <- failure_diagnostics$embedding_failures + 1
+        } else {
+          failure_diagnostics$other_failures <- failure_diagnostics$other_failures + 1
+        }
         
-        if (!is.na(median_dissim) && result$Holdout_MAE > (2 * median_dissim)) {
-          if (verbose) {
-            cat(sprintf("  [!] High MAE (%.3f) vs median dissimilarity (%.3f).\n",
-                        result$Holdout_MAE, median_dissim))
-          }
+        # Store message
+        failure_diagnostics$failure_messages <- c(
+          failure_diagnostics$failure_messages,
+          sprintf("Sample %d: %s", res$sample_id, res$failure_message)
+        )
+      }
+    }
+  
+    # Remove NULL results (failed evaluations) & extract valid results
+    valid_results <- Filter(function(x) !is.null(x$result), all_results)
+    valid_results_data <- lapply(valid_results, function(x) x$result)
+    
+    if (length(valid_results_data) == 0) {
+      if (verbose) {
+        # Provide detailed diagnostic error message
+        cat("\n", rep("=", 80), "\n", sep = "")
+        cat(sprintf("ERROR: ALL PARAMETER EVALUATIONS FAILED IN EPOCH %d\n", epoch))
+        cat(rep("=", 80), "\n\n", sep = "")
+        
+        cat("Failure Summary:\n")
+        cat(sprintf("  - Subsample/connectivity failures: %d/%d (%.1f%%)\n",
+                    failure_diagnostics$subsample_failures, num_samples,
+                    100 * failure_diagnostics$subsample_failures / num_samples))
+        cat(sprintf("  - CV fold creation failures:       %d/%d (%.1f%%)\n",
+                    failure_diagnostics$cv_fold_failures, num_samples,
+                    100 * failure_diagnostics$cv_fold_failures / num_samples))
+        cat(sprintf("  - Embedding failures:              %d/%d (%.1f%%)\n",
+                    failure_diagnostics$embedding_failures, num_samples,
+                    100 * failure_diagnostics$embedding_failures / num_samples))
+        cat(sprintf("  - Other failures:                  %d/%d (%.1f%%)\n",
+                    failure_diagnostics$other_failures, num_samples,
+                    100 * failure_diagnostics$other_failures / num_samples))
+        
+        cat("\nData Characteristics:\n")
+        cat(sprintf("  - Matrix size: %d x %d\n", matrix_size, matrix_size))
+        cat(sprintf("  - Missing values: %d/%d (%.1f%%)\n",
+                    sum(is.na(dissimilarity_matrix)),
+                    matrix_size^2,
+                    100 * sum(is.na(dissimilarity_matrix)) / matrix_size^2))
+        
+        if (use_subsampling) {
+          cat(sprintf("  - Subsample size: %d (%.1f%% of full matrix)\n",
+                      opt_subsample, 100 * opt_subsample / matrix_size))
+          cat(sprintf("  - CV folds: %d (each removes ~%d points)\n",
+                      folds, floor(opt_subsample / folds)))
+        } else {
+          cat(sprintf("  - CV folds: %d (each removes ~%d points)\n",
+                      folds, floor(matrix_size / folds)))
         }
       }
       
-      # Compile successful result
-      result_row <- data.frame(
-        N = N,
-        k0 = k0,
-        cooling_rate = cooling_rate,
-        c_repulsion = c_repulsion,
-        Holdout_MAE = result$Holdout_MAE,
-        NLL = result$NLL
-      )
-      
-      # Add subsampling metadata if used
-      if (use_subsampling) {
-        result_row$opt_subsample <- opt_subsample
-        result_row$original_n_points <- matrix_size
+      # Determine primary failure mode
+      primary_issue <- "unknown"
+      if (failure_diagnostics$subsample_failures > num_samples * 0.5) {
+        primary_issue <- "subsampling"
+      } else if (failure_diagnostics$cv_fold_failures > num_samples * 0.5) {
+        primary_issue <- "cv_folds"
+      } else if (failure_diagnostics$embedding_failures > num_samples * 0.5) {
+        primary_issue <- "embedding"
       }
+      if (verbose) {
+        cat("\nLikely Root Cause:\n")
+        if (primary_issue == "subsampling") {
+          cat("  >> DATA TOO SPARSE FOR SUBSAMPLING <<\n\n")
+          cat("  Your data has disconnected components when subsampled.\n")
+          cat("  This happens when observations are too sparse to maintain\n")
+          cat("  connectivity after random sampling.\n\n")
+          cat("Recommended Solutions (in order of preference):\n")
+          cat("  1. Prune sparse matrix BEFORE optimization\n\n")
+          cat("  2. Increase opt_subsample (current: ", opt_subsample, ")\n", sep = "")
+          cat("       Try: opt_subsample = ", ceiling(opt_subsample * 1.5), "\n\n", sep = "")
+          cat("  3. Reduce CV folds (current: ", folds, ")\n", sep = "")
+          cat("       Try: folds = ", max(5, floor(folds / 2)), "\n\n", sep = "")
+          cat("  4. Disable subsampling (use full matrix):\n")
+          cat("       opt_subsample = NULL\n")
+          cat("       Warning: This will be slow with large matrices\n\n")
+          
+        } else if (primary_issue == "cv_folds") {
+          cat("  >> INSUFFICIENT DATA FOR CROSS-VALIDATION <<\n\n")
+          cat("  The matrix becomes too sparse when splitting into CV folds.\n\n")
+          cat("Recommended Solutions:\n")
+          cat("  1. Reduce number of CV folds (current: ", folds, ")\n", sep = "")
+          cat("       Try: folds = ", max(5, floor(folds / 2)), "\n\n", sep = "")
+          cat("  2. Prune sparse matrix to increase density:\n\n")
+          
+        } else if (primary_issue == "embedding") {
+          cat("  >> EMBEDDING OPTIMIZATION FAILURES <<\n\n")
+          cat("  The optimization process is failing, possibly due to:\n")
+          cat("    - Extreme parameter values\n")
+          cat("    - Non-metric data structure\n")
+          cat("    - Insufficient iterations\n\n")
+          cat("Recommended Solutions:\n")
+          cat("  1. Check parameter ranges are reasonable\n")
+          cat("  2. Increase mapping_max_iter (current: ", mapping_max_iter, ")\n", sep = "")
+          cat("  3. Analyze data structure with analyze_network_structure()\n\n")
+        }
+        
+        # Show first few failure messages for debugging
+        if (length(failure_diagnostics$failure_messages) > 0) {
+          cat("\nFirst Few Failure Messages:\n")
+          cat(rep("-", 80), "\n", sep = "")
+          n_show <- min(5, length(failure_diagnostics$failure_messages))
+          for (msg in failure_diagnostics$failure_messages[1:n_show]) {
+            cat("  ", msg, "\n", sep = "")
+          }
+          if (length(failure_diagnostics$failure_messages) > n_show) {
+            cat(sprintf("  ... and %d more failures\n", 
+                        length(failure_diagnostics$failure_messages) - n_show))
+          }
+        }
+        
+        cat("\n", rep("=", 80), "\n\n", sep = "")
+      }
+      
+      stop(sprintf("No valid parameter evaluations completed successfully in epoch %d.", epoch))
+    }
+  
+    if (verbose && length(valid_results_data) < num_samples) {
+      cat(sprintf("\nWarning: Only %d/%d parameter evaluations completed successfully in epoch %d.\n",
+                  length(valid_results_data), num_samples, epoch))
+    }
+    
+    # Combine into data frame for this epoch
+    epoch_df <- do.call(rbind, valid_results_data)
+    
+    # Store results for final return (overwriting previous epoch)
+    final_df <- epoch_df
+    
+    # ==========================================================================
+    # RANGE UPDATE LOGIC (If not final epoch)
+    # ==========================================================================
+    if (epoch < epochs) {
+      # Sort by NLL
+      epoch_df_sorted <- epoch_df[order(epoch_df$NLL), ]
+      
+      # Keep top half
+      n_keep <- max(1, floor(nrow(epoch_df_sorted) / 2))
+      survivors <- epoch_df_sorted[1:n_keep, ]
       
       if (verbose) {
-        cat(sprintf("  [OK] MAE: %.4f, NLL: %.2f\n",
-                    result$Holdout_MAE, result$NLL))
+        cat(sprintf("\nEpoch %d summary: Best NLL = %.2f. Keeping %d survivors to refine ranges.\n", 
+                    epoch, min(survivors$NLL), n_keep))
       }
       
-      return(list(
-        result = result_row,
-        failure_type = NULL,
-        failure_message = NULL,
-        sample_id = i
-      ))
+      # Update ranges: 25% below min of survivors, 25% above max of survivors
+      # For integers (N), ensure at least 1
       
-    }, error = function(e) {
-      if (verbose) {
-        cat(sprintf("  X Error evaluating sample %d: %s\n", i, e$message))
-      }
-      return(list(
-        result = NULL,
-        failure_type = "other",
-        failure_message = e$message,
-        sample_id = i
-      ))
-    })
-  }
-  
-  # ==========================================================================
-  # PARALLEL EXECUTION WITH BATCHING
-  # ==========================================================================
-  if (verbose) cat("\nStarting parameter evaluations with batching...\n")
-  
-  # Determine batch size for memory management
-  cores_to_use <- min(max_cores, num_samples)
-  batch_size <- min(cores_to_use * 4, num_samples)  # Process 4 per core per batch
-  num_batches <- ceiling(num_samples / batch_size)
-  
-  if (verbose && num_batches > 1) {
-    cat(sprintf("Processing in %d batches (batch size: %d)\n", 
-                num_batches, batch_size))
-  }
-  
-  all_results <- list()
-  
-  for (batch in 1:num_batches) {
-    batch_start <- (batch - 1) * batch_size + 1
-    batch_end <- min(batch * batch_size, num_samples)
-    batch_indices <- batch_start:batch_end
-    
-    if (verbose && num_batches > 1) {
-      cat(sprintf("\nProcessing batch %d/%d (samples %d-%d)...\n",
-                  batch, num_batches, batch_start, batch_end))
-    }
-    
-    # Process batch in parallel
-    if (cores_to_use > 1 && length(batch_indices) > 1) {
-      if (.Platform$OS.type == "windows") {
-        cl <- parallel::makeCluster(min(cores_to_use, length(batch_indices)))
-        on.exit(parallel::stopCluster(cl), add = TRUE)
-        
-        # Load topolow on cluster
-        parallel::clusterEvalQ(cl, library(topolow))
-        
-        # Export required objects
-        parallel::clusterExport(cl,
-                                c("lhs_params", "full_dissimilarity_matrix", "matrix_size",
-                                  "mapping_max_iter", "relative_epsilon", "folds",
-                                  "use_subsampling", "opt_subsample", "verbose",
-                                  "likelihood_function", "euclidean_embedding",
-                                  "subsample_dissimilarity_matrix",
-                                  "check_matrix_connectivity",
-                                  "analyze_network_structure",
-                                  "sanity_check_subsample"),
-                                envir = environment())
-        
-        batch_results <- parallel::parLapply(cl, batch_indices, process_param_set)
-      } else {
-        # Unix-like systems
-        batch_results <- parallel::mclapply(batch_indices, process_param_set,
-                                            mc.cores = min(cores_to_use, length(batch_indices)))
-      }
-    } else {
-      # Sequential processing for small batches
-      batch_results <- lapply(batch_indices, process_param_set)
-    }
-    
-    # Collect batch results
-    all_results <- c(all_results, batch_results)
-    
-    # Garbage collection between batches for memory management
-    gc()
-    
-    if (verbose && num_batches > 1) {
-      valid_in_batch <- sum(!sapply(batch_results, is.null))
-      cat(sprintf("Batch %d complete: %d/%d successful\n", 
-                  batch, valid_in_batch, length(batch_indices)))
-    }
-  }
-  
-  # ==========================================================================
-  # AGGREGATE RESULTS
-  # ==========================================================================
-
-  # AGGREGATE FAILURE DIAGNOSTICS (this is the key fix)
-  failure_diagnostics <- list(
-    subsample_failures = 0,
-    cv_fold_failures = 0,
-    embedding_failures = 0,
-    other_failures = 0,
-    failure_messages = c()
-  )
-
-  for (res in all_results) {
-    if (!is.null(res$failure_type)) {
-      # Count failure by type
-      if (res$failure_type == "subsample") {
-        failure_diagnostics$subsample_failures <- failure_diagnostics$subsample_failures + 1
-      } else if (res$failure_type == "cv_fold") {
-        failure_diagnostics$cv_fold_failures <- failure_diagnostics$cv_fold_failures + 1
-      } else if (res$failure_type == "embedding") {
-        failure_diagnostics$embedding_failures <- failure_diagnostics$embedding_failures + 1
-      } else {
-        failure_diagnostics$other_failures <- failure_diagnostics$other_failures + 1
-      }
+      # --- N (Dimension) ---
+      new_N_min <- floor(min(survivors$N) * 0.75)
+      new_N_max <- ceiling(max(survivors$N) * 1.25)
+      cur_N_min <- max(1, new_N_min) # Ensure positive integer
+      cur_N_max <- max(cur_N_min, new_N_max) # Ensure max >= min
       
-      # Store message
-      failure_diagnostics$failure_messages <- c(
-        failure_diagnostics$failure_messages,
-        sprintf("Sample %d: %s", res$sample_id, res$failure_message)
-      )
-    }
-  }
-
-  # Remove NULL results (failed evaluations) & extract valid results
-  valid_results <- Filter(function(x) !is.null(x$result), all_results)
-  valid_results <- lapply(valid_results, function(x) x$result)
-  
-  if (length(valid_results) == 0) {
-    # Provide detailed diagnostic error message
-    cat("\n", rep("=", 80), "\n", sep = "")
-    cat("ERROR: ALL PARAMETER EVALUATIONS FAILED\n")
-    cat(rep("=", 80), "\n\n", sep = "")
-    
-    cat("Failure Summary:\n")
-    cat(sprintf("  - Subsample/connectivity failures: %d/%d (%.1f%%)\n",
-                failure_diagnostics$subsample_failures, num_samples,
-                100 * failure_diagnostics$subsample_failures / num_samples))
-    cat(sprintf("  - CV fold creation failures:       %d/%d (%.1f%%)\n",
-                failure_diagnostics$cv_fold_failures, num_samples,
-                100 * failure_diagnostics$cv_fold_failures / num_samples))
-    cat(sprintf("  - Embedding failures:              %d/%d (%.1f%%)\n",
-                failure_diagnostics$embedding_failures, num_samples,
-                100 * failure_diagnostics$embedding_failures / num_samples))
-    cat(sprintf("  - Other failures:                  %d/%d (%.1f%%)\n",
-                failure_diagnostics$other_failures, num_samples,
-                100 * failure_diagnostics$other_failures / num_samples))
-    
-    cat("\nData Characteristics:\n")
-    cat(sprintf("  - Matrix size: %d x %d\n", matrix_size, matrix_size))
-    cat(sprintf("  - Missing values: %d/%d (%.1f%%)\n",
-                sum(is.na(dissimilarity_matrix)),
-                matrix_size^2,
-                100 * sum(is.na(dissimilarity_matrix)) / matrix_size^2))
-    
-    if (use_subsampling) {
-      cat(sprintf("  - Subsample size: %d (%.1f%% of full matrix)\n",
-                  opt_subsample, 100 * opt_subsample / matrix_size))
-      cat(sprintf("  - CV folds: %d (each removes ~%d points)\n",
-                  folds, floor(opt_subsample / folds)))
-    } else {
-      cat(sprintf("  - CV folds: %d (each removes ~%d points)\n",
-                  folds, floor(matrix_size / folds)))
-    }
-    
-    # Determine primary failure mode
-    primary_issue <- "unknown"
-    if (failure_diagnostics$subsample_failures > num_samples * 0.5) {
-      primary_issue <- "subsampling"
-    } else if (failure_diagnostics$cv_fold_failures > num_samples * 0.5) {
-      primary_issue <- "cv_folds"
-    } else if (failure_diagnostics$embedding_failures > num_samples * 0.5) {
-      primary_issue <- "embedding"
-    }
-    
-    cat("\nLikely Root Cause:\n")
-    if (primary_issue == "subsampling") {
-      cat("  >> DATA TOO SPARSE FOR SUBSAMPLING <<\n\n")
-      cat("  Your data has disconnected components when subsampled.\n")
-      cat("  This happens when observations are too sparse to maintain\n")
-      cat("  connectivity after random sampling.\n\n")
-      cat("Recommended Solutions (in order of preference):\n")
-      cat("  1. Prune sparse matrix BEFORE optimization\n\n")
-      cat("  2. Increase opt_subsample (current: ", opt_subsample, ")\n", sep = "")
-      cat("       Try: opt_subsample = ", ceiling(opt_subsample * 1.5), "\n\n", sep = "")
-      cat("  3. Reduce CV folds (current: ", folds, ")\n", sep = "")
-      cat("       Try: folds = ", max(5, floor(folds / 2)), "\n\n", sep = "")
-      cat("  4. Disable subsampling (use full matrix):\n")
-      cat("       opt_subsample = NULL\n")
-      cat("       Warning: This will be slow with large matrices\n\n")
+      # --- k0 ---
+      new_k0_min <- min(survivors$k0) * 0.75
+      new_k0_max <- max(survivors$k0) * 1.25
+      cur_k0_min <- max(1e-6, new_k0_min)
+      cur_k0_max <- max(cur_k0_min, new_k0_max)
       
-    } else if (primary_issue == "cv_folds") {
-      cat("  >> INSUFFICIENT DATA FOR CROSS-VALIDATION <<\n\n")
-      cat("  The matrix becomes too sparse when splitting into CV folds.\n\n")
-      cat("Recommended Solutions:\n")
-      cat("  1. Reduce number of CV folds (current: ", folds, ")\n", sep = "")
-      cat("       Try: folds = ", max(5, floor(folds / 2)), "\n\n", sep = "")
-      cat("  2. Prune sparse matrix to increase density:\n\n")
+      # --- c_repulsion ---
+      new_c_rep_min <- min(survivors$c_repulsion) * 0.75
+      new_c_rep_max <- max(survivors$c_repulsion) * 1.25
+      cur_c_rep_min <- max(1e-6, new_c_rep_min)
+      cur_c_rep_max <- max(cur_c_rep_min, new_c_rep_max)
       
-    } else if (primary_issue == "embedding") {
-      cat("  >> EMBEDDING OPTIMIZATION FAILURES <<\n\n")
-      cat("  The optimization process is failing, possibly due to:\n")
-      cat("    - Extreme parameter values\n")
-      cat("    - Non-metric data structure\n")
-      cat("    - Insufficient iterations\n\n")
-      cat("Recommended Solutions:\n")
-      cat("  1. Check parameter ranges are reasonable\n")
-      cat("  2. Increase mapping_max_iter (current: ", mapping_max_iter, ")\n", sep = "")
-      cat("  3. Analyze data structure with analyze_network_structure()\n\n")
+      # --- cooling_rate ---
+      new_cool_min <- min(survivors$cooling_rate) * 0.75
+      new_cool_max <- max(survivors$cooling_rate) * 1.25
+      cur_cool_min <- max(1e-6, new_cool_min)
+      cur_cool_max <- max(cur_cool_min, new_cool_max)
+      
+      # Note: We drift outside user provided bounds, limited only by physical constraints (1e-6)
     }
-    
-    # Show first few failure messages for debugging
-    if (length(failure_diagnostics$failure_messages) > 0) {
-      cat("\nFirst Few Failure Messages:\n")
-      cat(rep("-", 80), "\n", sep = "")
-      n_show <- min(5, length(failure_diagnostics$failure_messages))
-      for (msg in failure_diagnostics$failure_messages[1:n_show]) {
-        cat("  ", msg, "\n", sep = "")
-      }
-      if (length(failure_diagnostics$failure_messages) > n_show) {
-        cat(sprintf("  ... and %d more failures\n", 
-                    length(failure_diagnostics$failure_messages) - n_show))
-      }
-    }
-    
-    cat("\n", rep("=", 80), "\n\n", sep = "")
-    
-    stop("No valid parameter evaluations completed successfully. See diagnostic output above.")
-  }
-
-  if (verbose && length(valid_results) < num_samples) {
-    cat(sprintf("\nWarning: Only %d/%d parameter evaluations completed successfully.\n",
-                length(valid_results), num_samples))
-  }
-  
-  # Combine into data frame
-  final_df <- do.call(rbind, valid_results)
+  } # End of epoch loop
   
   # ==========================================================================
-  # LOG-TRANSFORM PARAMETERS
+  # LOG-TRANSFORM PARAMETERS (Using Final Epoch Results)
   # ==========================================================================
+  # At this point, final_df contains all samples from the final epoch
+  
   params_to_transform <- c("N", "k0", "cooling_rate", "c_repulsion")
   
   for (param in params_to_transform) {
@@ -830,8 +925,8 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
   # ==========================================================================
   if (verbose) {
     cat("\n" , "=== Optimization Summary ===", "\n")
-    cat(sprintf("Successful evaluations: %d/%d\n",
-                length(valid_results), num_samples))
+    cat(sprintf("Final epoch evaluations: %d/%d\n",
+                nrow(final_df), num_samples))
     cat(sprintf("Best MAE: %.4f\n", min(final_df$Holdout_MAE, na.rm = TRUE)))
     cat(sprintf("Best NLL: %.2f\n", min(final_df$NLL, na.rm = TRUE)))
     if (use_subsampling) {
@@ -844,6 +939,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
   
   return(final_df)
 }
+
 
 
 #' Run Adaptive Monte Carlo Sampling for Parameter Refinement

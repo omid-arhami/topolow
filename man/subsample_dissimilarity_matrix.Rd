@@ -43,8 +43,7 @@ the original matrix.}
 }
 \description{
 Randomly samples a subset of points from a dissimilarity matrix, ensuring
-the resulting submatrix forms a connected graph. If connectivity cannot be
-achieved, the function adaptively increases the subsample size.
+the resulting submatrix forms a connected graph.
 }
 \details{
 The function performs the following steps:

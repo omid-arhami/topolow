@@ -177,3 +177,23 @@ The `opt_subsample` parameter is optional (default: NULL = use full data).
 * Adaptive strategies for handling sparse data
 * Comprehensive logging of subsampling operations
 * New diagnostic plots including MCMC exploration and parameter fit traces
+
+### New changes towards v3:
+
+#' The function performs these steps in an epoch-based evolutionary strategy:
+#' 1. **Initialization**: Starts with the user-provided parameter ranges.
+#' 2. **Epoch Loop**: For each epoch:
+#'    a. Generates `num_samples` using LHS within the current parameter ranges.
+#'    b. If `opt_subsample` is specified, each evaluation uses a random subsample.
+#'    c. Evaluates parameter sets via cross-validation (in parallel batches).
+#'    d. **Range Update** (after all but the final epoch):
+#'       - Sorts results by NLL and keeps the top 50%.
+#'       - Updates parameter ranges for the next epoch based on survivors:
+#'         New Min = 0.75 * Min(Survivors), New Max = 1.25 * Max(Survivors).
+#'       - This allows the search to drift and zoom in on optimal regions.
+#' 3. **Finalization**: Automatically log-transforms the results from the **final epoch**
+#'    for direct use with adaptive sampling.
+
+#' @param epochs Integer. Number of optimization epochs. In each epoch, parameters are sampled,
+#'   evaluated, and the best 50% are used to refine the search space for the next epoch.
+#'   Default: 3.
