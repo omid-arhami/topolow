@@ -1,7 +1,9 @@
 # Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
 # R/core.R
 
-#' TopoLow Core Functions
+#' @useDynLib topolow, .registration = TRUE
+#' @importFrom Rcpp sourceCpp
+NULL
 
 #' Vectorized Processing of Dissimilarity Matrix for Convergence Error Calculations
 #'
@@ -83,13 +85,16 @@ vectorized_process_distance_matrix <- function(distances_numeric, threshold_mask
 #'
 #' topolow (topological stochastic pairwise reconstruction for Euclidean embedding) optimizes
 #' point positions in an N-dimensional space to match a target dissimilarity matrix.
-#' The algorithm uses a physics-inspired approach with spring and repulsive forces
-#' to find optimal point configurations while handling missing and thresholded measurements.
+#' This version uses an optimized C++ backend with:
+#' * Compressed edge list (COO format) for memory efficiency
+#' * Negative sampling to approximate unmeasured pair repulsion
+#' * Immediate (Gauss-Seidel) position updates for better convergence
+#' * Stochastic edge shuffling for escaping local optima
 #'
 #' @details
 #' The algorithm iteratively updates point positions using:
 #' * Spring forces between points with measured dissimilarities.
-#' * Repulsive forces between points without measurements.
+#' * Repulsive forces between points without measurements (via negative sampling).
 #' * Conditional forces for thresholded measurements (< or >).
 #' * An adaptive spring constant that decays over iterations.
 #' * Convergence monitoring based on relative error change.
@@ -110,8 +115,8 @@ vectorized_process_distance_matrix <- function(distances_numeric, threshold_mask
 #' @param c_repulsion Numeric. Repulsion constant controlling repulsive forces.
 #' @param relative_epsilon Numeric. Convergence threshold for relative change in error.
 #'        Default is 1e-4.
-#' @param convergence_counter Integer. Number of iterations below threshold before declaring
-#'        convergence. Default is 5.
+#' @param convergence_counter Integer. Number of consecutive iterations below threshold before 
+#'        declaring convergence. Default is 5.
 #' @param initial_positions Matrix or NULL. Optional starting coordinates. If NULL,
 #'        random initialization is used. Matrix should have nrow = nrow(dissimilarity_matrix)
 #'        and ncol = ndim.
@@ -120,6 +125,11 @@ vectorized_process_distance_matrix <- function(distances_numeric, threshold_mask
 #' @param output_dir Character. Directory to save the CSV file. Required if
 #'        `write_positions_to_csv` is TRUE.
 #' @param verbose Logical. Whether to print progress messages. Default is FALSE.
+#' @param n_negative_samples Integer. Number of negative samples per edge endpoint. 
+#'        Higher values better approximate the original O(N²) algorithm but increase 
+#'        computation time. Default is 5.
+#' @param convergence_check_freq Integer. How often to check for convergence (every N iterations).
+#'        Lower values give more precise stopping but add overhead. Default is 10.
 #'
 #' @return A `list` object of class `topolow`. This list contains the results of the
 #'   optimization and includes the following components:
@@ -168,31 +178,37 @@ vectorized_process_distance_matrix <- function(distances_numeric, threshold_mask
 #' @importFrom utils write.csv
 #' @export
 euclidean_embedding <- function(dissimilarity_matrix,
-                               ndim,
-                               mapping_max_iter = 1000,
-                               k0,
-                               cooling_rate,
-                               c_repulsion,
-                               relative_epsilon = 1e-4,
-                               convergence_counter = 5,
-                               initial_positions = NULL,
-                               write_positions_to_csv = FALSE,
-                               output_dir,
-                               verbose = FALSE) {
+                                ndim,
+                                mapping_max_iter = 1000,
+                                k0,
+                                cooling_rate,
+                                c_repulsion,
+                                relative_epsilon = 1e-4,
+                                convergence_counter = 5,
+                                initial_positions = NULL,
+                                write_positions_to_csv = FALSE,
+                                output_dir,
+                                verbose = FALSE,
+                                n_negative_samples = 5,
+                                convergence_check_freq = 10) {
 
-  # Input validation with informative messages
+  # ===========================================================================
+  # INPUT VALIDATION
+  # ===========================================================================
   if (!is.matrix(dissimilarity_matrix)) {
     stop("dissimilarity_matrix must be a matrix")
   }
   if (nrow(dissimilarity_matrix) != ncol(dissimilarity_matrix)) {
     stop("dissimilarity_matrix must be square")
   }
+  
   # Check if there are any finite non-zero dissimilarities
   finite_dissim <- suppressWarnings(as.numeric(dissimilarity_matrix))
   finite_dissim[is.infinite(finite_dissim)] <- NA
   if (sum(!is.na(finite_dissim) & finite_dissim != 0) == 0) {
     warning("No finite non-zero dissimilarities found. Results may be unreliable.")
   }
+  
   if (!is.numeric(ndim) || ndim < 1 || ndim != round(ndim)) {
     stop("ndim must be a positive integer")
   }
@@ -219,6 +235,12 @@ euclidean_embedding <- function(dissimilarity_matrix,
       convergence_counter != round(convergence_counter)) {
     stop("convergence_counter must be a positive integer")
   }
+  if (!is.numeric(n_negative_samples) || n_negative_samples < 0) {
+    stop("n_negative_samples must be a non-negative integer")
+  }
+  if (!is.numeric(convergence_check_freq) || convergence_check_freq < 1) {
+    stop("convergence_check_freq must be a positive integer")
+  }
 
   # Validate initial positions if provided
   if (!is.null(initial_positions)) {
@@ -240,20 +262,21 @@ euclidean_embedding <- function(dissimilarity_matrix,
     stop("dissimilarity_matrix must have at least 2 rows/columns")
   }
 
-
-  ###=== Reorder rows and columns so largest values are furthest from diagonal
+  # ===========================================================================
+  # MATRIX REORDERING : Reorder rows and columns so largest values are furthest from diagonal
+  # ===========================================================================
   if (n > 1) {
     # Extract numeric values for clustering, handling threshold indicators
     numeric_matrix <- matrix(NA, n, n)
-    for(i in 1:n) {
-      for(j in 1:n) {
-        val <- dissimilarity_matrix[i,j]
-        if(!is.na(val)) {
-          if(is.character(val)) {
+    for (i in 1:n) {
+      for (j in 1:n) {
+        val <- dissimilarity_matrix[i, j]
+        if (!is.na(val)) {
+          if (is.character(val)) {
             # Remove < or > prefix and extract numeric value
-            numeric_matrix[i,j] <- as.numeric(gsub("^[<>]", "", val))
+            numeric_matrix[i, j] <- as.numeric(gsub("^[<>]", "", val))
           } else {
-            numeric_matrix[i,j] <- as.numeric(val)
+            numeric_matrix[i, j] <- as.numeric(val)
           }
         }
       }
@@ -263,7 +286,7 @@ euclidean_embedding <- function(dissimilarity_matrix,
     tryCatch({
       # Calculate average dissimilarity for each point using only non-NA values
       avg_dissim <- numeric(n)
-      for(i in 1:n) {
+      for (i in 1:n) {
         # Get all values for this point (excluding diagonal)
         row_vals <- numeric_matrix[i, -i]
         col_vals <- numeric_matrix[-i, i]
@@ -271,7 +294,7 @@ euclidean_embedding <- function(dissimilarity_matrix,
 
         # Calculate average using only non-NA values
         non_na_vals <- all_vals[!is.na(all_vals)]
-        if(length(non_na_vals) > 0) {
+        if (length(non_na_vals) > 0) {
           avg_dissim[i] <- mean(non_na_vals)
         } else {
           avg_dissim[i] <- 0  # If no measurements, put in middle
@@ -279,7 +302,7 @@ euclidean_embedding <- function(dissimilarity_matrix,
       }
 
       # Check if we have meaningful averages (not all zeros)
-      if(sum(avg_dissim > 0) > 1) {
+      if (sum(avg_dissim > 0) > 1) {
         # Order points by average dissimilarity (descending)
         # This puts high-dissimilarity points at extremes, low at center
         new_order <- order(avg_dissim)
@@ -306,225 +329,175 @@ euclidean_embedding <- function(dissimilarity_matrix,
       }
     }
   }
-  #====
 
+  # ===========================================================================
+  # PREPROCESSING FOR C++ (using COO format instead of CSC to avoid zero-dropping)
+  # ===========================================================================
+  
   # Pre-compute NA status once
   is_na_matrix <- is.na(dissimilarity_matrix)
   node_degrees <- rowSums(!is_na_matrix)
-  node_degrees_1 <- node_degrees + 1
-
+  
+  # Parse dissimilarity matrix to numeric values and threshold codes
   distances_numeric <- matrix(Inf, n, n)
-  threshold_mask <- matrix(0, n, n)  # 0 = number, 1 = >, -1 = <
-
-  for(i in 1:n) {
-    for(j in 1:n) {
-      if(!is.na(dissimilarity_matrix[i,j])) {
-        if(is.character(dissimilarity_matrix[i,j])) {
-          if(startsWith(dissimilarity_matrix[i,j], ">")) {
-            distances_numeric[i,j] <- as.numeric(sub(">", "", dissimilarity_matrix[i,j]))
-            threshold_mask[i,j] <- 1
-          } else if(startsWith(dissimilarity_matrix[i,j], "<")) {
-            distances_numeric[i,j] <- as.numeric(sub("<", "", dissimilarity_matrix[i,j]))
-            threshold_mask[i,j] <- -1
+  threshold_mask <- matrix(0L, n, n)  # 0 = number, 1 = >, -1 = <
+  
+  for (i in 1:n) {
+    for (j in 1:n) {
+      if (!is.na(dissimilarity_matrix[i, j])) {
+        if (is.character(dissimilarity_matrix[i, j])) {
+          if (startsWith(dissimilarity_matrix[i, j], ">")) {
+            distances_numeric[i, j] <- as.numeric(sub(">", "", dissimilarity_matrix[i, j]))
+            threshold_mask[i, j] <- 1L
+          } else if (startsWith(dissimilarity_matrix[i, j], "<")) {
+            distances_numeric[i, j] <- as.numeric(sub("<", "", dissimilarity_matrix[i, j]))
+            threshold_mask[i, j] <- -1L
           } else {
-            distances_numeric[i,j] <- as.numeric(dissimilarity_matrix[i,j])
+            distances_numeric[i, j] <- as.numeric(dissimilarity_matrix[i, j])
           }
         } else {
-          distances_numeric[i,j] <- dissimilarity_matrix[i,j]
+          distances_numeric[i, j] <- dissimilarity_matrix[i, j]
         }
       }
     }
   }
+  
+  # ===========================================================================
+  # BUILD COO EDGE LIST (UPPER TRIANGLE ONLY, PRE-FILTERED IN R)
+  # ===========================================================================
+  # This avoids the sparse matrix zero-dropping bug and reduces memory transfer
+  
+  edge_i <- integer(0)
+  edge_j <- integer(0)
+  edge_dist <- numeric(0)
+  edge_thresh <- integer(0)
+  
+  for (i in 1:(n - 1)) {
+    for (j in (i + 1):n) {
+      if (distances_numeric[i, j] != Inf) {
+        # Use 0-based indexing for C++
+        edge_i <- c(edge_i, i - 1L)
+        edge_j <- c(edge_j, j - 1L)
+        edge_dist <- c(edge_dist, distances_numeric[i, j])
+        edge_thresh <- c(edge_thresh, threshold_mask[i, j])
+      }
+    }
+  }
+  
+  if (length(edge_i) == 0) {
+    stop("No valid off-diagonal measurements found in dissimilarity matrix")
+  }
+  
+  # Create flattened has_measurement vector for O(1) lookup in C++
+  # Stored row-major: index = i * n + j
+  has_measurement <- !is_na_matrix
+  has_measurement_flat <- as.integer(as.vector(t(has_measurement)))
 
-  # Initialize positions
-  positions <- if(is.null(initial_positions)) {
+  # ===========================================================================
+  # INITIALIZATION OF POINT POSITIONS
+  # ===========================================================================
+  if (is.null(initial_positions)) {
     dissimilarity_matrix_numeric <- suppressWarnings(as.numeric(as.character(dissimilarity_matrix)))
     dissimilarity_matrix_numeric[is.na(dissimilarity_matrix_numeric)] <- NA
-    init_step <- max(dissimilarity_matrix_numeric, na.rm=TRUE) / n
-    # random initialization
-    random_steps <- matrix(stats::runif((n-1) * ndim, 0, 2*init_step), nrow=n-1, ncol=ndim)
+    init_step <- max(dissimilarity_matrix_numeric, na.rm = TRUE) / n
+    # Random initialization
+    random_steps <- matrix(stats::runif((n - 1) * ndim, 0, 2 * init_step), nrow = n - 1, ncol = ndim)
     # First row stays zero, subsequent rows are cumulative sums
-    pos <- rbind(matrix(0, 1, ndim), apply(random_steps, 2, cumsum))
-    pos
-  } else {
-    initial_positions
+    initial_positions <- rbind(matrix(0, 1, ndim), apply(random_steps, 2, cumsum))
   }
 
+  rownames(initial_positions) <- rownames(dissimilarity_matrix)
+
+  # ===========================================================================
+  # CALL C++ OPTIMIZATION
+  # ===========================================================================
+  if (verbose) cat("Starting C++ optimization...\n")
+
+  start_time <- Sys.time()
+  
+  cpp_result <- optimize_layout_cpp(
+    initial_positions = initial_positions,
+    edge_i = edge_i,
+    edge_j = edge_j,
+    edge_dist = edge_dist,
+    edge_thresh = edge_thresh,
+    has_measurement_flat = has_measurement_flat,
+    degrees = as.integer(node_degrees),
+    n_points = as.integer(n),
+    n_iter = as.integer(mapping_max_iter),
+    k0 = k0,
+    cooling_rate = cooling_rate,
+    c_repulsion = c_repulsion,
+    n_negative_samples = as.integer(n_negative_samples),
+    relative_epsilon = relative_epsilon,
+    convergence_window = as.integer(convergence_counter),
+    convergence_check_freq = as.integer(convergence_check_freq),
+    verbose = verbose
+  )
+  
+  end_time <- Sys.time()
+  
+  if (verbose) {
+    cat(sprintf("Optimization finished in %.2f seconds.\n", 
+                as.numeric(difftime(end_time, start_time, units = "secs"))))
+  }
+
+  # ===========================================================================
+  # POST-PROCESSING
+  # ===========================================================================
+  positions <- cpp_result$positions
   rownames(positions) <- rownames(dissimilarity_matrix)
 
-  # Initialize convergence tracking
-  convergence_error0 <- 1e12
-  prev_convergence_error <- convergence_error0
-  k <- k0
+  # Calculate current distances and final metrics
+  p_dist_mat <- as.matrix(stats::dist(positions))
+  rownames(p_dist_mat) <- rownames(positions)
+  colnames(p_dist_mat) <- rownames(positions)
 
-  # OPTIMIZATION 3: Create point pairs once
-  point_pairs <- matrix(0, n*(n-1)/2, 2)
-  pair_idx <- 1
-  for(i in 1:(n-1)) {
-    for(j in (i+1):n) {
-      point_pairs[pair_idx, ] <- c(i, j)
-      pair_idx <- pair_idx + 1
-    }
-  }
+  # Calculate evaluation metrics
+  dissimilarity_matrix_raw <- suppressWarnings(as.numeric(dissimilarity_matrix))
+  valid_indices_raw <- !is.na(dissimilarity_matrix_raw)
+  mae <- mean(abs(dissimilarity_matrix_raw[valid_indices_raw] - p_dist_mat[valid_indices_raw]))
 
-  # OPTIMIZATION 4: Pre-compute which pairs have measured dissimilarities
-  has_measurement <- matrix(FALSE, nrow(point_pairs), 1)
-  for(idx in 1:nrow(point_pairs)) {
-    i <- point_pairs[idx, 1]
-    j <- point_pairs[idx, 2]
-    has_measurement[idx] <- distances_numeric[i, j] != Inf
-  }
-
-  ################## Main optimization loop
-  for(iter in 1:mapping_max_iter) {
-    k_2 <- k / 2
-    stop <- FALSE
-
-    # Randomize point pair ordering for this iteration
-    random_order <- sample(nrow(point_pairs))
-    shuffled_pairs <- point_pairs[random_order,]
-    shuffled_has_measurement <- has_measurement[random_order]
-
-    # Calculate forces between pairs in random order
-    for(pair_idx in 1:nrow(shuffled_pairs)) {
-      i <- shuffled_pairs[pair_idx, 1]
-      j <- shuffled_pairs[pair_idx, 2]
-
-      delta <- positions[j,] - positions[i,]
-      distance <- sqrt(sum(delta^2))
-      distance_01 <- distance + 0.01
-
-      # Use pre-computed measurement status
-      if(shuffled_has_measurement[pair_idx]) {
-        # Inline logic for processing ideal distance based on threshold mask
-        if(threshold_mask[i, j] == 1) {  # ">" case
-          ideal_distance_processed <- if(distance < distances_numeric[i, j]) distances_numeric[i, j] else NULL
-        } else if(threshold_mask[i, j] == -1) {  # "<" case
-          ideal_distance_processed <- if(distance > distances_numeric[i, j]) distances_numeric[i, j] else NULL
-        } else {  # normal value
-          ideal_distance_processed <- distances_numeric[i, j]
-        }
-
-        if (!is.null(ideal_distance_processed)) {
-          # Spring force
-          adjustment_factor <- 2*k*(ideal_distance_processed-distance)*delta/distance_01
-          positions[i,] <- positions[i,] - adjustment_factor/(4*node_degrees_1[i]+k)
-          positions[j,] <- positions[j,] + adjustment_factor/(4*node_degrees_1[j]+k)
-        } else {
-          # Repulsive force for >threshold measurements
-          force <- c_repulsion/(2*distance_01^2)*(delta/distance_01)
-          positions[i,] <- positions[i,] - force/node_degrees_1[i]
-          positions[j,] <- positions[j,] + force/node_degrees_1[j]
-        }
-      } else {
-        # Repulsive force for missing measurements
-        force <- c_repulsion/(2*distance_01^2)*(delta/distance_01)
-        positions[i,] <- positions[i,] - force/node_degrees_1[i]
-        positions[j,] <- positions[j,] + force/node_degrees_1[j]
-      }
-    }
-
-    # Check for numerical stability less frequently
-    if(iter %% 5 == 0) {
-      if(any(!is.finite(positions))) {
-        warning("Numerical instability detected at iteration ", iter)
-        stop <- TRUE
-        break
-      }
-    }
-
-    if(stop) break
-
-    # Calculate current distances and convergence error
-    p_dist_mat <- as.matrix(stats::dist(positions))
-    rownames(p_dist_mat) <- rownames(positions)
-    colnames(p_dist_mat) <- rownames(positions)
-
-    dissimilarity_matrix_convergence_error <- vectorized_process_distance_matrix(distances_numeric, threshold_mask, p_dist_mat)
-
-    # Vectorized convergence error calculation
-    valid_mask <- !is.na(dissimilarity_matrix_convergence_error)
-    convergence_error <- mean(abs(dissimilarity_matrix_convergence_error[valid_mask] - p_dist_mat[valid_mask]))
-
-    # Calculate evaluation metrics similarly
-    dissimilarity_matrix_raw <- suppressWarnings(as.numeric(dissimilarity_matrix))
-    valid_indices_raw <- !is.na(dissimilarity_matrix_raw)
-    mae <- mean(abs(dissimilarity_matrix_raw[valid_indices_raw] - p_dist_mat[valid_indices_raw]))
-
-    if (verbose) {
-      cat(sprintf(
-        "Iteration=%d, MAE=%.4f, convergence_error=%.4f\n",
-        iter, mae, convergence_error
-      ))
-    }
-
-    # Check convergence
-    if (iter > 1) {
-      if (is.na(prev_convergence_error) ||
-          is.na(convergence_error) ||
-          convergence_error > convergence_error0 ||
-          is.na((prev_convergence_error - convergence_error)/prev_convergence_error)) {
-
-        if (verbose) {
-          cat(paste(
-            "! Skipping convergence check for this iteration.",
-            "Please check model parameters k, cooling_rate, and c_repulsion.\n"
-          ))
-          cat(sprintf(
-            "ndim=%d, k0=%.4f, cooling_rate=%.4f, c_repulsion=%.4f, MAE=%.4f, convergence_error=%.4f\n",
-            ndim, k0, cooling_rate, c_repulsion, mae, convergence_error
-          ))
-        }
-      } else {
-        if ((prev_convergence_error - convergence_error)/prev_convergence_error <
-            relative_epsilon) {
-          convergence_counter <- convergence_counter - 1
-          if(convergence_counter <= 0) {
-            if(verbose) cat("Convergence achieved\n")
-            break
-          }
-        }
-        prev_convergence_error <- convergence_error
-      }
-    }
-
-    # Update spring constant
-    k <- k * (1 - cooling_rate)
-  }
-
-  # Save positions if requested
-  if(write_positions_to_csv) {
-    if (!dir.exists(output_dir)) {
-      dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
-    }
+  # ===========================================================================
+  # SAVE POSITIONS IF REQUESTED
+  # ===========================================================================
+  if (write_positions_to_csv) {
     if (missing(output_dir)) {
       stop("An 'output_dir' must be provided when 'write_positions_to_csv' is TRUE.", call. = FALSE)
+    }
+    if (!dir.exists(output_dir)) {
+      dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
     }
     csv_filename <- sprintf(
       "Positions_dim_%d_k0_%.4f_cooling_%.4f_c_repulsion_%.4f.csv",
       ndim, k0, cooling_rate, c_repulsion
     )
-    # Write to the SPECIFIED directory
     full_path <- file.path(output_dir, csv_filename)
     utils::write.csv(positions, file = full_path, row.names = TRUE)
+    if (verbose) cat("Positions saved to:", full_path, "\n")
   }
 
-  # Create result object
+  # ===========================================================================
+  # CREATE RESULT OBJECT (original + new fields)
+  # ===========================================================================
   result <- structure(
     list(
       positions = positions,
       est_distances = p_dist_mat,
       mae = mae,
-      iter = iter,
+      iter = cpp_result$iterations,
       parameters = list(
         ndim = ndim,
         k0 = k0,
         cooling_rate = cooling_rate,
-        c_repulsion = c_repulsion
+        c_repulsion = c_repulsion,
+        n_negative_samples = n_negative_samples,
+        method = "cpp_coo_neg_sampling"
       ),
       convergence = list(
-        achieved = convergence_counter <= 0,
-        error = convergence_error
+        achieved = cpp_result$converged,
+        error = cpp_result$final_mae,
+        final_k = cpp_result$final_k
       )
     ),
     class = "topolow"
@@ -532,7 +505,6 @@ euclidean_embedding <- function(dissimilarity_matrix,
 
   return(result)
 }
-
 
 
 #' Main TopoLow algorithm implementation (DEPRECATED)

@@ -2,8 +2,7 @@
 % Please edit documentation in R/core.R
 \name{vectorized_process_distance_matrix}
 \alias{vectorized_process_distance_matrix}
-\title{TopoLow Core Functions
-Vectorized Processing of Dissimilarity Matrix for Convergence Error Calculations}
+\title{Vectorized Processing of Dissimilarity Matrix for Convergence Error Calculations}
 \usage{
 vectorized_process_distance_matrix(
   distances_numeric,

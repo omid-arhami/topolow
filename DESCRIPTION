@@ -33,6 +33,12 @@ Imports:
     rlang,
     gridExtra,
     igraph,
+    methods,
+    Matrix,
+    Rcpp (>= 1.0.0)
+LinkingTo: 
+    Rcpp,
+    RcppArmadillo
 Suggests:
     coda (>= 0.19-4),
     Rtsne,

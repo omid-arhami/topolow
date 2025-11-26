@@ -16,7 +16,9 @@ euclidean_embedding(
   initial_positions = NULL,
   write_positions_to_csv = FALSE,
   output_dir,
-  verbose = FALSE
+  verbose = FALSE,
+  n_negative_samples = 5,
+  convergence_check_freq = 10
 )
 }
 \arguments{
@@ -37,8 +39,8 @@ thresholded measurements.}
 \item{relative_epsilon}{Numeric. Convergence threshold for relative change in error.
 Default is 1e-4.}
 
-\item{convergence_counter}{Integer. Number of iterations below threshold before declaring
-convergence. Default is 5.}
+\item{convergence_counter}{Integer. Number of consecutive iterations below threshold before
+declaring convergence. Default is 5.}
 
 \item{initial_positions}{Matrix or NULL. Optional starting coordinates. If NULL,
 random initialization is used. Matrix should have nrow = nrow(dissimilarity_matrix)
@@ -51,6 +53,13 @@ Default is FALSE.}
 \code{write_positions_to_csv} is TRUE.}
 
 \item{verbose}{Logical. Whether to print progress messages. Default is FALSE.}
+
+\item{n_negative_samples}{Integer. Number of negative samples per edge endpoint.
+Higher values better approximate the original O(N²) algorithm but increase
+computation time. Default is 5.}
+
+\item{convergence_check_freq}{Integer. How often to check for convergence (every N iterations).
+Lower values give more precise stopping but add overhead. Default is 10.}
 }
 \value{
 A \code{list} object of class \code{topolow}. This list contains the results of the
@@ -69,14 +78,19 @@ optimization and includes the following components:
 
 topolow (topological stochastic pairwise reconstruction for Euclidean embedding) optimizes
 point positions in an N-dimensional space to match a target dissimilarity matrix.
-The algorithm uses a physics-inspired approach with spring and repulsive forces
-to find optimal point configurations while handling missing and thresholded measurements.
+This version uses an optimized C++ backend with:
+\itemize{
+\item Compressed edge list (COO format) for memory efficiency
+\item Negative sampling to approximate unmeasured pair repulsion
+\item Immediate (Gauss-Seidel) position updates for better convergence
+\item Stochastic edge shuffling for escaping local optima
+}
 }
 \details{
 The algorithm iteratively updates point positions using:
 \itemize{
 \item Spring forces between points with measured dissimilarities.
-\item Repulsive forces between points without measurements.
+\item Repulsive forces between points without measurements (via negative sampling).
 \item Conditional forces for thresholded measurements (< or >).
 \item An adaptive spring constant that decays over iterations.
 \item Convergence monitoring based on relative error change.
