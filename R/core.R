@@ -126,7 +126,7 @@ vectorized_process_distance_matrix <- function(distances_numeric, threshold_mask
 #'        `write_positions_to_csv` is TRUE.
 #' @param verbose Logical. Whether to print progress messages. Default is FALSE.
 #' @param n_negative_samples Integer. Number of negative samples per edge endpoint. 
-#'        Higher values better approximate the original O(N²) algorithm but increase 
+#'        Higher values better approximate the original O(N^2) algorithm but increase 
 #'        computation time. Default is 5.
 #' @param convergence_check_freq Integer. How often to check for convergence (every N iterations).
 #'        Lower values give more precise stopping but add overhead. Default is 10.
@@ -267,39 +267,38 @@ euclidean_embedding <- function(dissimilarity_matrix,
   # ===========================================================================
   if (n > 1) {
     # Extract numeric values for clustering, handling threshold indicators
-    numeric_matrix <- matrix(NA, n, n)
-    for (i in 1:n) {
-      for (j in 1:n) {
-        val <- dissimilarity_matrix[i, j]
-        if (!is.na(val)) {
-          if (is.character(val)) {
-            # Remove < or > prefix and extract numeric value
-            numeric_matrix[i, j] <- as.numeric(gsub("^[<>]", "", val))
-          } else {
-            numeric_matrix[i, j] <- as.numeric(val)
-          }
-        }
-      }
+    # VECTORIZED: Replace nested for loops with matrix operations
+    numeric_matrix <- matrix(NA_real_, n, n)
+    
+    # Get non-NA mask
+    non_na_mask <- !is.na(dissimilarity_matrix)
+    
+    # Check if any values are character type
+    if (is.character(dissimilarity_matrix)) {
+      # For character matrices: remove < or > prefixes and convert to numeric
+      # gsub operates element-wise on the entire matrix
+      numeric_matrix[non_na_mask] <- as.numeric(gsub("^[<>]", "", dissimilarity_matrix[non_na_mask]))
+    } else {
+      # For numeric matrices: direct conversion
+      numeric_matrix[non_na_mask] <- as.numeric(dissimilarity_matrix[non_na_mask])
     }
 
     # Create spectral ordering to concentrate largest values in corners
     tryCatch({
       # Calculate average dissimilarity for each point using only non-NA values
-      avg_dissim <- numeric(n)
-      for (i in 1:n) {
-        # Get all values for this point (excluding diagonal)
-        row_vals <- numeric_matrix[i, -i]
-        col_vals <- numeric_matrix[-i, i]
-        all_vals <- c(row_vals, col_vals)
-
-        # Calculate average using only non-NA values
-        non_na_vals <- all_vals[!is.na(all_vals)]
-        if (length(non_na_vals) > 0) {
-          avg_dissim[i] <- mean(non_na_vals)
-        } else {
-          avg_dissim[i] <- 0  # If no measurements, put in middle
-        }
-      }
+      # VECTORIZED: Replace for loop with matrix operations
+      # Set diagonal to NA to exclude self-comparisons
+      diag(numeric_matrix) <- NA
+      
+      # Compute row and column means, treating NA appropriately
+      row_means <- rowMeans(numeric_matrix, na.rm = TRUE)
+      col_means <- colMeans(numeric_matrix, na.rm = TRUE)
+      
+      # Average of row and column means (each point appears in both)
+      avg_dissim <- (row_means + col_means) / 2
+      
+      # Handle points with no measurements (NaN from all-NA rows/cols)
+      avg_dissim[is.nan(avg_dissim)] <- 0
 
       # Check if we have meaningful averages (not all zeros)
       if (sum(avg_dissim > 0) > 1) {
@@ -339,54 +338,65 @@ euclidean_embedding <- function(dissimilarity_matrix,
   node_degrees <- rowSums(!is_na_matrix)
   
   # Parse dissimilarity matrix to numeric values and threshold codes
+  # VECTORIZED: Replace nested for loops with logical indexing
   distances_numeric <- matrix(Inf, n, n)
   threshold_mask <- matrix(0L, n, n)  # 0 = number, 1 = >, -1 = <
   
-  for (i in 1:n) {
-    for (j in 1:n) {
-      if (!is.na(dissimilarity_matrix[i, j])) {
-        if (is.character(dissimilarity_matrix[i, j])) {
-          if (startsWith(dissimilarity_matrix[i, j], ">")) {
-            distances_numeric[i, j] <- as.numeric(sub(">", "", dissimilarity_matrix[i, j]))
-            threshold_mask[i, j] <- 1L
-          } else if (startsWith(dissimilarity_matrix[i, j], "<")) {
-            distances_numeric[i, j] <- as.numeric(sub("<", "", dissimilarity_matrix[i, j]))
-            threshold_mask[i, j] <- -1L
-          } else {
-            distances_numeric[i, j] <- as.numeric(dissimilarity_matrix[i, j])
-          }
-        } else {
-          distances_numeric[i, j] <- dissimilarity_matrix[i, j]
-        }
-      }
+  # Get non-NA mask
+  non_na_mask <- !is_na_matrix
+  
+  if (is.character(dissimilarity_matrix)) {
+    # For character matrices, identify threshold types using vectorized string operations
+    gt_mask <- non_na_mask & startsWith(dissimilarity_matrix, ">")
+    lt_mask <- non_na_mask & startsWith(dissimilarity_matrix, "<")
+    normal_mask <- non_na_mask & !gt_mask & !lt_mask
+    
+    # Set threshold codes
+    threshold_mask[gt_mask] <- 1L
+    threshold_mask[lt_mask] <- -1L
+    
+    # Extract numeric values (remove < or > prefix where applicable)
+    if (any(gt_mask)) {
+      distances_numeric[gt_mask] <- as.numeric(sub("^>", "", dissimilarity_matrix[gt_mask]))
     }
+    if (any(lt_mask)) {
+      distances_numeric[lt_mask] <- as.numeric(sub("^<", "", dissimilarity_matrix[lt_mask]))
+    }
+    if (any(normal_mask)) {
+      distances_numeric[normal_mask] <- as.numeric(dissimilarity_matrix[normal_mask])
+    }
+  } else {
+    # For numeric matrices, direct assignment
+    distances_numeric[non_na_mask] <- dissimilarity_matrix[non_na_mask]
   }
   
   # ===========================================================================
   # BUILD COO EDGE LIST (UPPER TRIANGLE ONLY, PRE-FILTERED IN R)
   # ===========================================================================
   # This avoids the sparse matrix zero-dropping bug and reduces memory transfer
+  # VECTORIZED: Replace nested for loops with which() and logical indexing
   
-  edge_i <- integer(0)
-  edge_j <- integer(0)
-  edge_dist <- numeric(0)
-  edge_thresh <- integer(0)
+  # Create upper triangle mask
+  upper_tri_mask <- upper.tri(distances_numeric)
   
-  for (i in 1:(n - 1)) {
-    for (j in (i + 1):n) {
-      if (distances_numeric[i, j] != Inf) {
-        # Use 0-based indexing for C++
-        edge_i <- c(edge_i, i - 1L)
-        edge_j <- c(edge_j, j - 1L)
-        edge_dist <- c(edge_dist, distances_numeric[i, j])
-        edge_thresh <- c(edge_thresh, threshold_mask[i, j])
-      }
-    }
-  }
+  # Find valid edges: upper triangle AND not Inf
+  valid_edges <- upper_tri_mask & (distances_numeric != Inf)
   
-  if (length(edge_i) == 0) {
+  # Get indices of valid edges
+  edge_indices <- which(valid_edges, arr.ind = TRUE)
+  
+  if (nrow(edge_indices) == 0) {
     stop("No valid off-diagonal measurements found in dissimilarity matrix")
   }
+  
+  # Convert to 0-based indexing for C++
+  edge_i <- as.integer(edge_indices[, 1] - 1L)
+  edge_j <- as.integer(edge_indices[, 2] - 1L)
+  
+  # Extract corresponding distances and thresholds using linear indexing
+  linear_idx <- edge_indices[, 1] + (edge_indices[, 2] - 1L) * n
+  edge_dist <- distances_numeric[linear_idx]
+  edge_thresh <- threshold_mask[linear_idx]
   
   # Create flattened has_measurement vector for O(1) lookup in C++
   # Stored row-major: index = i * n + j
