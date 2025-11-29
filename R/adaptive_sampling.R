@@ -2425,10 +2425,16 @@ likelihood_function <- function(dissimilarity_matrix, mapping_max_iter,
   # --- Manual k-Fold Creation ---
   # This approach creates k folds by iteratively removing a random subset of
   # non-NA values from the full matrix for each fold's training set.
+  
+  # Store the truth matrix once - it's the same for all folds
   truth_matrix <- dissimilarity_matrix
-
-  # Create a list to hold the [truth, training] matrix pairs for each fold
-  matrix_list <- replicate(folds, list(truth_matrix, NULL), simplify = FALSE)
+  n_rows <- nrow(dissimilarity_matrix)
+  
+  # MEMORY-EFFICIENT APPROACH:
+  # Instead of storing full training matrices for each fold, we store only the
+  # holdout indices. Training matrices are reconstructed on-the-fly during processing.
+  # This reduces memory from O(folds * n^2) to O(folds * holdout_size).
+  holdout_indices_list <- vector("list", folds)
 
   num_elements <- sum(!is.na(dissimilarity_matrix))
   # Size of the holdout set for each fold. /2 because each entry (i,j) has a symmetric counterpart (j,i).
@@ -2442,31 +2448,41 @@ likelihood_function <- function(dissimilarity_matrix, mapping_max_iter,
     if (sum(!is.na(D_train)) < holdout_size) {
         warning("Could not create all folds due to data sparsity. Using fewer folds.")
         folds <- i - 1
-        matrix_list <- matrix_list[1:folds]
+        holdout_indices_list <- holdout_indices_list[1:folds]
         break
     }
 
     random_indices <- sample(which(!is.na(D_train)), size = holdout_size)
-    input_matrix <- dissimilarity_matrix # Start with the full matrix
-
-    # Create the training matrix for the current fold by setting holdout values to NA
+    
+    # Store only the holdout indices for this fold (memory efficient)
+    holdout_indices_list[[i]] <- random_indices
+    
+    # Remove these indices from the pool for the next iteration
     for(index in random_indices) {
-      row <- (index - 1) %/% nrow(dissimilarity_matrix) + 1
-      col <- (index - 1) %% ncol(dissimilarity_matrix) + 1
-      input_matrix[row, col] <- NA
-      input_matrix[col, row] <- NA
-      # Remove these indices from the pool for the next iteration
+      row <- (index - 1) %/% n_rows + 1
+      col <- (index - 1) %% n_rows + 1
       D_train[row, col] <- NA
       D_train[col, row] <- NA
     }
-    matrix_list[[i]][[2]] <- input_matrix
   }
+  
+  # Clean up the temporary matrix to free memory before processing
+  rm(D_train)
 
   # --- Process Each Fold ---
   # Define the function to run topolow on a single fold
   process_sample <- function(i) {
-    truth_matrix <- matrix_list[[i]][[1]]
-    input_matrix <- matrix_list[[i]][[2]]
+    # Reconstruct the training matrix on-the-fly from the holdout indices
+    # This creates only ONE training matrix at a time instead of storing all folds
+    input_matrix <- dissimilarity_matrix
+    holdout_indices <- holdout_indices_list[[i]]
+    
+    for(index in holdout_indices) {
+      row <- (index - 1) %/% n_rows + 1
+      col <- (index - 1) %% n_rows + 1
+      input_matrix[row, col] <- NA
+      input_matrix[col, row] <- NA
+    }
 
     tryCatch({
       # Call euclidean_embedding with the current parameters
@@ -2519,8 +2535,10 @@ likelihood_function <- function(dissimilarity_matrix, mapping_max_iter,
       on.exit(parallel::stopCluster(cl), add = TRUE)
 
       # Export required variables to the cluster
+      # Note: We now export holdout_indices_list instead of matrix_list
       parallel::clusterExport(cl,
-                              c("matrix_list", "N", "k0", "cooling_rate", "c_repulsion",
+                              c("holdout_indices_list", "dissimilarity_matrix", "truth_matrix",
+                                "n_rows", "N", "k0", "cooling_rate", "c_repulsion",
                                 "mapping_max_iter", "relative_epsilon", "euclidean_embedding",
                                 "error_calculator_comparison"),
                               envir = environment())

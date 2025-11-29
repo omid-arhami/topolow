@@ -55,7 +55,7 @@ Default is FALSE.}
 \item{verbose}{Logical. Whether to print progress messages. Default is FALSE.}
 
 \item{n_negative_samples}{Integer. Number of negative samples per edge endpoint.
-Higher values better approximate the original O(N²) algorithm but increase
+Higher values better approximate the original O(N^2) algorithm but increase
 computation time. Default is 5.}
 
 \item{convergence_check_freq}{Integer. How often to check for convergence (every N iterations).
