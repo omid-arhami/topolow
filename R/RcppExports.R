@@ -5,3 +5,7 @@ optimize_layout_cpp <- function(initial_positions, edge_i, edge_j, edge_dist, ed
     .Call(`_topolow_optimize_layout_cpp`, initial_positions, edge_i, edge_j, edge_dist, edge_thresh, has_measurement_flat, degrees, n_points, n_iter, k0, cooling_rate, c_repulsion, n_negative_samples, relative_epsilon, convergence_window, convergence_check_freq, verbose)
 }
 
+optimize_layout_incremental_cpp <- function(initial_positions, edge_i, edge_j, edge_dist, edge_thresh, has_measurement_flat, degrees, fixed_point_mask, fixed_indices, new_indices, n_points, n_iter, k0, cooling_rate, c_repulsion, n_negative_samples, relative_epsilon, convergence_window, convergence_check_freq, verbose) {
+    .Call(`_topolow_optimize_layout_incremental_cpp`, initial_positions, edge_i, edge_j, edge_dist, edge_thresh, has_measurement_flat, degrees, fixed_point_mask, fixed_indices, new_indices, n_points, n_iter, k0, cooling_rate, c_repulsion, n_negative_samples, relative_epsilon, convergence_window, convergence_check_freq, verbose)
+}
+

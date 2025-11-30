@@ -4,7 +4,7 @@
 #' topolow Data Preprocessing Functions
 #'
 
-# New
+
 #' Convert List Format Data to Dissimilarity Matrix
 #'
 #' @description
@@ -225,7 +225,6 @@ list_to_matrix <- function(data, object_col, reference_col, value_col,
 }
 
 
-# New
 #' Convert Table Format Data to Dissimilarity Matrix
 #'
 #' @description
@@ -901,7 +900,6 @@ symmetric_to_nonsymmetric_matrix <- function(dist_matrix, selected_names) {
 }
 
 
-# Newed
 #' Convert Coordinates to a Distance Matrix
 #'
 #' @description
