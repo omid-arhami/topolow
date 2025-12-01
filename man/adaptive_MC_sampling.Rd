@@ -14,6 +14,7 @@ adaptive_MC_sampling(
   num_cores = 1,
   scenario_name,
   opt_subsample = NULL,
+  n_negative_samples = 100,
   verbose = FALSE
 )
 }
@@ -37,6 +38,9 @@ adaptive_MC_sampling(
 \item{opt_subsample}{Integer or NULL. If specified, subsamples the data for
 this adaptive sampling job. A single subsample is created at the start and
 reused for all iterations within this job for consistency. Default: NULL.}
+
+\item{n_negative_samples}{Integer. Number of negative samples per edge endpoint
+for the embedding algorithm. Default: 100.}
 
 \item{verbose}{Logical. If TRUE, prints progress messages. Default: FALSE.}
 }

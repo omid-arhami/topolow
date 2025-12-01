@@ -17,7 +17,7 @@ euclidean_embedding(
   write_positions_to_csv = FALSE,
   output_dir,
   verbose = FALSE,
-  n_negative_samples = 5,
+  n_negative_samples = 100,
   convergence_check_freq = 10
 )
 }

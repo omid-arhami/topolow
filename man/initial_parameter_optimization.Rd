@@ -23,6 +23,7 @@ initial_parameter_optimization(
   max_cores = NULL,
   folds = 20,
   opt_subsample = NULL,
+  n_negative_samples = 100,
   verbose = FALSE,
   write_files = FALSE,
   output_dir
@@ -71,6 +72,10 @@ subsample for robustness. Default: NULL (use full data).
 that parameter set use the same subsample
 \item The actual subsample size used is reported in output columns
 }}
+
+\item{n_negative_samples}{Integer. Number of negative samples per edge endpoint
+for the embedding algorithm. Higher values better approximate the original
+O(N^2) algorithm but increase computation time. Default: 100.}
 
 \item{verbose}{Logical. Whether to print progress messages. Default: FALSE.}
 

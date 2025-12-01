@@ -17,6 +17,7 @@ Euclidify(
   folds = 20,
   mapping_max_iter = 500,
   opt_subsample = NULL,
+  n_negative_samples = 100,
   clean_intermediate = TRUE,
   verbose = "standard",
   fallback_to_defaults = FALSE,
@@ -63,6 +64,10 @@ samples this many points for each parameter evaluation. Final embedding always
 uses the full dataset. Default: NULL (no subsampling).
 Recommended for large datasets (>300 points). See \code{\link{initial_parameter_optimization}}
 for details.}
+
+\item{n_negative_samples}{Integer. Number of negative samples per edge endpoint
+for the embedding algorithm. Higher values better approximate the original
+O(N^2) algorithm but increase computation time. Default: 100.}
 
 \item{clean_intermediate}{Logical. Whether to remove intermediate files. Default: TRUE}
 

@@ -13,7 +13,8 @@ likelihood_function(
   cooling_rate,
   c_repulsion,
   folds = 20,
-  num_cores = 1
+  num_cores = 1,
+  n_negative_samples = 5
 )
 }
 \arguments{
@@ -34,6 +35,9 @@ likelihood_function(
 \item{folds}{The number of cross-validation folds.}
 
 \item{num_cores}{The number of cores for parallel processing.}
+
+\item{n_negative_samples}{Integer. Number of negative samples per edge endpoint
+for the embedding algorithm. Default: 5.}
 }
 \value{
 A list containing the pooled \code{Holdout_MAE} and the \code{NLL}.
