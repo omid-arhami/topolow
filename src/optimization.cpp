@@ -188,6 +188,8 @@ List optimize_layout_cpp(
   // CONVERGENCE TRACKING
   // =========================================================================
   double k = k0;  // Current spring constant
+  // Initialize current_repulsion to decay alongside k
+  double current_repulsion = c_repulsion;
   double prev_error = std::numeric_limits<double>::max();
   int converge_count = convergence_window;
   bool converged = false;
@@ -273,8 +275,9 @@ List optimize_layout_cpp(
         }
         
       } else {
-        // Repulsion: c_repulsion / (2 * dist^2) / dist_stable
-        const double force_mag = c_repulsion / (2.0 * dist_stable * dist_stable * dist_stable);
+        // Repulsion: repulsion / (2 * dist^2) / dist_stable
+        // Use current_repulsion instead of constant c_repulsion
+        const double force_mag = current_repulsion / (2.0 * dist_stable * dist_stable * dist_stable);
         
         double* pos_i_mut = pos.colptr(0) + i;
         double* pos_j_mut = pos.colptr(0) + j;
@@ -310,7 +313,8 @@ List optimize_layout_cpp(
           rep_dist_sq += diff * diff;
         }
         const double rep_dist = std::sqrt(rep_dist_sq) + 0.01;
-        const double rep_force_mag = c_repulsion / (2.0 * rep_dist * rep_dist * rep_dist * deg_i);
+        // Use current_repulsion
+        const double rep_force_mag = current_repulsion / (2.0 * rep_dist * rep_dist * rep_dist * deg_i);
         
         for (int d = 0; d < dim; ++d) {
           double delta_d = pos_rand[d * n] - pos_i_mut[d * n];
@@ -335,7 +339,7 @@ List optimize_layout_cpp(
           rep_dist_sq += diff * diff;
         }
         const double rep_dist = std::sqrt(rep_dist_sq) + 0.01;
-        const double rep_force_mag = c_repulsion / (2.0 * rep_dist * rep_dist * rep_dist * deg_j);
+        const double rep_force_mag = current_repulsion / (2.0 * rep_dist * rep_dist * rep_dist * deg_j);
         
         for (int d = 0; d < dim; ++d) {
           double delta_d = pos_rand[d * n] - pos_j_mut[d * n];
@@ -348,7 +352,8 @@ List optimize_layout_cpp(
     // COOLING
     // ---------------------------------------------------------------------
     k *= (1.0 - cooling_rate);
-    
+    // Cool repulsion at the same rate to maintain force balance
+    current_repulsion *= (1.0 - cooling_rate);
     // ---------------------------------------------------------------------
     // CONVERGENCE CHECK (VECTORIZED)
     // ---------------------------------------------------------------------
@@ -369,10 +374,20 @@ List optimize_layout_cpp(
       }
       
       // Check for convergence
-      if (prev_error < std::numeric_limits<double>::max() && prev_error > 1e-10) {
-        const double relative_change = (prev_error - current_error) / prev_error;
+      if (prev_error < std::numeric_limits<double>::max()) {
         
-        if (relative_change >= 0 && relative_change < relative_epsilon) {
+        // Calculate the absolute difference
+        // This handles cases where error goes slightly UP due to stochasticity
+        const double diff = std::abs(prev_error - current_error);
+
+        // UNIFIED CONVERGENCE CRITERIA:
+        // 1. (diff < 1e-12): Handles cases where error is effectively zero (perfect fit).
+        // 2. (diff < relative_epsilon * prev_error): The standard relative check.
+        //    Using multiplication (epsilon * prev) instead of division (diff / prev)
+        //    prevents division-by-zero errors if prev_error is 0.
+        bool convergence_satisfied = (diff < 1e-12) || (diff < relative_epsilon * prev_error);
+        
+        if (convergence_satisfied) {
           --converge_count;
           if (converge_count <= 0) {
             converged = true;
@@ -385,7 +400,10 @@ List optimize_layout_cpp(
             break;
           }
         } else {
-          converge_count = convergence_window;
+          // Reset counter if stability is broken to have consecutive satisfied checks
+          // However, if error increased, we do not reset to full window, as the algorithm is stochastic 
+          // and swings are expected, especially near the optimum.
+          // converge_count = convergence_window;
         }
       }
       

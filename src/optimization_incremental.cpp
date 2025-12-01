@@ -20,7 +20,7 @@
 //              Only new points are optimized based on new measurements.
 //
 // DECISION 2: EDGE FILTERING (handled in R before calling C++)
-//    Problem:  Processing all n² edges is wasteful when adding few new points.
+//    Problem:  Processing all nÂ² edges is wasteful when adding few new points.
 //    Solution: Only edges involving at least one new point are passed to C++.
 //              Fixed-Fixed edges are excluded since neither endpoint can move.
 //              For 1000 fixed + 10 new points: ~20,000 edges vs ~500,000.
@@ -35,20 +35,20 @@
 //      Let F = force magnitude, norm_i and norm_j = normalization factors.
 //      
 //      Original (both free):
-//        Δpos_i = -F/norm_i,  Δpos_j = +F/norm_j
-//        Total Δdist ≈ F/norm_i + F/norm_j = F(norm_i + norm_j)/(norm_i * norm_j)
+//        Î”pos_i = -F/norm_i,  Î”pos_j = +F/norm_j
+//        Total Î”dist â‰ˆ F/norm_i + F/norm_j = F(norm_i + norm_j)/(norm_i * norm_j)
 //      
 //      Incremental (j fixed):
-//        Δpos_i = -F/norm_i,  Δpos_j = 0
-//        Total Δdist = F/norm_i
+//        Î”pos_i = -F/norm_i,  Î”pos_j = 0
+//        Total Î”dist = F/norm_i
 //      
 //      Ratio = norm_j / (norm_i + norm_j)  [NOT 1/2 unless norm_i = norm_j]
 //    
 //    Solution: Scale force applied to movable point by compensation factor:
 //        compensation = (norm_i + norm_j) / norm_j = 1 + norm_i/norm_j
 //      
-//      Then: Δdist = F * compensation / norm_i 
-//                  = F(norm_i + norm_j)/(norm_i * norm_j)  ✓ (matches original)
+//      Then: Î”dist = F * compensation / norm_i 
+//                  = F(norm_i + norm_j)/(norm_i * norm_j)  âœ“ (matches original)
 //
 // DECISION 4: EXTRA REPULSION PASS
 //    Problem:  Edge filtering removes Fixed-Fixed edges, which means the edge
@@ -247,6 +247,10 @@ List optimize_layout_incremental_cpp(
   // CONVERGENCE TRACKING
   // =========================================================================
   double k = k0;
+  
+  // FIX 1: Initialize current_repulsion to decay
+  double current_repulsion = c_repulsion;
+  
   double prev_error = std::numeric_limits<double>::max();
   int converge_count = convergence_window;
   bool converged = false;
@@ -311,7 +315,7 @@ List optimize_layout_incremental_cpp(
       
       // ---------------------------------------------------------------------
       // FORCE COMPENSATION (Decision 3)
-      // When one endpoint is fixed, scale force to achieve equivalent Δdist
+      // When one endpoint is fixed, scale force to achieve equivalent Î”dist
       // compensation = (norm_movable + norm_fixed) / norm_fixed
       // ---------------------------------------------------------------------
       double compensation_i = 1.0;
@@ -347,7 +351,7 @@ List optimize_layout_incremental_cpp(
         }
       } else {
         // Repulsion force: pushes points apart (threshold not satisfied)
-        const double base_force = c_repulsion / (2.0 * dist_stable * dist_stable * dist_stable);
+        const double base_force = current_repulsion / (2.0 * dist_stable * dist_stable * dist_stable);
         
         for (int d = 0; d < dim; ++d) {
           double delta_d = pos(j, d) - pos(i, d);
@@ -383,7 +387,7 @@ List optimize_layout_incremental_cpp(
             rep_dist_sq += diff * diff;
           }
           const double rep_dist = std::sqrt(rep_dist_sq) + 0.01;
-          const double rep_force = c_repulsion / (2.0 * rep_dist * rep_dist * rep_dist * deg_i);
+          const double rep_force = current_repulsion / (2.0 * rep_dist * rep_dist * rep_dist * deg_i);
           
           for (int d = 0; d < dim; ++d) {
             pos(i, d) -= (pos(rand_node, d) - pos(i, d)) * rep_force;
@@ -404,7 +408,7 @@ List optimize_layout_incremental_cpp(
             rep_dist_sq += diff * diff;
           }
           const double rep_dist = std::sqrt(rep_dist_sq) + 0.01;
-          const double rep_force = c_repulsion / (2.0 * rep_dist * rep_dist * rep_dist * deg_j);
+          const double rep_force = current_repulsion / (2.0 * rep_dist * rep_dist * rep_dist * deg_j);
           
           for (int d = 0; d < dim; ++d) {
             pos(j, d) -= (pos(rand_node, d) - pos(j, d)) * rep_force;
@@ -434,7 +438,7 @@ List optimize_layout_incremental_cpp(
             rep_dist_sq += diff * diff;
           }
           const double rep_dist = std::sqrt(rep_dist_sq) + 0.01;
-          const double rep_force = c_repulsion / (2.0 * rep_dist * rep_dist * rep_dist * deg_new);
+          const double rep_force = current_repulsion / (2.0 * rep_dist * rep_dist * rep_dist * deg_new);
           
           for (int d = 0; d < dim; ++d) {
             pos(new_pt, d) -= (pos(fixed_pt, d) - pos(new_pt, d)) * rep_force;
@@ -447,6 +451,8 @@ List optimize_layout_incremental_cpp(
     // COOLING
     // -----------------------------------------------------------------------
     k *= (1.0 - cooling_rate);
+    // Cool repulsion
+    current_repulsion *= (1.0 - cooling_rate);
     
     // -----------------------------------------------------------------------
     // CONVERGENCE CHECK
@@ -462,9 +468,14 @@ List optimize_layout_incremental_cpp(
                     << ", MAE=" << current_error << ", k=" << k << "\n";
       }
       
-      if (prev_error < std::numeric_limits<double>::max() && prev_error > 1e-10) {
-        double relative_change = (prev_error - current_error) / prev_error;
-        if (relative_change >= 0 && relative_change < relative_epsilon) {
+      // Check for convergence
+      if (prev_error < std::numeric_limits<double>::max()) {
+        // Robust convergence check
+        const double diff = std::abs(prev_error - current_error);
+        
+        bool convergence_satisfied = (diff < 1e-12) || (diff < relative_epsilon * prev_error);
+                
+        if (convergence_satisfied) {
           if (--converge_count <= 0) {
             converged = true;
             final_iter = iter + 1;
