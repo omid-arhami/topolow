@@ -189,7 +189,7 @@ euclidean_embedding <- function(dissimilarity_matrix,
                                 write_positions_to_csv = FALSE,
                                 output_dir,
                                 verbose = FALSE,
-                                n_negative_samples = 5,
+                                n_negative_samples = 100,
                                 convergence_check_freq = 10) {
 
   # ===========================================================================
@@ -558,6 +558,9 @@ euclidean_embedding <- function(dissimilarity_matrix,
 #' @param output_dir Character. Directory to save CSV file. Required if 
 #'        `write_positions_to_csv` is TRUE.
 #' @param verbose Logical. Whether to print progress messages. Default is FALSE.
+#' @param n_negative_samples Integer. Number of negative samples per edge endpoint. 
+#'        Higher values better approximate the original O(N^2) algorithm but increase 
+#'        computation time. Default is 100.
 #'
 #' @return A `list` object of class `topolow`. This list contains the results of the
 #'   optimization and includes the following components:
@@ -613,7 +616,8 @@ create_topolow_map <- function(distance_matrix,
                               initial_positions = NULL,
                               write_positions_to_csv = FALSE,
                               output_dir,
-                              verbose = FALSE) {
+                              verbose = FALSE,
+                              n_negative_samples = 100) {
   
   # Issue deprecation warning
   lifecycle::deprecate_warn(
@@ -646,7 +650,8 @@ create_topolow_map <- function(distance_matrix,
     initial_positions = initial_positions,
     write_positions_to_csv = write_positions_to_csv,
     output_dir = if(write_positions_to_csv) output_dir else NULL,
-    verbose = verbose
+    verbose = verbose,
+    n_negative_samples = n_negative_samples
   )
   return(result)
 }
@@ -741,6 +746,9 @@ summary.topolow <- function(object, ...) {
 #'   uses the full dataset. Default: NULL (no subsampling).
 #'   Recommended for large datasets (>300 points). See \code{\link{initial_parameter_optimization}}
 #'   for details.
+#' @param n_negative_samples Integer. Number of negative samples per edge endpoint 
+#'        for the embedding algorithm. Higher values better approximate the original 
+#'        O(N^2) algorithm but increase computation time. Default: 100.
 #' @param clean_intermediate Logical. Whether to remove intermediate files. Default: TRUE
 #' @param verbose Character. Verbosity level: "off" (no output), "standard" (progress updates),
 #'        or "full" (detailed output including from internal functions). Default: "standard"
@@ -880,6 +888,7 @@ Euclidify <- function(dissimilarity_matrix,
                       folds = 20,
                       mapping_max_iter = 500,
                       opt_subsample = NULL,
+                      n_negative_samples = 100,
                       clean_intermediate = TRUE,
                       verbose = "standard",
                       fallback_to_defaults = FALSE,
@@ -1034,6 +1043,7 @@ Euclidify <- function(dissimilarity_matrix,
       max_cores = max_cores,
       folds = folds,
       opt_subsample = opt_subsample,
+      n_negative_samples = n_negative_samples,
       verbose = verbose_internal,
       write_files = TRUE,
       output_dir = optimization_dir
@@ -1065,6 +1075,7 @@ Euclidify <- function(dissimilarity_matrix,
             mapping_max_iter = mapping_max_iter,
             relative_epsilon = 1e-5,
             folds = folds,
+            n_negative_samples = n_negative_samples,
             output_dir = optimization_dir,
             verbose = verbose_internal
           )
@@ -1242,6 +1253,7 @@ Euclidify <- function(dissimilarity_matrix,
       relative_epsilon = 1e-6,
       convergence_counter = 5,
       verbose = verbose_internal,
+      n_negative_samples = n_negative_samples,
       write_positions_to_csv = save_results,
       output_dir = output_dir
     )
