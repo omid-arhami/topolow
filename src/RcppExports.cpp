@@ -38,40 +38,9 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// optimize_layout_incremental_cpp
-List optimize_layout_incremental_cpp(NumericMatrix initial_positions, const IntegerVector& edge_i, const IntegerVector& edge_j, const NumericVector& edge_dist, const IntegerVector& edge_thresh, const IntegerVector& has_measurement_flat, const IntegerVector& degrees, const IntegerVector& fixed_point_mask, const IntegerVector& fixed_indices, const IntegerVector& new_indices, int n_points, int n_iter, double k0, double cooling_rate, double c_repulsion, int n_negative_samples, double relative_epsilon, int convergence_window, int convergence_check_freq, bool verbose);
-RcppExport SEXP _topolow_optimize_layout_incremental_cpp(SEXP initial_positionsSEXP, SEXP edge_iSEXP, SEXP edge_jSEXP, SEXP edge_distSEXP, SEXP edge_threshSEXP, SEXP has_measurement_flatSEXP, SEXP degreesSEXP, SEXP fixed_point_maskSEXP, SEXP fixed_indicesSEXP, SEXP new_indicesSEXP, SEXP n_pointsSEXP, SEXP n_iterSEXP, SEXP k0SEXP, SEXP cooling_rateSEXP, SEXP c_repulsionSEXP, SEXP n_negative_samplesSEXP, SEXP relative_epsilonSEXP, SEXP convergence_windowSEXP, SEXP convergence_check_freqSEXP, SEXP verboseSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< NumericMatrix >::type initial_positions(initial_positionsSEXP);
-    Rcpp::traits::input_parameter< const IntegerVector& >::type edge_i(edge_iSEXP);
-    Rcpp::traits::input_parameter< const IntegerVector& >::type edge_j(edge_jSEXP);
-    Rcpp::traits::input_parameter< const NumericVector& >::type edge_dist(edge_distSEXP);
-    Rcpp::traits::input_parameter< const IntegerVector& >::type edge_thresh(edge_threshSEXP);
-    Rcpp::traits::input_parameter< const IntegerVector& >::type has_measurement_flat(has_measurement_flatSEXP);
-    Rcpp::traits::input_parameter< const IntegerVector& >::type degrees(degreesSEXP);
-    Rcpp::traits::input_parameter< const IntegerVector& >::type fixed_point_mask(fixed_point_maskSEXP);
-    Rcpp::traits::input_parameter< const IntegerVector& >::type fixed_indices(fixed_indicesSEXP);
-    Rcpp::traits::input_parameter< const IntegerVector& >::type new_indices(new_indicesSEXP);
-    Rcpp::traits::input_parameter< int >::type n_points(n_pointsSEXP);
-    Rcpp::traits::input_parameter< int >::type n_iter(n_iterSEXP);
-    Rcpp::traits::input_parameter< double >::type k0(k0SEXP);
-    Rcpp::traits::input_parameter< double >::type cooling_rate(cooling_rateSEXP);
-    Rcpp::traits::input_parameter< double >::type c_repulsion(c_repulsionSEXP);
-    Rcpp::traits::input_parameter< int >::type n_negative_samples(n_negative_samplesSEXP);
-    Rcpp::traits::input_parameter< double >::type relative_epsilon(relative_epsilonSEXP);
-    Rcpp::traits::input_parameter< int >::type convergence_window(convergence_windowSEXP);
-    Rcpp::traits::input_parameter< int >::type convergence_check_freq(convergence_check_freqSEXP);
-    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
-    rcpp_result_gen = Rcpp::wrap(optimize_layout_incremental_cpp(initial_positions, edge_i, edge_j, edge_dist, edge_thresh, has_measurement_flat, degrees, fixed_point_mask, fixed_indices, new_indices, n_points, n_iter, k0, cooling_rate, c_repulsion, n_negative_samples, relative_epsilon, convergence_window, convergence_check_freq, verbose));
-    return rcpp_result_gen;
-END_RCPP
-}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_topolow_optimize_layout_cpp", (DL_FUNC) &_topolow_optimize_layout_cpp, 17},
-    {"_topolow_optimize_layout_incremental_cpp", (DL_FUNC) &_topolow_optimize_layout_incremental_cpp, 20},
     {NULL, NULL, 0}
 };
 
