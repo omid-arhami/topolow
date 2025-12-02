@@ -14,7 +14,7 @@ likelihood_function(
   c_repulsion,
   folds = 20,
   num_cores = 1,
-  n_negative_samples = 5
+  n_negative_samples = 100
 )
 }
 \arguments{
@@ -37,7 +37,7 @@ likelihood_function(
 \item{num_cores}{The number of cores for parallel processing.}
 
 \item{n_negative_samples}{Integer. Number of negative samples per edge endpoint
-for the embedding algorithm. Default: 5.}
+for the embedding algorithm. Default: 100.}
 }
 \value{
 A list containing the pooled \code{Holdout_MAE} and the \code{NLL}.
