@@ -85,16 +85,17 @@ vectorized_process_distance_matrix <- function(distances_numeric, threshold_mask
 #'
 #' topolow (topological stochastic pairwise reconstruction for Euclidean embedding) optimizes
 #' point positions in an N-dimensional space to match a target dissimilarity matrix.
-#' This version uses an optimized C++ backend with:
-#' * Compressed edge list (COO format) for memory efficiency
-#' * Negative sampling to approximate unmeasured pair repulsion
-#' * Immediate (Gauss-Seidel) position updates for better convergence
-#' * Stochastic edge shuffling for escaping local optima
+#' This version uses an **Exact** C++ backend that:
+#' * Iterates over all N(N-1)/2 pairs in every iteration (O(N²) complexity).
+#' * Ensures perfect fidelity to the original algorithm's force physics.
+#' * Uses Gauss-Seidel immediate updates for fast convergence.
+#' * Stochastic pair shuffling for escaping local optima.
+#' * Compressed edge list (COO format) for efficient error calculation.
 #'
 #' @details
 #' The algorithm iteratively updates point positions using:
 #' * Spring forces between points with measured dissimilarities.
-#' * Repulsive forces between points without measurements (via negative sampling).
+#' * Repulsive forces between ALL points without measurements (or thresholded pairs).
 #' * Conditional forces for thresholded measurements (< or >).
 #' * An adaptive spring constant that decays over iterations.
 #' * Convergence monitoring based on relative error change.
@@ -125,11 +126,8 @@ vectorized_process_distance_matrix <- function(distances_numeric, threshold_mask
 #' @param output_dir Character. Directory to save the CSV file. Required if
 #'        `write_positions_to_csv` is TRUE.
 #' @param verbose Logical. Whether to print progress messages. Default is FALSE.
-#' @param n_negative_samples Integer. Number of negative samples per edge endpoint. 
-#'        Higher values better approximate the original O(N^2) algorithm but increase 
-#'        computation time. Default is 5.
 #' @param convergence_check_freq Integer. How often to check for convergence (every N iterations).
-#'        Lower values give more precise stopping but add overhead. Default is 10.
+#'        Lower values give more precise stopping but add overhead. Default is 3
 #'
 #' @return A `list` object of class `topolow`. This list contains the results of the
 #'   optimization and includes the following components:
@@ -189,8 +187,7 @@ euclidean_embedding <- function(dissimilarity_matrix,
                                 write_positions_to_csv = FALSE,
                                 output_dir,
                                 verbose = FALSE,
-                                n_negative_samples = 100,
-                                convergence_check_freq = 10) {
+                                convergence_check_freq = 3) {
 
   # ===========================================================================
   # INPUT VALIDATION
@@ -234,9 +231,6 @@ euclidean_embedding <- function(dissimilarity_matrix,
       convergence_counter < 1 ||
       convergence_counter != round(convergence_counter)) {
     stop("convergence_counter must be a positive integer")
-  }
-  if (!is.numeric(n_negative_samples) || n_negative_samples < 0) {
-    stop("n_negative_samples must be a non-negative integer")
   }
   if (!is.numeric(convergence_check_freq) || convergence_check_freq < 1) {
     stop("convergence_check_freq must be a positive integer")
@@ -397,11 +391,6 @@ euclidean_embedding <- function(dissimilarity_matrix,
   linear_idx <- edge_indices[, 1] + (edge_indices[, 2] - 1L) * n
   edge_dist <- distances_numeric[linear_idx]
   edge_thresh <- threshold_mask[linear_idx]
-  
-  # Create flattened has_measurement vector for O(1) lookup in C++
-  # Stored row-major: index = i * n + j
-  has_measurement <- !is_na_matrix
-  has_measurement_flat <- as.integer(as.vector(t(has_measurement)))
 
   # ===========================================================================
   # INITIALIZATION OF POINT POSITIONS
@@ -425,25 +414,39 @@ euclidean_embedding <- function(dissimilarity_matrix,
 
   start_time <- Sys.time()
   
-  cpp_result <- optimize_layout_cpp(
+  # Prepare dense dissimilarity matrix for C++
+  # - Inf for unmeasured pairs (already set)
+  # - Symmetric (fill lower triangle from upper)
+  distances_dense <- distances_numeric
+  distances_dense[lower.tri(distances_dense)] <- t(distances_numeric)[lower.tri(distances_numeric)]
+  
+  # Prepare dense threshold matrix
+  # - 0 for unmeasured pairs (no threshold applies)
+  # - Symmetric
+  threshold_dense <- threshold_mask
+  threshold_dense[lower.tri(threshold_dense)] <- t(threshold_mask)[lower.tri(threshold_mask)]
+  
+  # Call exact C++ function
+  cpp_result <- optimize_layout_exact_cpp(
     initial_positions = initial_positions,
+    dissimilarity_matrix = distances_dense,
+    threshold_matrix = threshold_dense,
+    degrees = as.integer(node_degrees),
     edge_i = edge_i,
     edge_j = edge_j,
     edge_dist = edge_dist,
     edge_thresh = edge_thresh,
-    has_measurement_flat = has_measurement_flat,
-    degrees = as.integer(node_degrees),
-    n_points = as.integer(n),
     n_iter = as.integer(mapping_max_iter),
     k0 = k0,
     cooling_rate = cooling_rate,
     c_repulsion = c_repulsion,
-    n_negative_samples = as.integer(n_negative_samples),
     relative_epsilon = relative_epsilon,
     convergence_window = as.integer(convergence_counter),
     convergence_check_freq = as.integer(convergence_check_freq),
     verbose = verbose
   )
+  
+  method_name <- "cpp_exact_full_pairwise"
   
   end_time <- Sys.time()
   
@@ -501,8 +504,7 @@ euclidean_embedding <- function(dissimilarity_matrix,
         k0 = k0,
         cooling_rate = cooling_rate,
         c_repulsion = c_repulsion,
-        n_negative_samples = n_negative_samples,
-        method = "cpp_coo_neg_sampling"
+        method = method_name
       ),
       convergence = list(
         achieved = cpp_result$converged,
@@ -558,9 +560,6 @@ euclidean_embedding <- function(dissimilarity_matrix,
 #' @param output_dir Character. Directory to save CSV file. Required if 
 #'        `write_positions_to_csv` is TRUE.
 #' @param verbose Logical. Whether to print progress messages. Default is FALSE.
-#' @param n_negative_samples Integer. Number of negative samples per edge endpoint. 
-#'        Higher values better approximate the original O(N^2) algorithm but increase 
-#'        computation time. Default is 100.
 #'
 #' @return A `list` object of class `topolow`. This list contains the results of the
 #'   optimization and includes the following components:
@@ -616,8 +615,8 @@ create_topolow_map <- function(distance_matrix,
                               initial_positions = NULL,
                               write_positions_to_csv = FALSE,
                               output_dir,
-                              verbose = FALSE,
-                              n_negative_samples = 100) {
+                              verbose = FALSE
+                              ) {
   
   # Issue deprecation warning
   lifecycle::deprecate_warn(
@@ -650,8 +649,7 @@ create_topolow_map <- function(distance_matrix,
     initial_positions = initial_positions,
     write_positions_to_csv = write_positions_to_csv,
     output_dir = if(write_positions_to_csv) output_dir else NULL,
-    verbose = verbose,
-    n_negative_samples = n_negative_samples
+    verbose = verbose
   )
   return(result)
 }
@@ -746,9 +744,6 @@ summary.topolow <- function(object, ...) {
 #'   uses the full dataset. Default: NULL (no subsampling).
 #'   Recommended for large datasets (>300 points). See \code{\link{initial_parameter_optimization}}
 #'   for details.
-#' @param n_negative_samples Integer. Number of negative samples per edge endpoint 
-#'        for the embedding algorithm. Higher values better approximate the original 
-#'        O(N^2) algorithm but increase computation time. Default: 100.
 #' @param clean_intermediate Logical. Whether to remove intermediate files. Default: TRUE
 #' @param verbose Character. Verbosity level: "off" (no output), "standard" (progress updates),
 #'        or "full" (detailed output including from internal functions). Default: "standard"
@@ -888,7 +883,6 @@ Euclidify <- function(dissimilarity_matrix,
                       folds = 20,
                       mapping_max_iter = 500,
                       opt_subsample = NULL,
-                      n_negative_samples = 100,
                       clean_intermediate = TRUE,
                       verbose = "standard",
                       fallback_to_defaults = FALSE,
@@ -1043,7 +1037,6 @@ Euclidify <- function(dissimilarity_matrix,
       max_cores = max_cores,
       folds = folds,
       opt_subsample = opt_subsample,
-      n_negative_samples = n_negative_samples,
       verbose = verbose_internal,
       write_files = TRUE,
       output_dir = optimization_dir
@@ -1075,7 +1068,6 @@ Euclidify <- function(dissimilarity_matrix,
             mapping_max_iter = mapping_max_iter,
             relative_epsilon = 1e-5,
             folds = folds,
-            n_negative_samples = n_negative_samples,
             output_dir = optimization_dir,
             verbose = verbose_internal
           )
@@ -1253,7 +1245,6 @@ Euclidify <- function(dissimilarity_matrix,
       relative_epsilon = 1e-6,
       convergence_counter = 5,
       verbose = verbose_internal,
-      n_negative_samples = n_negative_samples,
       write_positions_to_csv = save_results,
       output_dir = output_dir
     )

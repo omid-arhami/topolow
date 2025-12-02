@@ -16,8 +16,7 @@ create_topolow_map(
   initial_positions = NULL,
   write_positions_to_csv = FALSE,
   output_dir,
-  verbose = FALSE,
-  n_negative_samples = 100
+  verbose = FALSE
 )
 }
 \arguments{
@@ -52,10 +51,6 @@ Default is FALSE.}
 \code{write_positions_to_csv} is TRUE.}
 
 \item{verbose}{Logical. Whether to print progress messages. Default is FALSE.}
-
-\item{n_negative_samples}{Integer. Number of negative samples per edge endpoint.
-Higher values better approximate the original O(N^2) algorithm but increase
-computation time. Default is 100.}
 }
 \value{
 A \code{list} object of class \code{topolow}. This list contains the results of the

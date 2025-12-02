@@ -11,36 +11,35 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
-// optimize_layout_cpp
-List optimize_layout_cpp(NumericMatrix initial_positions, const IntegerVector& edge_i, const IntegerVector& edge_j, const NumericVector& edge_dist, const IntegerVector& edge_thresh, const IntegerVector& has_measurement_flat, const IntegerVector& degrees, int n_points, int n_iter, double k0, double cooling_rate, double c_repulsion, int n_negative_samples, double relative_epsilon, int convergence_window, int convergence_check_freq, bool verbose);
-RcppExport SEXP _topolow_optimize_layout_cpp(SEXP initial_positionsSEXP, SEXP edge_iSEXP, SEXP edge_jSEXP, SEXP edge_distSEXP, SEXP edge_threshSEXP, SEXP has_measurement_flatSEXP, SEXP degreesSEXP, SEXP n_pointsSEXP, SEXP n_iterSEXP, SEXP k0SEXP, SEXP cooling_rateSEXP, SEXP c_repulsionSEXP, SEXP n_negative_samplesSEXP, SEXP relative_epsilonSEXP, SEXP convergence_windowSEXP, SEXP convergence_check_freqSEXP, SEXP verboseSEXP) {
+// optimize_layout_exact_cpp
+List optimize_layout_exact_cpp(NumericMatrix initial_positions, NumericMatrix dissimilarity_matrix, IntegerMatrix threshold_matrix, const IntegerVector& degrees, const IntegerVector& edge_i, const IntegerVector& edge_j, const NumericVector& edge_dist, const IntegerVector& edge_thresh, int n_iter, double k0, double cooling_rate, double c_repulsion, double relative_epsilon, int convergence_window, int convergence_check_freq, bool verbose);
+RcppExport SEXP _topolow_optimize_layout_exact_cpp(SEXP initial_positionsSEXP, SEXP dissimilarity_matrixSEXP, SEXP threshold_matrixSEXP, SEXP degreesSEXP, SEXP edge_iSEXP, SEXP edge_jSEXP, SEXP edge_distSEXP, SEXP edge_threshSEXP, SEXP n_iterSEXP, SEXP k0SEXP, SEXP cooling_rateSEXP, SEXP c_repulsionSEXP, SEXP relative_epsilonSEXP, SEXP convergence_windowSEXP, SEXP convergence_check_freqSEXP, SEXP verboseSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< NumericMatrix >::type initial_positions(initial_positionsSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type dissimilarity_matrix(dissimilarity_matrixSEXP);
+    Rcpp::traits::input_parameter< IntegerMatrix >::type threshold_matrix(threshold_matrixSEXP);
+    Rcpp::traits::input_parameter< const IntegerVector& >::type degrees(degreesSEXP);
     Rcpp::traits::input_parameter< const IntegerVector& >::type edge_i(edge_iSEXP);
     Rcpp::traits::input_parameter< const IntegerVector& >::type edge_j(edge_jSEXP);
     Rcpp::traits::input_parameter< const NumericVector& >::type edge_dist(edge_distSEXP);
     Rcpp::traits::input_parameter< const IntegerVector& >::type edge_thresh(edge_threshSEXP);
-    Rcpp::traits::input_parameter< const IntegerVector& >::type has_measurement_flat(has_measurement_flatSEXP);
-    Rcpp::traits::input_parameter< const IntegerVector& >::type degrees(degreesSEXP);
-    Rcpp::traits::input_parameter< int >::type n_points(n_pointsSEXP);
     Rcpp::traits::input_parameter< int >::type n_iter(n_iterSEXP);
     Rcpp::traits::input_parameter< double >::type k0(k0SEXP);
     Rcpp::traits::input_parameter< double >::type cooling_rate(cooling_rateSEXP);
     Rcpp::traits::input_parameter< double >::type c_repulsion(c_repulsionSEXP);
-    Rcpp::traits::input_parameter< int >::type n_negative_samples(n_negative_samplesSEXP);
     Rcpp::traits::input_parameter< double >::type relative_epsilon(relative_epsilonSEXP);
     Rcpp::traits::input_parameter< int >::type convergence_window(convergence_windowSEXP);
     Rcpp::traits::input_parameter< int >::type convergence_check_freq(convergence_check_freqSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
-    rcpp_result_gen = Rcpp::wrap(optimize_layout_cpp(initial_positions, edge_i, edge_j, edge_dist, edge_thresh, has_measurement_flat, degrees, n_points, n_iter, k0, cooling_rate, c_repulsion, n_negative_samples, relative_epsilon, convergence_window, convergence_check_freq, verbose));
+    rcpp_result_gen = Rcpp::wrap(optimize_layout_exact_cpp(initial_positions, dissimilarity_matrix, threshold_matrix, degrees, edge_i, edge_j, edge_dist, edge_thresh, n_iter, k0, cooling_rate, c_repulsion, relative_epsilon, convergence_window, convergence_check_freq, verbose));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_topolow_optimize_layout_cpp", (DL_FUNC) &_topolow_optimize_layout_cpp, 17},
+    {"_topolow_optimize_layout_exact_cpp", (DL_FUNC) &_topolow_optimize_layout_exact_cpp, 16},
     {NULL, NULL, 0}
 };
 

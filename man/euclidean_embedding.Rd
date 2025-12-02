@@ -17,8 +17,7 @@ euclidean_embedding(
   write_positions_to_csv = FALSE,
   output_dir,
   verbose = FALSE,
-  n_negative_samples = 100,
-  convergence_check_freq = 10
+  convergence_check_freq = 3
 )
 }
 \arguments{
@@ -54,12 +53,8 @@ Default is FALSE.}
 
 \item{verbose}{Logical. Whether to print progress messages. Default is FALSE.}
 
-\item{n_negative_samples}{Integer. Number of negative samples per edge endpoint.
-Higher values better approximate the original O(N^2) algorithm but increase
-computation time. Default is 5.}
-
 \item{convergence_check_freq}{Integer. How often to check for convergence (every N iterations).
-Lower values give more precise stopping but add overhead. Default is 10.}
+Lower values give more precise stopping but add overhead. Default is 3}
 }
 \value{
 A \code{list} object of class \code{topolow}. This list contains the results of the
@@ -78,19 +73,20 @@ optimization and includes the following components:
 
 topolow (topological stochastic pairwise reconstruction for Euclidean embedding) optimizes
 point positions in an N-dimensional space to match a target dissimilarity matrix.
-This version uses an optimized C++ backend with:
+This version uses an \strong{Exact} C++ backend that:
 \itemize{
-\item Compressed edge list (COO format) for memory efficiency
-\item Negative sampling to approximate unmeasured pair repulsion
-\item Immediate (Gauss-Seidel) position updates for better convergence
-\item Stochastic edge shuffling for escaping local optima
+\item Iterates over all N(N-1)/2 pairs in every iteration (O(N²) complexity).
+\item Ensures perfect fidelity to the original algorithm's force physics.
+\item Uses Gauss-Seidel immediate updates for fast convergence.
+\item Stochastic pair shuffling for escaping local optima.
+\item Compressed edge list (COO format) for efficient error calculation.
 }
 }
 \details{
 The algorithm iteratively updates point positions using:
 \itemize{
 \item Spring forces between points with measured dissimilarities.
-\item Repulsive forces between points without measurements (via negative sampling).
+\item Repulsive forces between ALL points without measurements (or thresholded pairs).
 \item Conditional forces for thresholded measurements (< or >).
 \item An adaptive spring constant that decays over iterations.
 \item Convergence monitoring based on relative error change.
