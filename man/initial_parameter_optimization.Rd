@@ -6,9 +6,9 @@
 \usage{
 initial_parameter_optimization(
   dissimilarity_matrix,
-  mapping_max_iter = 20,
-  relative_epsilon,
-  convergence_counter,
+  mapping_max_iter = 1000,
+  relative_epsilon = 0.001,
+  convergence_counter = 3,
   scenario_name,
   N_min,
   N_max,

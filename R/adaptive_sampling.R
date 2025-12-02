@@ -143,9 +143,9 @@
 #' @importFrom future availableCores
 #' @export
 initial_parameter_optimization <- function(dissimilarity_matrix,
-                                           mapping_max_iter = 20,
-                                           relative_epsilon,
-                                           convergence_counter,
+                                           mapping_max_iter = 1000,
+                                           relative_epsilon = 1e-3,
+                                           convergence_counter = 3,
                                            scenario_name,
                                            N_min,
                                            N_max,
