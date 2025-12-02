@@ -14,7 +14,6 @@ run_adaptive_sampling(
   relative_epsilon = 1e-04,
   folds = 20,
   opt_subsample = NULL,
-  n_negative_samples = 100,
   output_dir,
   verbose = FALSE
 )
@@ -52,10 +51,6 @@ data forms a connected graph. Default: NULL (use full data).
 \item Recommended: use same value as in \code{initial_parameter_optimization}
 \item The actual subsample size used is reported in output columns
 }}
-
-\item{n_negative_samples}{Integer. Number of negative samples per edge endpoint
-for the embedding algorithm. Higher values better approximate the original
-O(N^2) algorithm but increase computation time. Default: 100.}
 
 \item{output_dir}{Character. Required directory for output files.}
 

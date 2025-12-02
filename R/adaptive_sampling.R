@@ -70,9 +70,6 @@
 #'       that parameter set use the same subsample
 #'     \item The actual subsample size used is reported in output columns
 #'   }
-#' @param n_negative_samples Integer. Number of negative samples per edge endpoint 
-#'        for the embedding algorithm. Higher values better approximate the original 
-#'        O(N^2) algorithm but increase computation time. Default: 100.
 #' @param verbose Logical. Whether to print progress messages. Default: FALSE.
 #' @param write_files Logical. Whether to save results to a CSV file. Default: FALSE.
 #' @param output_dir Character. Directory for output files. Required if `write_files` is TRUE.
@@ -160,7 +157,6 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
                                            max_cores = NULL,
                                            folds = 20,
                                            opt_subsample = NULL,
-                                           n_negative_samples = 100,
                                            verbose = FALSE,
                                            write_files = FALSE,
                                            output_dir) {
@@ -518,8 +514,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
             cooling_rate = cooling_rate,
             c_repulsion = c_repulsion,
             folds = folds,
-            num_cores = 1,
-            n_negative_samples = n_negative_samples
+            num_cores = 1
           )
         }, error = function(e) {
           # Track CV/embedding failure with details
@@ -653,8 +648,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
                                     "subsample_dissimilarity_matrix",
                                     "check_matrix_connectivity",
                                     "analyze_network_structure",
-                                    "sanity_check_subsample",
-                                    "n_negative_samples"),
+                                    "sanity_check_subsample"),
                                   envir = environment())
           
           batch_results <- parallel::parLapply(cl, batch_indices, process_param_set)
@@ -982,9 +976,6 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
 #'     \item Recommended: use same value as in \code{initial_parameter_optimization}
 #'     \item The actual subsample size used is reported in output columns
 #'   }
-#' @param n_negative_samples Integer. Number of negative samples per edge endpoint 
-#'        for the embedding algorithm. Higher values better approximate the original 
-#'        O(N^2) algorithm but increase computation time. Default: 100.
 #' @param output_dir Character. Required directory for output files.
 #' @param verbose Logical. Whether to print progress messages. Default: FALSE.
 #'
@@ -1065,7 +1056,6 @@ run_adaptive_sampling <- function(initial_samples_file,
                                   relative_epsilon = 1e-4,
                                   folds = 20,
                                   opt_subsample = NULL,
-                                  n_negative_samples = 100,
                                   output_dir,
                                   verbose = FALSE) {
   # ==========================================================================
@@ -1262,7 +1252,7 @@ run_adaptive_sampling <- function(initial_samples_file,
                             c("adaptive_MC_sampling", "temps", "dissimilarity_matrix",
                               "mapping_max_iter", "relative_epsilon", "folds",
                               "output_dir", "scenario_name", "iterations",
-                              "opt_subsample", "n_negative_samples",
+                              "opt_subsample",
                               "subsample_dissimilarity_matrix",
                           "check_matrix_connectivity",
                           "analyze_network_structure",
@@ -1281,7 +1271,6 @@ run_adaptive_sampling <- function(initial_samples_file,
         num_cores = 1,
         scenario_name = scenario_name,
         opt_subsample = opt_subsample,  # Pass subsampling parameter
-        n_negative_samples = n_negative_samples,
         verbose = FALSE  # Keep individual jobs quiet
       )
     })
@@ -1303,7 +1292,6 @@ run_adaptive_sampling <- function(initial_samples_file,
           num_cores = 1,
           scenario_name = scenario_name,
           opt_subsample = opt_subsample,  # Pass subsampling parameter
-          n_negative_samples = n_negative_samples,
           verbose = FALSE  # Keep individual jobs quiet
         )
         return(list(success = TRUE, job = i))
@@ -1449,8 +1437,6 @@ run_adaptive_sampling <- function(initial_samples_file,
 #' @param opt_subsample Integer or NULL. If specified, subsamples the data for
 #'   this adaptive sampling job. A single subsample is created at the start and
 #'   reused for all iterations within this job for consistency. Default: NULL.
-#' @param n_negative_samples Integer. Number of negative samples per edge endpoint 
-#'        for the embedding algorithm. Default: 100.
 #' @param verbose Logical. If TRUE, prints progress messages. Default: FALSE.
 #'
 #' @return A \code{data.frame} containing all samples (initial and newly generated)
@@ -1491,7 +1477,6 @@ adaptive_MC_sampling <- function(samples_file,
                                  num_cores = 1,
                                  scenario_name,
                                  opt_subsample = NULL,
-                                 n_negative_samples = 100,
                                  verbose = FALSE) {
   # ==========================================================================
   # INPUT VALIDATION AND SETUP
@@ -1665,8 +1650,7 @@ adaptive_MC_sampling <- function(samples_file,
         cooling_rate = cooling_rate_new,
         c_repulsion = c_repulsion_new,
         folds = folds,
-        num_cores = num_cores,
-        n_negative_samples = n_negative_samples
+        num_cores = num_cores
       )
     }, error = function(e) {
       if (verbose) {
@@ -2494,8 +2478,6 @@ calculate_weighted_marginals <- function(samples) {
 #' @param c_repulsion The repulsion constant.
 #' @param folds The number of cross-validation folds.
 #' @param num_cores The number of cores for parallel processing.
-#' @param n_negative_samples Integer. Number of negative samples per edge endpoint 
-#'        for the embedding algorithm. Default: 100.
 #'
 #' @return A list containing the pooled `Holdout_MAE` and the `NLL`.
 #'
@@ -2503,8 +2485,7 @@ calculate_weighted_marginals <- function(samples) {
 #' @keywords internal
 likelihood_function <- function(dissimilarity_matrix, mapping_max_iter,
                                 relative_epsilon, N, k0, cooling_rate,
-                                c_repulsion, folds = 20, num_cores = 1,
-                                n_negative_samples = 100) {
+                                c_repulsion, folds = 20, num_cores = 1) {
   # --- Manual k-Fold Creation ---
   # This approach creates k folds by iteratively removing a random subset of
   # non-NA values from the full matrix for each fold's training set.
@@ -2578,8 +2559,7 @@ likelihood_function <- function(dissimilarity_matrix, mapping_max_iter,
         c_repulsion = c_repulsion,
         relative_epsilon = relative_epsilon,
         convergence_counter = 5,
-        verbose = FALSE,
-        n_negative_samples = n_negative_samples
+        verbose = FALSE
       )
 
       # Use the topolow return object 'est_distances'
@@ -2624,7 +2604,7 @@ likelihood_function <- function(dissimilarity_matrix, mapping_max_iter,
                               c("holdout_indices_list", "dissimilarity_matrix", "truth_matrix",
                                 "n_rows", "N", "k0", "cooling_rate", "c_repulsion",
                                 "mapping_max_iter", "relative_epsilon", "euclidean_embedding",
-                                "error_calculator_comparison", "n_negative_samples"),
+                                "error_calculator_comparison"),
                               envir = environment())
 
       res_list <- parallel::parLapply(cl, 1:folds, process_sample)

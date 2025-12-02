@@ -202,7 +202,7 @@ The `opt_subsample` parameter is optional (default: NULL = use full data).
 
 * **Major Performance Enhancement**: The core optimization loop in `euclidean_embedding()` has been rewritten in C++ using Rcpp and RcppArmadillo, providing significant speedups for large datasets. All for loops in the core function `euclidean_embedding()` have been replaced with vector operations.
 
-* **New Algorithm: Negative Sampling**
+* **New Algorithm: Negative Sampling (not used)**
   - Implements negative sampling to approximate unmeasured pair repulsion
   - Reduces complexity from O(N²) per iteration to O(E × k), where E is the number of measured edges and k is the number of negative samples
   - New parameter `n_negative_samples` (default: 5) controls the approximation quality vs. speed tradeoff
