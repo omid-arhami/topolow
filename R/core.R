@@ -128,6 +128,11 @@ vectorized_process_distance_matrix <- function(distances_numeric, threshold_mask
 #' @param verbose Logical. Whether to print progress messages. Default is FALSE.
 #' @param convergence_check_freq Integer. How often to check for convergence (every N iterations).
 #'        Lower values give more precise stopping but add overhead. Default is 3
+#' @param preserve_order Logical. If TRUE, the original row and column order of the 
+#'        dissimilarity matrix is strictly preserved. If FALSE (default), the matrix is
+#'        reordered internally for optimized convergence (spectral pattern with largest
+#'        values in corners). Set to TRUE when downstream analyses depend on specific
+#'        point ordering matching the input matrix.
 #'
 #' @return A `list` object of class `topolow`. This list contains the results of the
 #'   optimization and includes the following components:
@@ -187,7 +192,8 @@ euclidean_embedding <- function(dissimilarity_matrix,
                                 write_positions_to_csv = FALSE,
                                 output_dir,
                                 verbose = FALSE,
-                                convergence_check_freq = 3) {
+                                convergence_check_freq = 3,
+                                preserve_order = FALSE) {
 
   # ===========================================================================
   # INPUT VALIDATION
@@ -256,10 +262,10 @@ euclidean_embedding <- function(dissimilarity_matrix,
     stop("dissimilarity_matrix must have at least 2 rows/columns")
   }
 
-  # ===========================================================================
+# ===========================================================================
   # MATRIX REORDERING : Reorder rows and columns so largest values are furthest from diagonal
   # ===========================================================================
-  if (n > 1) {
+  if (n > 1 && !preserve_order) {
     # Extract numeric values for clustering, handling threshold indicators
     # VECTORIZED: Replace nested for loops with matrix operations
     numeric_matrix <- matrix(NA_real_, n, n)
@@ -310,6 +316,8 @@ euclidean_embedding <- function(dissimilarity_matrix,
       # If ordering fails, skip reordering
       if (verbose) cat("Could not reorder matrix:", e$message, "\n")
     })
+  } else if (preserve_order && verbose) {
+    cat("Preserving original row/column order (preserve_order = TRUE)\n")
   }
 
   # If initial positions provided, ensure they match the reordered matrix
@@ -888,7 +896,8 @@ Euclidify <- function(dissimilarity_matrix,
                       fallback_to_defaults = FALSE,
                       save_results = FALSE,
                       create_diagnostic_plots = FALSE,
-                      diagnostic_plot_types = "all") {
+                      diagnostic_plot_types = "all",
+                      preserve_order = FALSE) {
   
   # Start timing
   start_time <- Sys.time()
@@ -1039,7 +1048,8 @@ Euclidify <- function(dissimilarity_matrix,
       opt_subsample = opt_subsample,
       verbose = verbose_internal,
       write_files = TRUE,
-      output_dir = optimization_dir
+      output_dir = optimization_dir,
+      preserve_order = preserve_order
     )
     
     optimization_summary$initial_results <- initial_results
@@ -1069,7 +1079,8 @@ Euclidify <- function(dissimilarity_matrix,
             relative_epsilon = 1e-5,
             folds = folds,
             output_dir = optimization_dir,
-            verbose = verbose_internal
+            verbose = verbose_internal,
+            preserve_order = preserve_order
           )
         }, error = function(e) {
           if (verbose_main) cat("  WARNING: Adaptive sampling failed:", e$message, "\n")
@@ -1246,7 +1257,8 @@ Euclidify <- function(dissimilarity_matrix,
       convergence_counter = 5,
       verbose = verbose_internal,
       write_positions_to_csv = save_results,
-      output_dir = output_dir
+      output_dir = output_dir,
+      preserve_order = preserve_order
     )
   }, error = function(e) {
     if (verbose_main) cat("  ERROR: Final embedding failed:", e$message, "\n")

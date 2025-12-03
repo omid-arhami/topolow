@@ -159,7 +159,8 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
                                            opt_subsample = NULL,
                                            verbose = FALSE,
                                            write_files = FALSE,
-                                           output_dir) {
+                                           output_dir,
+                                           preserve_order = FALSE) {
   # ==========================================================================
   # INPUT VALIDATION
   # ==========================================================================
@@ -316,7 +317,8 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
               dissimilarity_matrix = dissimilarity_matrix,
               sample_size = opt_subsample,
               max_attempts = 2,
-              verbose = FALSE
+              verbose = FALSE,
+              preserve_order = preserve_order
             )
           }, error = function(e) NULL)
           
@@ -454,7 +456,8 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
               dissimilarity_matrix = full_dissimilarity_matrix,
               sample_size = opt_subsample,
               max_attempts = 5,
-              verbose = verbose
+              verbose = verbose,
+              preserve_order = preserve_order
             )
           }, error = function(e) {
             failure_info$type <<- "subsample"
@@ -514,7 +517,8 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
             cooling_rate = cooling_rate,
             c_repulsion = c_repulsion,
             folds = folds,
-            num_cores = 1
+            num_cores = 1,
+          preserve_order = preserve_order
           )
         }, error = function(e) {
           # Track CV/embedding failure with details
@@ -641,14 +645,11 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
           # Export required objects
           # IMPORTANT: We export the current 'lhs_params' which changes per epoch
           parallel::clusterExport(cl,
-                                  c("lhs_params", "full_dissimilarity_matrix", "matrix_size",
-                                    "mapping_max_iter", "relative_epsilon", "folds",
-                                    "use_subsampling", "opt_subsample", "verbose", "epoch", "num_samples",
-                                    "likelihood_function", "euclidean_embedding",
-                                    "subsample_dissimilarity_matrix",
-                                    "check_matrix_connectivity",
-                                    "analyze_network_structure",
-                                    "sanity_check_subsample"),
+                            c("lhs_params", "full_dissimilarity_matrix", "mapping_max_iter", "relative_epsilon",
+                              "use_subsampling", "opt_subsample", "verbose", "epoch", "num_samples",
+                              "likelihood_function", "euclidean_embedding",
+                              "subsample_dissimilarity_matrix", "sanity_check_subsample",
+                              "error_calculator_comparison", "folds", "preserve_order"),
                                   envir = environment())
           
           batch_results <- parallel::parLapply(cl, batch_indices, process_param_set)
@@ -978,6 +979,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
 #'   }
 #' @param output_dir Character. Required directory for output files.
 #' @param verbose Logical. Whether to print progress messages. Default: FALSE.
+#' @param preserve_order Logical. Whether to preserve the order of points in the output. Default: FALSE.
 #'
 #' @return No return value. Called for its side effect of writing results to a CSV file
 #'   in \code{output_dir}.
@@ -1057,7 +1059,8 @@ run_adaptive_sampling <- function(initial_samples_file,
                                   folds = 20,
                                   opt_subsample = NULL,
                                   output_dir,
-                                  verbose = FALSE) {
+                                  verbose = FALSE,
+                                  preserve_order = FALSE) {
   # ==========================================================================
   # CAPTURE ORIGINAL COLUMN ORDER (CRITICAL FOR CRAN)
   # ==========================================================================
@@ -1252,7 +1255,7 @@ run_adaptive_sampling <- function(initial_samples_file,
                             c("adaptive_MC_sampling", "temps", "dissimilarity_matrix",
                               "mapping_max_iter", "relative_epsilon", "folds",
                               "output_dir", "scenario_name", "iterations",
-                              "opt_subsample",
+                              "opt_subsample", "preserve_order",
                               "subsample_dissimilarity_matrix",
                           "check_matrix_connectivity",
                           "analyze_network_structure",
@@ -1271,7 +1274,8 @@ run_adaptive_sampling <- function(initial_samples_file,
         num_cores = 1,
         scenario_name = scenario_name,
         opt_subsample = opt_subsample,  # Pass subsampling parameter
-        verbose = FALSE  # Keep individual jobs quiet
+        verbose = FALSE,  # Keep individual jobs quiet
+        preserve_order = preserve_order
       )
     })
     
@@ -1292,7 +1296,8 @@ run_adaptive_sampling <- function(initial_samples_file,
           num_cores = 1,
           scenario_name = scenario_name,
           opt_subsample = opt_subsample,  # Pass subsampling parameter
-          verbose = FALSE  # Keep individual jobs quiet
+          verbose = FALSE,  # Keep individual jobs quiet
+          preserve_order = preserve_order
         )
         return(list(success = TRUE, job = i))
       }, error = function(e) {
@@ -1438,6 +1443,7 @@ run_adaptive_sampling <- function(initial_samples_file,
 #'   this adaptive sampling job. A single subsample is created at the start and
 #'   reused for all iterations within this job for consistency. Default: NULL.
 #' @param verbose Logical. If TRUE, prints progress messages. Default: FALSE.
+#' @param preserve_order Logical. If TRUE, preserves the order of samples in the output. Default: FALSE.
 #'
 #' @return A \code{data.frame} containing all samples (initial and newly generated)
 #' with their parameters and evaluated performance metrics. The data frame includes
@@ -1477,7 +1483,8 @@ adaptive_MC_sampling <- function(samples_file,
                                  num_cores = 1,
                                  scenario_name,
                                  opt_subsample = NULL,
-                                 verbose = FALSE) {
+                                 verbose = FALSE,
+                                 preserve_order = FALSE) {
   # ==========================================================================
   # INPUT VALIDATION AND SETUP
   # ==========================================================================
@@ -1530,7 +1537,8 @@ adaptive_MC_sampling <- function(samples_file,
       dissimilarity_matrix = full_dissimilarity_matrix,
       sample_size = opt_subsample,
       max_attempts = 5,
-      verbose = verbose
+      verbose = verbose,
+      preserve_order = preserve_order
     )
     
     if (!subsample_result$is_connected) {
@@ -1650,7 +1658,8 @@ adaptive_MC_sampling <- function(samples_file,
         cooling_rate = cooling_rate_new,
         c_repulsion = c_repulsion_new,
         folds = folds,
-        num_cores = num_cores
+        num_cores = num_cores,
+        preserve_order = preserve_order
       )
     }, error = function(e) {
       if (verbose) {
@@ -2478,6 +2487,7 @@ calculate_weighted_marginals <- function(samples) {
 #' @param c_repulsion The repulsion constant.
 #' @param folds The number of cross-validation folds.
 #' @param num_cores The number of cores for parallel processing.
+#' @param preserve_order Logical indicating whether to preserve the order of folds.
 #'
 #' @return A list containing the pooled `Holdout_MAE` and the `NLL`.
 #'
@@ -2485,7 +2495,8 @@ calculate_weighted_marginals <- function(samples) {
 #' @keywords internal
 likelihood_function <- function(dissimilarity_matrix, mapping_max_iter,
                                 relative_epsilon, N, k0, cooling_rate,
-                                c_repulsion, folds = 20, num_cores = 1) {
+                                c_repulsion, folds = 20, num_cores = 1,
+                                preserve_order = FALSE) {
   # --- Manual k-Fold Creation ---
   # This approach creates k folds by iteratively removing a random subset of
   # non-NA values from the full matrix for each fold's training set.
@@ -2559,7 +2570,8 @@ likelihood_function <- function(dissimilarity_matrix, mapping_max_iter,
         c_repulsion = c_repulsion,
         relative_epsilon = relative_epsilon,
         convergence_counter = 5,
-        verbose = FALSE
+        verbose = FALSE,
+        preserve_order = preserve_order
       )
 
       # Use the topolow return object 'est_distances'
@@ -2604,7 +2616,7 @@ likelihood_function <- function(dissimilarity_matrix, mapping_max_iter,
                               c("holdout_indices_list", "dissimilarity_matrix", "truth_matrix",
                                 "n_rows", "N", "k0", "cooling_rate", "c_repulsion",
                                 "mapping_max_iter", "relative_epsilon", "euclidean_embedding",
-                                "error_calculator_comparison"),
+                                "error_calculator_comparison", "preserve_order"),
                               envir = environment())
 
       res_list <- parallel::parLapply(cl, 1:folds, process_sample)
