@@ -844,7 +844,6 @@ titers_list_to_matrix <- function(data, chnames, chorder = NULL,
 }
 
 
-# Newed
 #' Clean Data by Removing MAD-based Outliers
 #'
 #' @description

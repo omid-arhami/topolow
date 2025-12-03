@@ -1133,7 +1133,10 @@ plot_temporal_mapping <- function(df_coords, ndim,
     save_plot(p, filename, layout_config, output_dir)
   }
   
-  return(p)
+  return(list(
+    plot = p,
+    velocity_data = positions[, c("name", "V1", "V2", "year", "v1", "v2", "mag")]
+  ))
 }
 
 
@@ -1776,7 +1779,10 @@ plot_cluster_mapping <- function(df_coords, ndim,
     save_plot(p, filename, layout_config, output_dir)
   }
   
-  return(p)
+  return(list(
+    plot = p,
+    velocity_data = positions[, c("name", "V1", "V2", "year", "v1", "v2", "mag")]
+  ))
 }
 
 
