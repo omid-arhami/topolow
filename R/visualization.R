@@ -834,6 +834,8 @@ plot_temporal_mapping <- function(df_coords, ndim,
     }
   }
   
+  # Initialize velocity data as NULL
+  velocity_data <- NULL
   if (draw_arrows) {
     if (!"year" %in% names(reduced_df)) {
       stop("`year` column is required when draw_arrows = TRUE")
@@ -982,6 +984,8 @@ plot_temporal_mapping <- function(df_coords, ndim,
     positions$v1  <- v1
     positions$v2  <- v2
     positions$mag <- sqrt(v1^2 + v2^2)
+    # Store velocity data for return
+    velocity_data <- positions[, c("name", "V1", "V2", "year", "v1", "v2", "mag")]
     
     top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
     cat(sprintf("Showing only arrows with magnitude >= %.3f (figure unit)\n", layout_config$arrow_plot_threshold))
@@ -1133,10 +1137,15 @@ plot_temporal_mapping <- function(df_coords, ndim,
     save_plot(p, filename, layout_config, output_dir)
   }
   
-  return(list(
-    plot = p,
-    velocity_data = positions[, c("name", "V1", "V2", "year", "v1", "v2", "mag")]
-  ))
+  # Return both plot and velocity data
+  if (!is.null(velocity_data)) {
+    return(list(
+      plot = p,
+      velocity_data = velocity_data
+    ))
+  } else {
+    return(p)
+  }
 }
 
 
@@ -1469,6 +1478,8 @@ plot_cluster_mapping <- function(df_coords, ndim,
     }
   }
   
+  # Initialize velocity data as NULL
+  velocity_data <- NULL
   if (draw_arrows) {
     if (!"year" %in% names(reduced_df)) {
       stop("`year` column is required when draw_arrows = TRUE")
@@ -1617,6 +1628,9 @@ plot_cluster_mapping <- function(df_coords, ndim,
     positions$v1  <- v1
     positions$v2  <- v2
     positions$mag <- sqrt(v1^2 + v2^2)
+    
+    # Store velocity data for return
+    velocity_data <- positions[, c("name", "V1", "V2", "year", "v1", "v2", "mag")]
     
     if (show_one_arrow_per_cluster) {
       top_vel <- positions %>%
@@ -1779,10 +1793,15 @@ plot_cluster_mapping <- function(df_coords, ndim,
     save_plot(p, filename, layout_config, output_dir)
   }
   
-  return(list(
-    plot = p,
-    velocity_data = positions[, c("name", "V1", "V2", "year", "v1", "v2", "mag")]
-  ))
+  # Return both plot and velocity data
+  if (!is.null(velocity_data)) {
+    return(list(
+      plot = p,
+      velocity_data = velocity_data
+    ))
+  } else {
+    return(p)
+  }
 }
 
 
