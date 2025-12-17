@@ -13,7 +13,8 @@ likelihood_function(
   cooling_rate,
   c_repulsion,
   folds = 20,
-  num_cores = 1
+  num_cores = 1,
+  preserve_order = FALSE
 )
 }
 \arguments{
@@ -34,6 +35,8 @@ likelihood_function(
 \item{folds}{The number of cross-validation folds.}
 
 \item{num_cores}{The number of cores for parallel processing.}
+
+\item{preserve_order}{Logical indicating whether to preserve the order of folds.}
 }
 \value{
 A list containing the pooled \code{Holdout_MAE} and the \code{NLL}.

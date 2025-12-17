@@ -14,7 +14,8 @@ adaptive_MC_sampling(
   num_cores = 1,
   scenario_name,
   opt_subsample = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  preserve_order = FALSE
 )
 }
 \arguments{
@@ -39,6 +40,8 @@ this adaptive sampling job. A single subsample is created at the start and
 reused for all iterations within this job for consistency. Default: NULL.}
 
 \item{verbose}{Logical. If TRUE, prints progress messages. Default: FALSE.}
+
+\item{preserve_order}{Logical. If TRUE, preserves the order of samples in the output. Default: FALSE.}
 }
 \value{
 A \code{data.frame} containing all samples (initial and newly generated)

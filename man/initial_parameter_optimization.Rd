@@ -25,7 +25,8 @@ initial_parameter_optimization(
   opt_subsample = NULL,
   verbose = FALSE,
   write_files = FALSE,
-  output_dir
+  output_dir,
+  preserve_order = FALSE
 )
 }
 \arguments{
@@ -77,6 +78,13 @@ that parameter set use the same subsample
 \item{write_files}{Logical. Whether to save results to a CSV file. Default: FALSE.}
 
 \item{output_dir}{Character. Directory for output files. Required if \code{write_files} is TRUE.}
+
+\item{preserve_order}{Logical. If TRUE, the original row and column order of the
+dissimilarity matrix is preserved in the output coordinates. If FALSE, the data is
+reordered based on their available distances for a faster convergence. Set to TRUE
+when domain knowledge supports a specific order (e.g., directional evolution) or
+when downstream analyses depend on specific point ordering matching the input matrix.
+Default: FALSE}
 }
 \value{
 A \code{data.frame} containing the log-transformed parameter sets and their performance metrics

@@ -15,7 +15,8 @@ run_adaptive_sampling(
   folds = 20,
   opt_subsample = NULL,
   output_dir,
-  verbose = FALSE
+  verbose = FALSE,
+  preserve_order = FALSE
 )
 }
 \arguments{
@@ -55,6 +56,8 @@ data forms a connected graph. Default: NULL (use full data).
 \item{output_dir}{Character. Required directory for output files.}
 
 \item{verbose}{Logical. Whether to print progress messages. Default: FALSE.}
+
+\item{preserve_order}{Logical. Whether to preserve the order of points in the output. Default: FALSE.}
 }
 \value{
 No return value. Called for its side effect of writing results to a CSV file

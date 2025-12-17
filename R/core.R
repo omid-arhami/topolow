@@ -131,7 +131,8 @@ vectorized_process_distance_matrix <- function(distances_numeric, threshold_mask
 #' @param preserve_order Logical. If TRUE, the original row and column order of the 
 #'        dissimilarity matrix is strictly preserved. If FALSE (default), the matrix is
 #'        reordered internally for optimized convergence (spectral pattern with largest
-#'        values in corners). Set to TRUE when downstream analyses depend on specific
+#'        values in corners). Set to TRUE when domain knowledge supports a specific order (e.g., 
+#'        directional evolution) or when downstream analyses depend on specific
 #'        point ordering matching the input matrix.
 #'
 #' @return A `list` object of class `topolow`. This list contains the results of the
@@ -763,6 +764,12 @@ summary.topolow <- function(object, ...) {
 #' @param diagnostic_plot_types Character vector. Which plot types to create.
 #'        Options: "all", "parameter_search", "convergence", "quality", "cv_errors".
 #'        Default: "all"
+#' @param preserve_order Logical. If TRUE, the original row and column order of the 
+#'        dissimilarity matrix is preserved in the output coordinates. If FALSE, the data is 
+#'        reordered based on their available distances for a faster convergence. Set to TRUE 
+#'        when domain knowledge supports a specific order (e.g., directional evolution) or 
+#'        when downstream analyses depend on specific point ordering matching the input matrix.
+#'        Default: FALSE
 #' 
 #' @return A list containing:
 #'   \item{positions}{Matrix of optimized coordinates}

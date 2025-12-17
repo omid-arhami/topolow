@@ -7,7 +7,7 @@
 plot_cv_errors(all_samples)
 }
 \arguments{
-\item{cv_errors}{Data frame with fold-wise errors and parameter information.}
+\item{all_samples}{Data frame with parameter evaluations and CV errors.}
 }
 \value{
 A ggplot object showing CV error distributions.

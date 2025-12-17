@@ -10,7 +10,8 @@ subsample_dissimilarity_matrix(
   max_attempts = 5,
   min_completeness = 0.1,
   random_seed = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  preserve_order = FALSE
 )
 }
 \arguments{
@@ -24,10 +25,14 @@ giving up. Default: 5}
 \item{min_completeness}{Numeric. Minimum acceptable network completeness
 (0-1). Default: 0.10. Used for warnings, not hard requirement.}
 
-\item{random_seed}{Integer or NULL. Random seed for reproducibility. If NULL,
-no seed is set. Default: NULL.}
+\item{random_seed}{Integer or NULL. If provided, sets the random seed for reproducibility.}
 
 \item{verbose}{Logical. Print progress messages. Default: FALSE.}
+
+\item{preserve_order}{Logical. If TRUE, the selected indices are sorted to maintain the
+original row/column order of the input matrix. If FALSE (default), indices are
+returned in random order as sampled. Set to TRUE when downstream analyses depend
+on specific point ordering.}
 }
 \value{
 A list containing:

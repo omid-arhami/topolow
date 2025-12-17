@@ -342,8 +342,7 @@ plot_embedding_quality <- function(true_dissim, est_dissim) {
 #' @description
 #' Visualizes the distribution of CV errors across folds and parameter sets.
 #'
-#' @param cv_errors Data frame with fold-wise errors and parameter information.
-#'
+#' @param all_samples Data frame with parameter evaluations and CV errors.
 #' @return A ggplot object showing CV error distributions.
 #'
 #' @importFrom ggplot2 ggplot aes geom_boxplot geom_violin labs theme_minimal

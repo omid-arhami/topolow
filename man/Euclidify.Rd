@@ -22,7 +22,8 @@ Euclidify(
   fallback_to_defaults = FALSE,
   save_results = FALSE,
   create_diagnostic_plots = FALSE,
-  diagnostic_plot_types = "all"
+  diagnostic_plot_types = "all",
+  preserve_order = FALSE
 )
 }
 \arguments{
@@ -80,6 +81,13 @@ showing the parameter optimization process and embedding quality. Default: FALSE
 \item{diagnostic_plot_types}{Character vector. Which plot types to create.
 Options: "all", "parameter_search", "convergence", "quality", "cv_errors".
 Default: "all"}
+
+\item{preserve_order}{Logical. If TRUE, the original row and column order of the
+dissimilarity matrix is preserved in the output coordinates. If FALSE, the data is
+reordered based on their available distances for a faster convergence. Set to TRUE
+when domain knowledge supports a specific order (e.g., directional evolution) or
+when downstream analyses depend on specific point ordering matching the input matrix.
+Default: FALSE}
 }
 \value{
 A list containing:

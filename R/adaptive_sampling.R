@@ -73,6 +73,12 @@
 #' @param verbose Logical. Whether to print progress messages. Default: FALSE.
 #' @param write_files Logical. Whether to save results to a CSV file. Default: FALSE.
 #' @param output_dir Character. Directory for output files. Required if `write_files` is TRUE.
+#' @param preserve_order Logical. If TRUE, the original row and column order of the
+#'        dissimilarity matrix is preserved in the output coordinates. If FALSE, the data is
+#'        reordered based on their available distances for a faster convergence. Set to TRUE
+#'        when domain knowledge supports a specific order (e.g., directional evolution) or
+#'        when downstream analyses depend on specific point ordering matching the input matrix.
+#'        Default: FALSE
 #'
 #' @return A `data.frame` containing the log-transformed parameter sets and their performance metrics
 #'   from the **final epoch**. Columns include: `log_N`, `log_k0`, `log_cooling_rate`, `log_c_repulsion`,

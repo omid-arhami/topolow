@@ -17,7 +17,8 @@ euclidean_embedding(
   write_positions_to_csv = FALSE,
   output_dir,
   verbose = FALSE,
-  convergence_check_freq = 3
+  convergence_check_freq = 3,
+  preserve_order = FALSE
 )
 }
 \arguments{
@@ -55,6 +56,13 @@ Default is FALSE.}
 
 \item{convergence_check_freq}{Integer. How often to check for convergence (every N iterations).
 Lower values give more precise stopping but add overhead. Default is 3}
+
+\item{preserve_order}{Logical. If TRUE, the original row and column order of the
+dissimilarity matrix is strictly preserved. If FALSE (default), the matrix is
+reordered internally for optimized convergence (spectral pattern with largest
+values in corners). Set to TRUE when domain knowledge supports a specific order (e.g.,
+directional evolution) or when downstream analyses depend on specific
+point ordering matching the input matrix.}
 }
 \value{
 A \code{list} object of class \code{topolow}. This list contains the results of the
