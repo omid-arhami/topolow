@@ -3,7 +3,186 @@
 
 #' Model Diagnostics and Convergence Testing
 
-# Newed:
+
+#' Create Diagnostic Plots for Multiple Sampling Chains
+#'
+#' @description
+#' Creates trace and density plots for multiple sampling or optimization chains to help
+#' assess convergence and mixing. It displays parameter trajectories and their
+#' distributions across all chains.
+#'
+#' @param chain_files A character vector of paths to CSV files, where each file contains data for one chain.
+#' @param mutual_size Integer. The number of samples to use from the end of each chain for plotting.
+#' @param output_file Character. The path for saving the plot. Required if `save_plot` is TRUE.
+#' @param output_dir Character. The directory for saving output files. Required if `save_plot` is TRUE.
+#' @param save_plot Logical. If TRUE, saves the plot to a file. Default: FALSE.
+#' @param width,height,dpi Numeric. The dimensions and resolution for the saved plot.
+#' @return A `ggplot` object of the combined plots.
+#' @examples
+#' # This example uses sample data files that would be included with the package.
+#' chain_files <- c(
+#'   system.file("extdata", "diag_chain1.csv", package = "topolow"),
+#'   system.file("extdata", "diag_chain2.csv", package = "topolow"),
+#'   system.file("extdata", "diag_chain3.csv", package = "topolow")
+#' )
+#'
+#' # Only run the example if the files are found
+#' if (all(nzchar(chain_files))) {
+#'   # Create diagnostic plot without saving to a file
+#'   plot_mcmc_diagnostics(chain_files, mutual_size = 50, save_plot = FALSE)
+#' }
+#'
+#' @export
+plot_mcmc_diagnostics <- function(chain_files,
+                                    mutual_size = 2000,
+                                    output_file = "diagnostic_plots.png",
+                                    output_dir,
+                                    save_plot = FALSE,
+                                    width = 3000, height = 3000, dpi = 300) {
+                                      # Check if gridextra is available
+  if (!requireNamespace("gridExtra", quietly = TRUE)) {
+    stop("gridExtra package is required for plotting. Please install with install.packages('gridExtra').")
+  }
+  if (save_plot && (missing(output_dir) || missing(output_file))) {
+    stop("`output_dir` and `output_file` must be provided when `save_plot` is TRUE.", call. = FALSE)
+  }
+
+  # Read and process chain data
+  par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
+  chains <- lapply(chain_files, function(file) {
+    df <- utils::read.csv(file)
+    # Take the last `mutual_size` samples
+    tail(df[, par_names], mutual_size)
+  })
+
+  n_params <- ncol(chains[[1]])
+  n_chains <- length(chains)
+
+  # Create a list to hold all the individual plots
+  plot_list <- list()
+
+  for (i in seq_len(n_params)) {
+    # Combine data from all chains for the current parameter
+    trace_data <- do.call(rbind, lapply(seq_len(n_chains), function(j) {
+      data.frame(
+        Chain = as.factor(j),
+        Iteration = seq_len(nrow(chains[[j]])),
+        Value = chains[[j]][, i]
+      )
+    }))
+
+    # Create Trace Plot
+    p_trace <- ggplot2::ggplot(trace_data,
+                               ggplot2::aes(x = .data$Iteration, y = .data$Value, color = .data$Chain)) +
+      ggplot2::geom_line(linewidth = 0.5) +
+      ggplot2::labs(title = paste("Trace Plot:", par_names[i]), x = "Iteration", y = "Value") +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        legend.position = "none",
+        panel.grid.minor = ggplot2::element_blank(),
+        panel.border = ggplot2::element_rect(color = "black", fill = NA)
+      )
+    plot_list <- c(plot_list, list(p_trace))
+
+    # Create Density Plot
+    p_density <- ggplot2::ggplot(trace_data, ggplot2::aes(x = .data$Value, color = .data$Chain)) +
+      ggplot2::geom_density(alpha = 0.3) +
+      ggplot2::labs(title = paste("Density Plot:", par_names[i]), x = "Value", y = "Density") +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        legend.position = "none",
+        panel.grid.minor = ggplot2::element_blank(),
+        panel.border = ggplot2::element_rect(color = "black", fill = NA)
+      )
+    plot_list <- c(plot_list, list(p_density))
+  }
+
+  # Arrange all plots into a grid
+  combined_plot <- gridExtra::grid.arrange(grobs = plot_list, ncol = 2)
+
+  # Optionally save the combined plot
+  if (save_plot) {
+    full_output_path <- file.path(output_dir, output_file)
+    ggsave_white_bg(full_output_path, combined_plot,
+                    width = width / dpi, height = height / dpi,
+                    dpi = dpi, limitsize = FALSE)
+  }
+
+  return(combined_plot)
+}
+
+
+#' Plot Embedding Quality
+#'
+#' @description
+#' Creates diagnostic plots for assessing embedding quality.
+#'
+#' @param true_dissim Matrix of input dissimilarities.
+#' @param est_dissim Matrix of estimated distances from embedding.
+#'
+#' @return A ggplot object with quality diagnostic plots.
+#'
+#' @importFrom ggplot2 ggplot aes geom_point geom_abline geom_density2d
+#'   labs theme_minimal stat_smooth
+#' @keywords internal
+plot_embedding_quality <- function(true_dissim, est_dissim) {
+  
+  # Get observed (non-NA, non-diagonal) pairs
+  mask <- !is.na(true_dissim) & row(true_dissim) != col(true_dissim)
+  
+  plot_data <- data.frame(
+    true_dist = as.vector(true_dissim[mask]),
+    est_dist = as.vector(est_dissim[mask])
+  )
+  
+  # Remove any character values (thresholds)
+  plot_data$true_dist <- suppressWarnings(as.numeric(as.character(plot_data$true_dist)))
+  plot_data <- plot_data[!is.na(plot_data$true_dist), ]
+  
+  p1 <- ggplot(plot_data, aes(x = .data$true_dist, y = .data$est_dist)) +
+    geom_point(alpha = 0.3, size = 1.5) +
+    geom_abline(slope = 1, intercept = 0, color = "red", 
+                linetype = "dashed", linewidth = 1) +
+    stat_smooth(method = "loess", color = "blue", se = FALSE) +
+    labs(
+      title = "Embedding Quality: Predicted vs True Distances",
+      subtitle = "Red line = perfect fit, Blue line = LOESS smooth",
+      x = "Input Dissimilarity",
+      y = "Estimated Euclidean Distance"
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 14, face = "bold"),
+      plot.subtitle = element_text(size = 10)
+    )
+  
+  # Residuals
+  plot_data$residual <- plot_data$est_dist - plot_data$true_dist
+  
+  p2 <- ggplot(plot_data, aes(x = .data$true_dist, y = .data$residual)) +
+    geom_point(alpha = 0.3, size = 1.5) +
+    geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+    stat_smooth(method = "loess", color = "blue", se = TRUE) +
+    labs(
+      title = "Residual Plot",
+      x = "Input Dissimilarity",
+      y = "Residual (Estimated - True)"
+    ) +
+    theme_minimal()
+  
+  p3 <- ggplot(plot_data, aes(x = .data$residual)) +
+    geom_density(fill = "steelblue", alpha = 0.5) +
+    labs(
+      title = "Distribution of Residuals",
+      x = "Residual",
+      y = "Density"
+    ) +
+    theme_minimal()
+  
+  gridExtra::grid.arrange(p1, p2, p3, ncol = 1, heights = c(2, 1, 1))
+}
+
+
 #' Check Multivariate Gaussian Convergence
 #'
 #' @description
@@ -102,7 +281,6 @@ check_gaussian_convergence <- function(data, window_size = 300, tolerance = 0.01
 }
 
 
-# Newed:
 #' Calculate MCMC-style Diagnostics for Sampling Chains
 #'
 #' @description
@@ -230,7 +408,6 @@ calculate_diagnostics <- function(chain_files, mutual_size=500) {
 }
 
 
-# Newed:
 #' Analyze Network Structure
 #'
 #' @description
@@ -297,3 +474,266 @@ analyze_network_structure <- function(dissimilarity_matrix) {
   ))
 }
 
+
+#' Plot Running Minimum Error to Show Sampling Convergence
+#'
+#' @description
+#' Creates a diagnostic plot showing how the best (minimum) NLL or MAE found improves
+#' over iterations and eventually plateaus. This is a standard way to demonstrate that
+#' sampling/optimization has converged in terms of the objective function.
+#'
+#' @param chain_files Character vector. Paths to CSV files containing sampling chains.
+#' @param metric Character. Which metric to plot: "NLL", "MAE", or "both". Default: "both"
+#' @param combine_chains Logical. If TRUE, combines all chains into one sequence.
+#'   If FALSE, plots each chain separately. Default: TRUE
+#' @param show_raw Logical. If TRUE, shows raw values as points behind the running minimum.
+#'   Default: TRUE
+#' @param window_size Integer. Window size for computing rolling mean (optional smoothing).
+#'   Set to NULL for no smoothing. Default: NULL
+#' @param output_file Character. Optional path to save the plot. Default: NULL
+#' @param width,height Numeric. Dimensions for saved plot. Default: 10, 6
+#' @param dpi Numeric. Resolution for saved plot. Default: 300
+#'
+#' @return A ggplot object showing the error plateau diagnostic.
+#'
+#' @details
+#' The "running minimum" (or cumulative minimum) shows the best value found so far
+#' at each iteration. When this line flattens out (plateaus), it indicates that
+#' the sampling has found the optimal region and additional samples are not
+#' improving the objective.
+#'
+#' This is distinct from:
+#' - Trace plots (which show parameter values, not objective function)
+#' - R-hat (which measures between-chain variance)
+#' - ESS (which measures autocorrelation)
+#'
+#' @examples
+#' \dontrun{
+#' # Basic usage
+#' chain_files <- c("chain1.csv", "chain2.csv", "chain3.csv")
+#' plot_performance_trace(chain_files)
+#'
+#' # Plot only NLL with separate chains
+#' plot_performance_trace(chain_files, metric = "NLL", combine_chains = FALSE)
+#'
+#' # Save the plot
+#' plot_performance_trace(chain_files, output_file = "fig/convergence_plateau.png")
+#' }
+#'
+#' @importFrom ggplot2 ggplot aes geom_point geom_line geom_step labs theme_minimal
+#'   scale_color_manual facet_wrap theme element_text ggsave
+#' @importFrom dplyr mutate group_by ungroup bind_rows
+#' @export
+plot_performance_trace <- function(chain_files,
+                                metric = "both",
+                                combine_chains = TRUE,
+                                show_raw = TRUE,
+                                window_size = NULL,
+                                output_file = NULL,
+                                width = 10,
+                                height = 6,
+                                dpi = 300) {
+  
+  # Validate inputs
+  if (!all(file.exists(chain_files))) {
+    missing <- chain_files[!file.exists(chain_files)]
+    stop("Missing chain files: ", paste(missing, collapse = ", "))
+  }
+  metric <- match.arg(metric, c("NLL", "MAE", "both"))
+  
+  # Read and combine chain data
+  all_data <- lapply(seq_along(chain_files), function(i) {
+    df <- utils::read.csv(chain_files[i])
+    df$chain <- paste0("Chain ", i)
+    df$sample_in_chain <- seq_len(nrow(df))
+    return(df)
+  })
+  
+  if (combine_chains) {
+    # Combine all chains sequentially
+    combined <- do.call(rbind, all_data)
+    combined$iteration <- seq_len(nrow(combined))
+    combined$chain <- "Combined"
+    plot_data <- combined
+  } else {
+    # Keep chains separate but add global iteration counter
+    plot_data <- do.call(rbind, all_data)
+    plot_data$iteration <- plot_data$sample_in_chain
+  }
+  
+  # Filter out invalid rows
+  plot_data <- plot_data[!is.na(plot_data$NLL) & !is.na(plot_data$Holdout_MAE) &
+                           is.finite(plot_data$NLL) & is.finite(plot_data$Holdout_MAE), ]
+  
+  # Calculate running minimum for each chain
+  plot_data <- do.call(rbind, lapply(split(plot_data, plot_data$chain), function(chain_df) {
+    chain_df <- chain_df[order(chain_df$iteration), ]
+    chain_df$running_min_NLL <- cummin(chain_df$NLL)
+    chain_df$running_min_MAE <- cummin(chain_df$Holdout_MAE)
+    
+    # Optional: rolling mean for smoothing
+    if (!is.null(window_size) && window_size > 1) {
+      n <- nrow(chain_df)
+      chain_df$rolling_mean_NLL <- zoo::rollmean(chain_df$NLL, k = window_size, 
+                                                   fill = NA, align = "right")
+      chain_df$rolling_mean_MAE <- zoo::rollmean(chain_df$Holdout_MAE, k = window_size, 
+                                                   fill = NA, align = "right")
+    }
+    return(chain_df)
+  }))
+  
+  # Prepare data for plotting
+  if (metric == "both") {
+    # Reshape data for faceting
+    plot_long <- rbind(
+      data.frame(
+        iteration = plot_data$iteration,
+        chain = plot_data$chain,
+        value = plot_data$NLL,
+        running_min = plot_data$running_min_NLL,
+        metric = "Log-Likelihood"
+      ),
+      data.frame(
+        iteration = plot_data$iteration,
+        chain = plot_data$chain,
+        value = plot_data$Holdout_MAE,
+        running_min = plot_data$running_min_MAE,
+        metric = "Mean Absolute Error (MAE)"
+      )
+    )
+    
+    p <- ggplot2::ggplot(plot_long, ggplot2::aes(x = iteration))
+    
+    if (show_raw) {
+      p <- p + ggplot2::geom_point(ggplot2::aes(y = value, color = chain), 
+                                    alpha = 0.3, size = 1)
+    }
+    
+    p <- p + 
+      ggplot2::geom_step(ggplot2::aes(y = running_min, color = chain), 
+                          linewidth = 1.2, direction = "hv") +
+      ggplot2::facet_wrap(~metric, scales = "free_y", ncol = 1) +
+      ggplot2::labs(
+        title = "Sampling Convergence: Running Minimum Error",
+        subtitle = "Plateau indicates optimal region has been found",
+        x = "Sample Iteration",
+        y = "Value",
+        color = "Chain"
+      ) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        plot.title = ggplot2::element_text(size = 14, face = "bold"),
+        plot.subtitle = ggplot2::element_text(size = 10, color = "gray40"),
+        strip.text = ggplot2::element_text(size = 11, face = "bold"),
+        panel.grid.minor = ggplot2::element_blank()
+      )
+    
+  } else {
+    # Single metric
+    value_col <- if (metric == "NLL") "NLL" else "Holdout_MAE"
+    running_min_col <- if (metric == "NLL") "running_min_NLL" else "running_min_MAE"
+    y_label <- if (metric == "NLL") "Negative Log-Likelihood" else "Mean Absolute Error"
+    
+    p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = iteration))
+    
+    if (show_raw) {
+      p <- p + ggplot2::geom_point(ggplot2::aes_string(y = value_col, color = "chain"), 
+                                    alpha = 0.3, size = 1)
+    }
+    
+    p <- p + 
+      ggplot2::geom_step(ggplot2::aes_string(y = running_min_col, color = "chain"), 
+                          linewidth = 1.2, direction = "hv") +
+      ggplot2::labs(
+        title = paste("Sampling Convergence: Running Minimum", metric),
+        subtitle = "Plateau indicates optimal region has been found",
+        x = "Sample Iteration",
+        y = y_label,
+        color = "Chain"
+      ) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        plot.title = ggplot2::element_text(size = 14, face = "bold"),
+        plot.subtitle = ggplot2::element_text(size = 10, color = "gray40"),
+        panel.grid.minor = ggplot2::element_blank()
+      )
+  }
+  
+  # Remove legend if only one chain
+  if (length(unique(plot_data$chain)) == 1) {
+    p <- p + ggplot2::theme(legend.position = "none")
+  }
+  
+  # Save if requested
+  if (!is.null(output_file)) {
+    ggplot2::ggsave(output_file, p, width = width, height = height, dpi = dpi, bg = "white")
+    message("Plot saved to: ", output_file)
+  }
+  
+  return(p)
+}
+
+
+#' Plot Log-Likelihood Improvement Over Iterations
+#'
+#' @description
+#' A visualization showing the improvement in log-likelihood 
+#' relative to the first sample, making it easy to see when gains diminish.
+#'
+#' @param chain_files Character vector. Paths to CSV files containing sampling chains.
+#' @param combine_chains Logical. If TRUE, combines all chains. Default: TRUE
+#'
+#' @return A ggplot object.
+#' @export
+plot_ll_improvement <- function(chain_files, combine_chains = TRUE) {
+  
+  # Read and combine chain data
+  all_data <- lapply(seq_along(chain_files), function(i) {
+    df <- utils::read.csv(chain_files[i])
+    df$chain <- paste0("Chain ", i)
+    df$sample_in_chain <- seq_len(nrow(df))
+    return(df)
+  })
+  
+  if (combine_chains) {
+    plot_data <- do.call(rbind, all_data)
+    plot_data$iteration <- seq_len(nrow(plot_data))
+    plot_data$chain <- "Combined"
+  } else {
+    plot_data <- do.call(rbind, all_data)
+    plot_data$iteration <- plot_data$sample_in_chain
+  }
+  
+  # Filter out invalid rows
+  plot_data <- plot_data[!is.na(plot_data$NLL) & is.finite(plot_data$NLL), ]
+  
+  # Calculate LL improvement (since we minimize NLL, improvement = reduction)
+  plot_data <- do.call(rbind, lapply(split(plot_data, plot_data$chain), function(chain_df) {
+    chain_df <- chain_df[order(chain_df$iteration), ]
+    initial_best <- chain_df$NLL[1]
+    chain_df$running_min_NLL <- cummin(chain_df$NLL)
+    chain_df$improvement <- initial_best - chain_df$running_min_NLL
+    return(chain_df)
+  }))
+  
+  p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = iteration, y = improvement, color = chain)) +
+    ggplot2::geom_step(linewidth = 1.2) +
+    ggplot2::labs(
+      title = "Cumulative NLL Improvement Over Sampling",
+      subtitle = "Flattening curve indicates convergence to optimal region",
+      x = "Sample Iteration",
+      y = "NLL Improvement (relative to initial best)",
+      color = "Chain"
+    ) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(size = 14, face = "bold"),
+      plot.subtitle = ggplot2::element_text(size = 10, color = "gray40")
+    )
+  
+  if (length(unique(plot_data$chain)) == 1) {
+    p <- p + ggplot2::theme(legend.position = "none")
+  }
+  
+  return(p)
+}

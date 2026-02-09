@@ -2186,116 +2186,6 @@ make_interactive <- function(plot, tooltip_vars = NULL) {
 }
 
 
-# Newed
-#' Create Diagnostic Plots for Multiple Sampling Chains
-#'
-#' @description
-#' Creates trace and density plots for multiple sampling or optimization chains to help
-#' assess convergence and mixing. It displays parameter trajectories and their
-#' distributions across all chains.
-#'
-#' @param chain_files A character vector of paths to CSV files, where each file contains data for one chain.
-#' @param mutual_size Integer. The number of samples to use from the end of each chain for plotting.
-#' @param output_file Character. The path for saving the plot. Required if `save_plot` is TRUE.
-#' @param output_dir Character. The directory for saving output files. Required if `save_plot` is TRUE.
-#' @param save_plot Logical. If TRUE, saves the plot to a file. Default: FALSE.
-#' @param width,height,dpi Numeric. The dimensions and resolution for the saved plot.
-#' @return A `ggplot` object of the combined plots.
-#' @examples
-#' # This example uses sample data files that would be included with the package.
-#' chain_files <- c(
-#'   system.file("extdata", "diag_chain1.csv", package = "topolow"),
-#'   system.file("extdata", "diag_chain2.csv", package = "topolow"),
-#'   system.file("extdata", "diag_chain3.csv", package = "topolow")
-#' )
-#'
-#' # Only run the example if the files are found
-#' if (all(nzchar(chain_files))) {
-#'   # Create diagnostic plot without saving to a file
-#'   plot_mcmc_diagnostics(chain_files, mutual_size = 50, save_plot = FALSE)
-#' }
-#'
-#' @export
-plot_mcmc_diagnostics <- function(chain_files,
-                                    mutual_size = 2000,
-                                    output_file = "diagnostic_plots.png",
-                                    output_dir,
-                                    save_plot = FALSE,
-                                    width = 3000, height = 3000, dpi = 300) {
-                                      # Check if gridextra is available
-  if (!requireNamespace("gridExtra", quietly = TRUE)) {
-    stop("gridExtra package is required for plotting. Please install with install.packages('gridExtra').")
-  }
-  if (save_plot && (missing(output_dir) || missing(output_file))) {
-    stop("`output_dir` and `output_file` must be provided when `save_plot` is TRUE.", call. = FALSE)
-  }
-
-  # Read and process chain data
-  par_names <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")
-  chains <- lapply(chain_files, function(file) {
-    df <- utils::read.csv(file)
-    # Take the last `mutual_size` samples
-    tail(df[, par_names], mutual_size)
-  })
-
-  n_params <- ncol(chains[[1]])
-  n_chains <- length(chains)
-
-  # Create a list to hold all the individual plots
-  plot_list <- list()
-
-  for (i in seq_len(n_params)) {
-    # Combine data from all chains for the current parameter
-    trace_data <- do.call(rbind, lapply(seq_len(n_chains), function(j) {
-      data.frame(
-        Chain = as.factor(j),
-        Iteration = seq_len(nrow(chains[[j]])),
-        Value = chains[[j]][, i]
-      )
-    }))
-
-    # Create Trace Plot
-    p_trace <- ggplot2::ggplot(trace_data,
-                               ggplot2::aes(x = .data$Iteration, y = .data$Value, color = .data$Chain)) +
-      ggplot2::geom_line(linewidth = 0.5) +
-      ggplot2::labs(title = paste("Trace Plot:", par_names[i]), x = "Iteration", y = "Value") +
-      ggplot2::theme_minimal() +
-      ggplot2::theme(
-        legend.position = "none",
-        panel.grid.minor = ggplot2::element_blank(),
-        panel.border = ggplot2::element_rect(color = "black", fill = NA)
-      )
-    plot_list <- c(plot_list, list(p_trace))
-
-    # Create Density Plot
-    p_density <- ggplot2::ggplot(trace_data, ggplot2::aes(x = .data$Value, color = .data$Chain)) +
-      ggplot2::geom_density(alpha = 0.3) +
-      ggplot2::labs(title = paste("Density Plot:", par_names[i]), x = "Value", y = "Density") +
-      ggplot2::theme_minimal() +
-      ggplot2::theme(
-        legend.position = "none",
-        panel.grid.minor = ggplot2::element_blank(),
-        panel.border = ggplot2::element_rect(color = "black", fill = NA)
-      )
-    plot_list <- c(plot_list, list(p_density))
-  }
-
-  # Arrange all plots into a grid
-  combined_plot <- gridExtra::grid.arrange(grobs = plot_list, ncol = 2)
-
-  # Optionally save the combined plot
-  if (save_plot) {
-    full_output_path <- file.path(output_dir, output_file)
-    ggsave_white_bg(full_output_path, combined_plot,
-                    width = width / dpi, height = height / dpi,
-                    dpi = dpi, limitsize = FALSE)
-  }
-
-  return(combined_plot)
-}
-
-
-# Newed
 #' Plot Method for topolow Convergence Diagnostics
 #'
 #' @description
@@ -2398,7 +2288,7 @@ print.topolow_convergence <- function(x, ...) {
   print(setNames(x$final_mean, x$param_names))
 }
 
-# Newed
+
 #' Plot Method for topolow parameter estimation Diagnostics
 #'
 #' @description
@@ -2426,6 +2316,7 @@ plot.topolow_diagnostics <- function(x,
                           save_plot = save_plot,
                           ...)
 }
+
 
 #' Print Method for topolow parameter estimation Diagnostics
 #'

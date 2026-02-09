@@ -2,8 +2,7 @@
 % Please edit documentation in R/diagnostics.R
 \name{check_gaussian_convergence}
 \alias{check_gaussian_convergence}
-\title{Model Diagnostics and Convergence Testing
-Check Multivariate Gaussian Convergence}
+\title{Check Multivariate Gaussian Convergence}
 \usage{
 check_gaussian_convergence(data, window_size = 300, tolerance = 0.01)
 }
