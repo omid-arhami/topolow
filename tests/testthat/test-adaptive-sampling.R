@@ -9,7 +9,7 @@ test_that("generate_kde_samples works correctly", {
     log_k0 = log(runif(50, 1, 5)),
     log_cooling_rate = log(runif(50, 0.01, 0.1)),
     log_c_repulsion = log(runif(50, 0.1, 1)),
-    NLL = runif(50, 20, 100)
+    Holdout_MAE = runif(50, 0.20, 10.0)
   )
 
   # Generate new samples
@@ -32,7 +32,8 @@ test_that("generate_kde_samples handles edge cases", {
     log_k0 = log(c(1, 2)),
     log_cooling_rate = log(c(0.01, 0.02)),
     log_c_repulsion = log(c(0.1, 0.2)),
-    NLL = c(50, 60)
+    NLL = c(50, 60),
+    Holdout_MAE = c(0.5, 0.67)
   )
 
   expect_no_error(new_samples <- generate_kde_samples(minimal_samples, n = 5))
@@ -84,7 +85,7 @@ test_that("calculate_weighted_marginals works correctly", {
     log_k0 = log(runif(50, 1, 5)),
     log_cooling_rate = log(runif(50, 0.01, 0.1)),
     log_c_repulsion = log(runif(50, 0.1, 1)),
-    NLL = runif(50, 20, 100)
+    Holdout_MAE = runif(50, 0.20, 10.0)
   )
 
   marginals <- calculate_weighted_marginals(test_samples)
@@ -121,12 +122,13 @@ test_that("calculate_weighted_marginals input validation", {
     log_k0 = log(runif(20, 1, 5)),
     log_cooling_rate = log(runif(20, 0.01, 0.1)),
     log_c_repulsion = log(runif(20, 0.1, 1)),
-    NLL = as.character(runif(20, 20, 100))  # Character instead of numeric
+    NLL = as.character(runif(20, 20, 100)),  # Character instead of numeric
+    Holdout_MAE = as.character(runif(20, 0.20, 10.0))  # Character instead of numeric
   )
 
   expect_error(
     calculate_weighted_marginals(invalid_samples),
-    "All required parameter and NLL columns must be numeric"
+    "All required parameter and Holdout_MAE columns must be numeric"
   )
 
   # Test with all infinite NLL values
@@ -135,7 +137,8 @@ test_that("calculate_weighted_marginals input validation", {
     log_k0 = log(runif(20, 1, 5)),
     log_cooling_rate = log(runif(20, 0.01, 0.1)),
     log_c_repulsion = log(runif(20, 0.1, 1)),
-    NLL = rep(Inf, 20)
+    NLL = rep(Inf, 20),
+    Holdout_MAE = runif(20, 0.20, 10.0)
   )
 
   expect_error(

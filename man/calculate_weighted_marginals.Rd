@@ -8,7 +8,7 @@ calculate_weighted_marginals(samples)
 }
 \arguments{
 \item{samples}{A data frame containing parameter samples (e.g., \code{log_N}, \code{log_k0})
-and a negative log-likelihood column named \code{NLL}.}
+and a holdout MAE column named \code{Holdout_MAE}.}
 }
 \value{
 A named list where each element is a density object (a list with \code{x}
@@ -23,6 +23,10 @@ identifying the most probable parameter values from a set of Monte Carlo samples
 }
 \details{
 This function uses the \code{weighted_kde} helper to perform kernel density
-estimation for each parameter, with weights derived from the normalized
-likelihoods of the samples.
+estimation for each parameter, with weights derived from \code{-log(MAE)}.
+Lower MAE (better fit) gives higher weight. Using log(MAE) instead of NLL
+ensures weights are comparable across evaluations with different numbers
+of validation points (e.g., different subsamples or CV configurations).
+When the number of validation points is constant, this produces identical
+weights to the previous NLL-based scheme.
 }

@@ -47,7 +47,7 @@ data forms a connected graph. Default: NULL (use full data).
 
 \strong{Important Notes:}
 \itemize{
-\item If connectivity cannot be achieved, sample size is adaptively increased
+\item If connectivity cannot be achieved, another subsample will be attempted up to a maximum number of attempts.
 \item Each parallel job uses a different subsample
 \item Recommended: use same value as in \code{initial_parameter_optimization}
 \item The actual subsample size used is reported in output columns

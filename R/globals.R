@@ -5,5 +5,7 @@ utils::globalVariables(c(
   "X", "X.1", "cluster", "color", "count", "distance", "euclidean_dist",
   "mag", "max_value", "n", "name", "processed_value", "sample1", "sample2",
   "season", "season_num", "total_count", "year", "final_value", 
-  "True_dissimilarity", "Pred_for_observed"
+  "True_dissimilarity", "Pred_for_observed",
+  # New variables added to silence R CMD check notes:
+  "chain", "improvement", "iteration", "running_min", "value"
 ))

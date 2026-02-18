@@ -64,7 +64,7 @@
 #'
 #'   **Notes:**
 #'   \itemize{
-#'     \item If connectivity cannot be achieved, sample size is adaptively increased
+#'     \item If connectivity cannot be achieved, another random sample is attempted up to `max_attempts` times (default: 5). 
 #'     \item Minimum recommended: \code{opt_subsample >= max(100, folds)}
 #'     \item Each parameter set gets a different subsample, but all CV folds within
 #'       that parameter set use the same subsample
@@ -840,16 +840,16 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
     # RANGE UPDATE LOGIC (If not final epoch)
     # ==========================================================================
     if (epoch < epochs) {
-      # Sort by NLL
-      epoch_df_sorted <- epoch_df[order(epoch_df$NLL), ]
+      # Sort by MAE (lower = better; invariant to subsample size unlike NLL)
+      epoch_df_sorted <- epoch_df[order(epoch_df$Holdout_MAE), ]
       
       # Keep top half
       n_keep <- max(1, floor(nrow(epoch_df_sorted) / 2))
       survivors <- epoch_df_sorted[1:n_keep, ]
       
       if (verbose) {
-        cat(sprintf("\nEpoch %d summary: Best NLL = %.2f. Keeping %d survivors to refine ranges.\n", 
-                    epoch, min(survivors$NLL), n_keep))
+        cat(sprintf("\nEpoch %d summary: Best MAE = %.4f. Keeping %d survivors to refine ranges.\n", 
+                    epoch, min(survivors$Holdout_MAE), n_keep))
       }
       
       # Update ranges: 25% below min of survivors, 25% above max of survivors
@@ -978,7 +978,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
 #'
 #'   **Important Notes:**
 #'   \itemize{
-#'     \item If connectivity cannot be achieved, sample size is adaptively increased
+#'     \item If connectivity cannot be achieved, another subsample will be attempted up to a maximum number of attempts.
 #'     \item Each parallel job uses a different subsample
 #'     \item Recommended: use same value as in \code{initial_parameter_optimization}
 #'     \item The actual subsample size used is reported in output columns
@@ -1102,7 +1102,7 @@ run_adaptive_sampling <- function(initial_samples_file,
   
   # Read and validate initial samples
   init <- read.csv(initial_samples_file, stringsAsFactors = FALSE)
-  req <- c(par_names, "NLL")
+  req <- c(par_names, "NLL", "Holdout_MAE")
   if (!all(req %in% names(init))) {
     stop("Missing columns in initial samples: ",
          paste(setdiff(req, names(init)), collapse = ", "))
@@ -1149,12 +1149,18 @@ run_adaptive_sampling <- function(initial_samples_file,
   # PARALLEL PROCESSING SETUP (using future package)
   # ==========================================================================
   
-  available_cores <- future::availableCores() - 4 # Leave some cores free
+  # FIX: Safer core calculation logic
+  total_system_cores <- future::availableCores()
+  
   if (is.null(max_cores)) {
-    max_cores <- max(1, available_cores)
+    # Auto-mode: Try to leave 4 cores free, but ensure at least 1 is used
+    max_cores <- max(1, total_system_cores - 4)
   } else {
-    max_cores <- min(max_cores, available_cores)
+    # User-specified: Cap at system limit, don't enforce arbitrary buffer
+    max_cores <- min(max_cores, total_system_cores)
   }
+  # Final safety check to ensure positive integer
+  max_cores <- max(1, as.integer(max_cores))
   num_parallel_jobs <- max_cores
   
   # iterations = num_samples per job (following original naming)
@@ -1598,7 +1604,7 @@ adaptive_MC_sampling <- function(samples_file,
     })
     
     # Validate required columns
-    required_cols <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion", "NLL")
+    required_cols <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion", "NLL", "Holdout_MAE")
     if (!all(required_cols %in% names(samples))) {
       stop("Samples file missing required columns: ",
            paste(setdiff(required_cols, names(samples)), collapse = ", "))
@@ -1782,7 +1788,7 @@ adaptive_MC_sampling <- function(samples_file,
 #' for each parameter independently. This is an internal helper function for the
 #' adaptive sampling process.
 #'
-#' @param samples A data frame of previous samples containing parameter columns and an "NLL" column.
+#' @param samples A data frame of previous samples containing parameter columns and a "Holdout_MAE" column.
 #' @param n The integer number of new samples to generate.
 #' @param epsilon A numeric probability (0-1) of sampling with a wider bandwidth to
 #'   encourage exploration. Default is 0.
@@ -1792,20 +1798,28 @@ adaptive_MC_sampling <- function(samples_file,
 #' @keywords internal
 #' @importFrom stats na.omit runif bw.nrd0 approx
 generate_kde_samples <- function(samples, n, epsilon = 0) {
+  # Validate MAE column exists
+  if (!"Holdout_MAE" %in% names(samples)) {
+    stop("Samples data frame must contain a 'Holdout_MAE' column.")
+  }
+
   # First, remove outliers from the input samples to stabilize the KDE
   samples <- as.data.frame(lapply(samples, clean_data, k = 3))
   samples <- na.omit(samples)
+
+  # Remove non-positive MAE values (needed for log)
+  samples <- samples[samples$Holdout_MAE > 0, ]
 
   # Check if we have enough samples after cleaning
   if (nrow(samples) < 2) {
     stop("Insufficient samples remaining after removing NA & outliers (need at least 2)")
   }
 
-  # Calculate importance weights from the Negative Log-Likelihood (NLL)
-  log_likes <- -samples$NLL
-  # Shift log-likelihoods to be positive for stability
-  std_log_likes <- log_likes - min(log_likes) + 0.05
-  weights <- std_log_likes / sum(std_log_likes)
+  # Calculate importance weights from MAE (lower MAE = better = higher weight)
+  neg_log_mae <- -log(samples$Holdout_MAE)
+  # Shift to be positive for stability
+  std_neg_log_mae <- neg_log_mae - min(neg_log_mae) + 0.05
+  weights <- std_neg_log_mae / sum(std_neg_log_mae)
 
    # Check for NA weights
   if (any(is.na(weights))) {
@@ -2404,7 +2418,7 @@ print.parameter_sensitivity <- function(x, ...) {
 #' identifying the most probable parameter values from a set of Monte Carlo samples.
 #'
 #' @param samples A data frame containing parameter samples (e.g., `log_N`, `log_k0`)
-#'   and a negative log-likelihood column named `NLL`.
+#'   and a holdout MAE column named `Holdout_MAE`.
 #'
 #' @return A named list where each element is a density object (a list with `x`
 #'   and `y` components) corresponding to a model parameter.
@@ -2413,14 +2427,18 @@ print.parameter_sensitivity <- function(x, ...) {
 #'
 #' @details
 #' This function uses the `weighted_kde` helper to perform kernel density
-#' estimation for each parameter, with weights derived from the normalized
-#' likelihoods of the samples.
+#' estimation for each parameter, with weights derived from `-log(MAE)`.
+#' Lower MAE (better fit) gives higher weight. Using log(MAE) instead of NLL
+#' ensures weights are comparable across evaluations with different numbers
+#' of validation points (e.g., different subsamples or CV configurations).
+#' When the number of validation points is constant, this produces identical
+#' weights to the previous NLL-based scheme.
 #'
 #' @importFrom stats na.omit
 #' @export
 calculate_weighted_marginals <- function(samples) {
   # --- Input Validation ---
-  required_cols <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion", "NLL")
+  required_cols <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion", "Holdout_MAE")
   if (!all(required_cols %in% names(samples))) {
     stop("Missing required columns: ",
          paste(setdiff(required_cols, names(samples)), collapse = ", "))
@@ -2428,15 +2446,19 @@ calculate_weighted_marginals <- function(samples) {
 
   # Ensure required columns are numeric
   if (!all(sapply(samples[required_cols], is.numeric))) {
-    stop("All required parameter and NLL columns must be numeric.")
+    stop("All required parameter and Holdout_MAE columns must be numeric.")
   }
-  # Validate NLL values
-  if (all(is.infinite(samples$NLL))) {
-    stop("All NLL values are infinite")
+  # Validate MAE values
+  if (all(is.infinite(samples$Holdout_MAE))) {
+    stop("All Holdout_MAE values are infinite")
   }
-  if (any(is.na(samples$NLL))) {
-    warning("NA values in the NLL column will be removed.")
-    samples <- samples[!is.na(samples$NLL), ]
+  if (any(is.na(samples$Holdout_MAE))) {
+    warning("NA values in the Holdout_MAE column will be removed.")
+    samples <- samples[!is.na(samples$Holdout_MAE), ]
+  }
+  if (any(samples$Holdout_MAE <= 0, na.rm = TRUE)) {
+    warning("Non-positive MAE values found and will be removed.")
+    samples <- samples[samples$Holdout_MAE > 0, ]
   }
 
   if (nrow(samples) < 2) {
@@ -2448,11 +2470,16 @@ calculate_weighted_marginals <- function(samples) {
   samples <- as.data.frame(lapply(samples, clean_data, k = 3))
   samples <- na.omit(samples)
 
-  # Calculate importance weights from log-likelihoods
-  log_likelihoods <- -samples$NLL
+  # Calculate importance weights from MAE (lower MAE = better = higher weight).
+  # Using -log(MAE) produces identical weights to the previous -NLL scheme when
+  # the number of validation points (n) is constant across samples, because
+  # NLL = n*(1 + log(2*MAE)) and the n factor cancels during normalization.
+  # Unlike NLL, -log(MAE) is invariant to n, making weights comparable across
+  # different subsamples and CV configurations.
+  neg_log_mae <- -log(samples$Holdout_MAE)
   # Shift to be positive and normalize
-  std_log_likelihoods <- log_likelihoods - min(log_likelihoods, na.rm = TRUE) + 0.05
-  weights <- std_log_likelihoods / sum(std_log_likelihoods, na.rm = TRUE)
+  std_neg_log_mae <- neg_log_mae - min(neg_log_mae, na.rm = TRUE) + 0.05
+  weights <- std_neg_log_mae / sum(std_neg_log_mae, na.rm = TRUE)
 
   # Define the parameter columns to process
   vars <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")

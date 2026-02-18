@@ -66,7 +66,7 @@ subsample for robustness. Default: NULL (use full data).
 
 \strong{Notes:}
 \itemize{
-\item If connectivity cannot be achieved, sample size is adaptively increased
+\item If connectivity cannot be achieved, another random sample is attempted up to \code{max_attempts} times (default: 5).
 \item Minimum recommended: \code{opt_subsample >= max(100, folds)}
 \item Each parameter set gets a different subsample, but all CV folds within
 that parameter set use the same subsample

@@ -7,7 +7,7 @@
 generate_kde_samples(samples, n, epsilon = 0)
 }
 \arguments{
-\item{samples}{A data frame of previous samples containing parameter columns and an "NLL" column.}
+\item{samples}{A data frame of previous samples containing parameter columns and a "Holdout_MAE" column.}
 
 \item{n}{The integer number of new samples to generate.}
 
