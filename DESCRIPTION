@@ -35,6 +35,7 @@ Imports:
     igraph,
     methods,
     Matrix,
+    zoo,
     Rcpp (>= 1.0.0)
 LinkingTo: 
     Rcpp,

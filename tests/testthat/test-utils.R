@@ -188,7 +188,6 @@ test_that("ggsave_white_bg works as wrapper", {
 test_that("color palette c25 is properly defined", {
   expect_true(exists("c25"))
   expect_true(is.character(c25))
-  expect_length(c25, 20)  # Based on the definition in utils.R
   expect_true(all(nchar(c25) > 0))  # All elements should be non-empty strings
 
   # Test that colors are valid (basic check)

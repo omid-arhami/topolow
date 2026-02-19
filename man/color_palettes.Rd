@@ -6,7 +6,7 @@
 \alias{c25}
 \title{Color Palettes}
 \format{
-An object of class \code{character} of length 20.
+An object of class \code{character} of length 25.
 }
 \usage{
 c25

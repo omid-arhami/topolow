@@ -1318,13 +1318,13 @@ plot_cluster_mapping <- function(df_coords, ndim,
   }
   
   n_clusters <- length(cluster_levels)
-  colors <- aesthetic_config$color_palette[1:min(n_clusters, length(aesthetic_config$color_palette))]
-  names(colors) <- cluster_levels
-  
   if (n_clusters > length(aesthetic_config$color_palette)) {
     warning("More clusters than available colors. Colors will be recycled.")
     colors <- rep_len(aesthetic_config$color_palette, n_clusters)
+  } else {
+    colors <- aesthetic_config$color_palette[1:n_clusters]
   }
+  names(colors) <- cluster_levels
   
   reduced_df$cluster <- factor(reduced_df$cluster, levels = cluster_levels)
   
@@ -1944,13 +1944,12 @@ plot_3d_mapping <- function(df, ndim,
   if("cluster" %in% names(reduced_df)) {
     n_clusters <- length(unique(reduced_df$cluster))
     
-    # Use the color palette directly from the aesthetic config, truncating if necessary.
-    colors <- aesthetic_config$color_palette[1:min(n_clusters, length(aesthetic_config$color_palette))]
-    
-    # Handle cases with more clusters than colors by recycling
-    if (n_clusters > length(colors)) {
+    # Use the color palette, recycling if more clusters than colors
+    if (n_clusters > length(aesthetic_config$color_palette)) {
         warning("More clusters than available colors. Colors will be recycled.")
-        colors <- rep_len(colors, n_clusters)
+        colors <- rep_len(aesthetic_config$color_palette, n_clusters)
+    } else {
+        colors <- aesthetic_config$color_palette[1:n_clusters]
     }
     point_colors <- colors[as.numeric(factor(reduced_df$cluster))]
   } else if("year" %in% names(reduced_df)) {

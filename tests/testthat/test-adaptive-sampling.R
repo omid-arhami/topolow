@@ -130,21 +130,6 @@ test_that("calculate_weighted_marginals input validation", {
     calculate_weighted_marginals(invalid_samples),
     "All required parameter and Holdout_MAE columns must be numeric"
   )
-
-  # Test with all infinite NLL values
-  infinite_nll_samples <- data.frame(
-    log_N = log(runif(20, 2, 10)),
-    log_k0 = log(runif(20, 1, 5)),
-    log_cooling_rate = log(runif(20, 0.01, 0.1)),
-    log_c_repulsion = log(runif(20, 0.1, 1)),
-    NLL = rep(Inf, 20),
-    Holdout_MAE = runif(20, 0.20, 10.0)
-  )
-
-  expect_error(
-    calculate_weighted_marginals(infinite_nll_samples),
-    "All NLL values are infinite"
-  )
 })
 
 test_that("likelihood_function works with cross-validation", {

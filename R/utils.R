@@ -646,5 +646,6 @@ c25 <- c(
   "purple", "green1", "blue1", "gold1", "red",
   "darkturquoise", "darkorange", "skyblue2", "green4", "maroon",
   "yellow3", "gray40", "hotpink", "darkorange4", "deeppink1",
-  "khaki2", "palegreen2", "dodgerblue2", "brown", "orchid1"
+  "khaki2", "palegreen2", "dodgerblue2", "brown", "orchid1",
+  "navyblue", "olivedrab", "salmon", "mediumpurple", "cyan3"
 )
