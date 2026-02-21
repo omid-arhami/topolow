@@ -656,7 +656,7 @@ plot_performance_trace <- function(chain_files,
           chain = plot_data$chain,
           value = plot_data$NLL,
           running_min = plot_data$running_min_NLL,
-          metric = "Log-Likelihood"
+          metric = "Negative Log-Likelihood"
         ),
         data.frame(
           iteration = plot_data$iteration_mae,
@@ -674,7 +674,7 @@ plot_performance_trace <- function(chain_files,
           chain = plot_data$chain,
           value = plot_data$NLL,
           running_min = plot_data$running_min_NLL,
-          metric = "Log-Likelihood"
+          metric = "Negative Log-Likelihood"
         ),
         data.frame(
           iteration = plot_data$iteration,
