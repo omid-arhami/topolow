@@ -8,6 +8,7 @@ plot_performance_trace(
   chain_files,
   metric = "both",
   combine_chains = TRUE,
+  sort_combined = TRUE,
   show_raw = TRUE,
   window_size = NULL,
   output_file = NULL,
@@ -23,6 +24,12 @@ plot_performance_trace(
 
 \item{combine_chains}{Logical. If TRUE, combines all chains into one sequence.
 If FALSE, plots each chain separately. Default: TRUE}
+
+\item{sort_combined}{Logical. If TRUE and \code{combine_chains} is TRUE, sorts combined
+samples from worst to best for each metric independently before computing the
+running minimum. This produces a smooth monotonic improvement curve that is not
+biased by chain ordering. If FALSE, chains are concatenated sequentially (original
+behavior). Default: TRUE}
 
 \item{show_raw}{Logical. If TRUE, shows raw values as points behind the running minimum.
 Default: TRUE}
@@ -50,6 +57,14 @@ at each iteration. When this line flattens out (plateaus), it indicates that
 the sampling has found the optimal region and additional samples are not
 improving the objective.
 
+When \code{combine_chains = TRUE} and \code{sort_combined = TRUE}, samples from all chains
+are sorted from worst (highest) to best (lowest) independently for each metric
+before computing the running minimum. This avoids the problem where the first
+chain in the list dominates the visual, and produces a smooth improvement curve
+showing how quality improves across the full pool of samples. Each metric facet
+has its own sort order, so the NLL panel sorts by NLL and the MAE panel sorts
+by MAE.
+
 This is distinct from:
 \itemize{
 \item Trace plots (which show parameter values, not objective function)
@@ -59,9 +74,12 @@ This is distinct from:
 }
 \examples{
 \dontrun{
-# Basic usage
+# Basic usage (sorted by default)
 chain_files <- c("chain1.csv", "chain2.csv", "chain3.csv")
 plot_performance_trace(chain_files)
+
+# Original sequential concatenation behavior
+plot_performance_trace(chain_files, sort_combined = FALSE)
 
 # Plot only NLL with separate chains
 plot_performance_trace(chain_files, metric = "NLL", combine_chains = FALSE)

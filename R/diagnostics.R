@@ -486,6 +486,11 @@ analyze_network_structure <- function(dissimilarity_matrix) {
 #' @param metric Character. Which metric to plot: "NLL", "MAE", or "both". Default: "both"
 #' @param combine_chains Logical. If TRUE, combines all chains into one sequence.
 #'   If FALSE, plots each chain separately. Default: TRUE
+#' @param sort_combined Logical. If TRUE and `combine_chains` is TRUE, sorts combined
+#'   samples from worst to best for each metric independently before computing the
+#'   running minimum. This produces a smooth monotonic improvement curve that is not
+#'   biased by chain ordering. If FALSE, chains are concatenated sequentially (original
+#'   behavior). Default: TRUE
 #' @param show_raw Logical. If TRUE, shows raw values as points behind the running minimum.
 #'   Default: TRUE
 #' @param window_size Integer. Window size for computing rolling mean (optional smoothing).
@@ -502,6 +507,14 @@ analyze_network_structure <- function(dissimilarity_matrix) {
 #' the sampling has found the optimal region and additional samples are not
 #' improving the objective.
 #'
+#' When `combine_chains = TRUE` and `sort_combined = TRUE`, samples from all chains
+#' are sorted from worst (highest) to best (lowest) independently for each metric
+#' before computing the running minimum. This avoids the problem where the first
+#' chain in the list dominates the visual, and produces a smooth improvement curve
+#' showing how quality improves across the full pool of samples. Each metric facet
+#' has its own sort order, so the NLL panel sorts by NLL and the MAE panel sorts
+#' by MAE.
+#'
 #' This is distinct from:
 #' - Trace plots (which show parameter values, not objective function)
 #' - R-hat (which measures between-chain variance)
@@ -509,9 +522,12 @@ analyze_network_structure <- function(dissimilarity_matrix) {
 #'
 #' @examples
 #' \dontrun{
-#' # Basic usage
+#' # Basic usage (sorted by default)
 #' chain_files <- c("chain1.csv", "chain2.csv", "chain3.csv")
 #' plot_performance_trace(chain_files)
+#'
+#' # Original sequential concatenation behavior
+#' plot_performance_trace(chain_files, sort_combined = FALSE)
 #'
 #' # Plot only NLL with separate chains
 #' plot_performance_trace(chain_files, metric = "NLL", combine_chains = FALSE)
@@ -527,6 +543,7 @@ analyze_network_structure <- function(dissimilarity_matrix) {
 plot_performance_trace <- function(chain_files,
                                 metric = "both",
                                 combine_chains = TRUE,
+                                sort_combined = TRUE,
                                 show_raw = TRUE,
                                 window_size = NULL,
                                 output_file = NULL,
@@ -550,11 +567,56 @@ plot_performance_trace <- function(chain_files,
   })
   
   if (combine_chains) {
-    # Combine all chains sequentially
     combined <- do.call(rbind, all_data)
-    combined$iteration <- seq_len(nrow(combined))
     combined$chain <- "Combined"
-    plot_data <- combined
+    
+    if (sort_combined) {
+      # Sort independently per metric for a smooth improvement curve
+      # ----------------------------------------------------------
+      # NLL: sort worst (highest) to best (lowest)
+      nll_order <- order(-combined$NLL)
+      combined$iteration_nll <- NA_integer_
+      combined$iteration_nll[nll_order] <- seq_len(nrow(combined))
+      
+      # MAE: sort worst (highest) to best (lowest)
+      mae_order <- order(-combined$Holdout_MAE)
+      combined$iteration_mae <- NA_integer_
+      combined$iteration_mae[mae_order] <- seq_len(nrow(combined))
+      
+      # Compute running minimums along the sorted orders
+      combined$running_min_NLL <- NA_real_
+      combined$running_min_NLL[nll_order] <- cummin(combined$NLL[nll_order])
+      
+      combined$running_min_MAE <- NA_real_
+      combined$running_min_MAE[mae_order] <- cummin(combined$Holdout_MAE[mae_order])
+      
+      # Optional: rolling mean along sorted orders
+      if (!is.null(window_size) && window_size > 1) {
+        combined$rolling_mean_NLL <- NA_real_
+        combined$rolling_mean_NLL[nll_order] <- zoo::rollmean(
+          combined$NLL[nll_order], k = window_size, fill = NA, align = "right")
+        
+        combined$rolling_mean_MAE <- NA_real_
+        combined$rolling_mean_MAE[mae_order] <- zoo::rollmean(
+          combined$Holdout_MAE[mae_order], k = window_size, fill = NA, align = "right")
+      }
+      
+      # For single-metric mode, set a default iteration column
+      if (metric == "NLL") {
+        combined$iteration <- combined$iteration_nll
+      } else if (metric == "MAE") {
+        combined$iteration <- combined$iteration_mae
+      }
+      # For "both", iteration_nll and iteration_mae are used directly below
+      
+      plot_data <- combined
+      
+    } else {
+      # Original behavior: sequential concatenation
+      combined$iteration <- seq_len(nrow(combined))
+      plot_data <- combined
+    }
+    
   } else {
     # Keep chains separate but add global iteration counter
     plot_data <- do.call(rbind, all_data)
@@ -565,42 +627,64 @@ plot_performance_trace <- function(chain_files,
   plot_data <- plot_data[!is.na(plot_data$NLL) & !is.na(plot_data$Holdout_MAE) &
                            is.finite(plot_data$NLL) & is.finite(plot_data$Holdout_MAE), ]
   
-  # Calculate running minimum for each chain
-  plot_data <- do.call(rbind, lapply(split(plot_data, plot_data$chain), function(chain_df) {
-    chain_df <- chain_df[order(chain_df$iteration), ]
-    chain_df$running_min_NLL <- cummin(chain_df$NLL)
-    chain_df$running_min_MAE <- cummin(chain_df$Holdout_MAE)
-    
-    # Optional: rolling mean for smoothing
-    if (!is.null(window_size) && window_size > 1) {
-      n <- nrow(chain_df)
-      chain_df$rolling_mean_NLL <- zoo::rollmean(chain_df$NLL, k = window_size, 
-                                                   fill = NA, align = "right")
-      chain_df$rolling_mean_MAE <- zoo::rollmean(chain_df$Holdout_MAE, k = window_size, 
-                                                   fill = NA, align = "right")
-    }
-    return(chain_df)
-  }))
+  # Calculate running minimum for each chain (non-sorted path)
+  if (!(combine_chains && sort_combined)) {
+    plot_data <- do.call(rbind, lapply(split(plot_data, plot_data$chain), function(chain_df) {
+      chain_df <- chain_df[order(chain_df$iteration), ]
+      chain_df$running_min_NLL <- cummin(chain_df$NLL)
+      chain_df$running_min_MAE <- cummin(chain_df$Holdout_MAE)
+      
+      # Optional: rolling mean for smoothing
+      if (!is.null(window_size) && window_size > 1) {
+        chain_df$rolling_mean_NLL <- zoo::rollmean(chain_df$NLL, k = window_size, 
+                                                     fill = NA, align = "right")
+        chain_df$rolling_mean_MAE <- zoo::rollmean(chain_df$Holdout_MAE, k = window_size, 
+                                                     fill = NA, align = "right")
+      }
+      return(chain_df)
+    }))
+  }
   
   # Prepare data for plotting
   if (metric == "both") {
-    # Reshape data for faceting
-    plot_long <- rbind(
-      data.frame(
-        iteration = plot_data$iteration,
-        chain = plot_data$chain,
-        value = plot_data$NLL,
-        running_min = plot_data$running_min_NLL,
-        metric = "Log-Likelihood"
-      ),
-      data.frame(
-        iteration = plot_data$iteration,
-        chain = plot_data$chain,
-        value = plot_data$Holdout_MAE,
-        running_min = plot_data$running_min_MAE,
-        metric = "Mean Absolute Error (MAE)"
+    
+    if (combine_chains && sort_combined) {
+      # Each metric gets its own iteration axis (sorted independently)
+      plot_long <- rbind(
+        data.frame(
+          iteration = plot_data$iteration_nll,
+          chain = plot_data$chain,
+          value = plot_data$NLL,
+          running_min = plot_data$running_min_NLL,
+          metric = "Log-Likelihood"
+        ),
+        data.frame(
+          iteration = plot_data$iteration_mae,
+          chain = plot_data$chain,
+          value = plot_data$Holdout_MAE,
+          running_min = plot_data$running_min_MAE,
+          metric = "Mean Absolute Error (MAE)"
+        )
       )
-    )
+    } else {
+      # Shared iteration axis (original behavior)
+      plot_long <- rbind(
+        data.frame(
+          iteration = plot_data$iteration,
+          chain = plot_data$chain,
+          value = plot_data$NLL,
+          running_min = plot_data$running_min_NLL,
+          metric = "Log-Likelihood"
+        ),
+        data.frame(
+          iteration = plot_data$iteration,
+          chain = plot_data$chain,
+          value = plot_data$Holdout_MAE,
+          running_min = plot_data$running_min_MAE,
+          metric = "Mean Absolute Error (MAE)"
+        )
+      )
+    }
     
     p <- ggplot2::ggplot(plot_long, ggplot2::aes(x = iteration))
     
@@ -609,14 +693,20 @@ plot_performance_trace <- function(chain_files,
                                     alpha = 0.3, size = 1)
     }
     
+    subtitle_text <- if (combine_chains && sort_combined) {
+      "Samples sorted worst-to-best per metric; plateau indicates optimal region"
+    } else {
+      "Plateau indicates optimal region has been found"
+    }
+    
     p <- p + 
       ggplot2::geom_step(ggplot2::aes(y = running_min, color = chain), 
                           linewidth = 1.2, direction = "hv") +
-      ggplot2::facet_wrap(~metric, scales = "free_y", ncol = 1) +
+      ggplot2::facet_wrap(~metric, scales = "free", ncol = 1) +
       ggplot2::labs(
-        title = "Sampling Convergence: Running Minimum Error",
-        subtitle = "Plateau indicates optimal region has been found",
-        x = "Sample Iteration",
+        title = "Sampling Performance: Running Minimum Error",
+        subtitle = subtitle_text,
+        x = "Sample (sorted by metric)",
         y = "Value",
         color = "Chain"
       ) +
@@ -641,13 +731,19 @@ plot_performance_trace <- function(chain_files,
                                     alpha = 0.3, size = 1)
     }
     
+    subtitle_text <- if (combine_chains && sort_combined) {
+      "Samples sorted worst-to-best; plateau indicates optimal region"
+    } else {
+      "Plateau indicates optimal region has been found"
+    }
+    
     p <- p + 
       ggplot2::geom_step(ggplot2::aes_string(y = running_min_col, color = "chain"), 
                           linewidth = 1.2, direction = "hv") +
       ggplot2::labs(
-        title = paste("Sampling Convergence: Running Minimum", metric),
-        subtitle = "Plateau indicates optimal region has been found",
-        x = "Sample Iteration",
+        title = paste("Sampling Performance: Running Minimum", metric),
+        subtitle = subtitle_text,
+        x = "Sample (sorted by metric)",
         y = y_label,
         color = "Chain"
       ) +
