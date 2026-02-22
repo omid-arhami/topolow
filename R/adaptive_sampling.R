@@ -578,7 +578,9 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
           cooling_rate = cooling_rate,
           c_repulsion = c_repulsion,
           Holdout_MAE = result$Holdout_MAE,
-          NLL = result$NLL
+          NLL = result$NLL,
+          mean_iter = result$mean_iter,
+          pct_converged = result$pct_converged
         )
         
         # Add subsampling metadata if used
@@ -588,8 +590,8 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
         }
         
         if (verbose) {
-          cat(sprintf("  [OK] MAE: %.4f, NLL: %.2f\n",
-                      result$Holdout_MAE, result$NLL))
+          cat(sprintf("  [OK] MAE: %.4f, NLL: %.2f, mean_iter: %.0f, converged: %.0f%%\n",
+            result$Holdout_MAE, result$NLL, result$mean_iter, result$pct_converged))
         }
         
         return(list(
@@ -911,7 +913,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
   
   # Reorder columns: log-transformed params first, then MAE, NLL, then metadata
   base_cols <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion",
-                 "Holdout_MAE", "NLL")
+                 "Holdout_MAE", "NLL", "mean_iter", "pct_converged")
   metadata_cols <- setdiff(names(final_df), c(base_cols, params_to_transform))
   final_df <- final_df[, c(base_cols, metadata_cols)]
   
@@ -1700,8 +1702,8 @@ adaptive_MC_sampling <- function(samples_file,
     }
     
     if (verbose) {
-      cat(sprintf("  [OK] MAE: %.4f, NLL: %.2f\n",
-                  result$Holdout_MAE, result$NLL))
+      cat(sprintf("  [OK] MAE: %.4f, NLL: %.2f, mean_iter: %.0f, converged: %.0f%%\n",
+            result$Holdout_MAE, result$NLL, result$mean_iter, result$pct_converged))
     }
     
     # ========================================================================
@@ -1715,7 +1717,9 @@ adaptive_MC_sampling <- function(samples_file,
       log_cooling_rate = log_cooling_rate_new,
       log_c_repulsion = log_c_repulsion_new,
       Holdout_MAE = result$Holdout_MAE,
-      NLL = result$NLL
+      NLL = result$NLL,
+      mean_iter = result$mean_iter,
+      pct_converged = result$pct_converged
     )
     
     # Add subsampling metadata if used
@@ -2609,6 +2613,8 @@ likelihood_function <- function(dissimilarity_matrix, mapping_max_iter,
 
       # Use the topolow return object 'est_distances'
       p_dist_mat <- as.matrix(res_train$est_distances)
+      fold_iter <- res_train$iter
+      fold_converged <- res_train$convergence$achieved
 
       # Calculate errors on the holdout set
       errors <- error_calculator_comparison(p_dist_mat, truth_matrix, input_matrix)
@@ -2625,14 +2631,18 @@ likelihood_function <- function(dissimilarity_matrix, mapping_max_iter,
       data.frame(
         Holdout_MAE = mae_holdout,
         n_samples = n_samples,
-        sum_abs_errors = sum_abs_errors
+        sum_abs_errors = sum_abs_errors,
+        iter = fold_iter,
+        converged = as.integer(fold_converged)
       )
     }, error = function(e) {
       # Return NA result on error
       data.frame(
         Holdout_MAE = NA,
         n_samples = 0,
-        sum_abs_errors = 0
+        sum_abs_errors = 0,
+        iter = NA,
+        converged = 0
       )
     })
   }
@@ -2668,7 +2678,7 @@ likelihood_function <- function(dissimilarity_matrix, mapping_max_iter,
                    !sapply(res_list, function(x) all(is.na(x$Holdout_MAE)))
 
   if(sum(valid_results) == 0) {
-    return(list(Holdout_MAE = NA, NLL = NA))
+    return(list(Holdout_MAE = NA, NLL = NA, mean_iter = NA, pct_converged = NA))
   }
 
   # Keep only valid results
@@ -2685,7 +2695,15 @@ likelihood_function <- function(dissimilarity_matrix, mapping_max_iter,
   # NLL is derived from the properties of the Laplace distribution, where MAE is the MLE for the scale parameter b.
   pooled_nll <- if(!is.na(pooled_mae)) total_samples * (1 + log(2 * pooled_mae)) else NA
 
-  return(list(Holdout_MAE = pooled_mae, NLL = pooled_nll))
+  mean_iter <- mean(res_df$iter, na.rm = TRUE)
+  pct_converged <- mean(res_df$converged, na.rm = TRUE) * 100
+
+  return(list(
+    Holdout_MAE = pooled_mae,
+    NLL = pooled_nll,
+    mean_iter = mean_iter,
+    pct_converged = pct_converged
+  ))
 }
 
 
