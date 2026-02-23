@@ -544,6 +544,7 @@ plot_performance_trace <- function(chain_files,
                                 metric = "both",
                                 combine_chains = TRUE,
                                 sort_combined = TRUE,
+                                trim_worst = 0.1,
                                 show_raw = TRUE,
                                 window_size = NULL,
                                 output_file = NULL,
@@ -686,15 +687,21 @@ plot_performance_trace <- function(chain_files,
       )
     }
     
+    if (combine_chains && sort_combined && trim_worst > 0) {
+      cutoff <- floor(trim_worst * nrow(combined))
+      plot_long <- plot_long[plot_long$iteration > cutoff, ]
+    }
+
     p <- ggplot2::ggplot(plot_long, ggplot2::aes(x = iteration))
-    
+
     if (show_raw) {
-      p <- p + ggplot2::geom_point(ggplot2::aes(y = value, color = chain), 
+      p <- p + ggplot2::geom_point(ggplot2::aes(y = value, color = chain),
                                     alpha = 0.3, size = 1)
     }
-    
+
     subtitle_text <- if (combine_chains && sort_combined) {
-      "Samples sorted worst-to-best per metric; plateau indicates optimal region"
+      paste0("Samples sorted worst-to-best per metric; worst ",
+             round(trim_worst * 100), "% removed; plateau indicates optimal region")
     } else {
       "Plateau indicates optimal region has been found"
     }
@@ -724,15 +731,21 @@ plot_performance_trace <- function(chain_files,
     running_min_col <- if (metric == "NLL") "running_min_NLL" else "running_min_MAE"
     y_label <- if (metric == "NLL") "Negative Log-Likelihood" else "Mean Absolute Error"
     
+    if (combine_chains && sort_combined && trim_worst > 0) {
+      cutoff <- floor(trim_worst * nrow(plot_data))
+      plot_data <- plot_data[plot_data$iteration > cutoff, ]
+    }
+
     p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = iteration))
-    
+
     if (show_raw) {
-      p <- p + ggplot2::geom_point(ggplot2::aes_string(y = value_col, color = "chain"), 
+      p <- p + ggplot2::geom_point(ggplot2::aes_string(y = value_col, color = "chain"),
                                     alpha = 0.3, size = 1)
     }
-    
+
     subtitle_text <- if (combine_chains && sort_combined) {
-      "Samples sorted worst-to-best; plateau indicates optimal region"
+      paste0("Samples sorted worst-to-best; worst ",
+             round(trim_worst * 100), "% removed; plateau indicates optimal region")
     } else {
       "Plateau indicates optimal region has been found"
     }
