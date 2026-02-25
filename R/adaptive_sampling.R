@@ -2497,11 +2497,11 @@ calculate_weighted_marginals <- function(samples) {
   # different subsamples and CV configurations.
   
   # Temperature-scaled softmax (tunable)
-  neg_log_mae <- -log(samples$Holdout_MAE)
+  log_mae <- log(samples$Holdout_MAE)
   # Normalize to [0, 1] range, then apply temperature
-  neg_log_mae_norm <- (neg_log_mae - min(neg_log_mae)) / (max(neg_log_mae) - min(neg_log_mae) + 1e-10)
+  log_mae_norm <- (log_mae - min(log_mae)) / (max(log_mae) - min(log_mae) + 1e-10)
   temperature <- 0.2  # lower = sharper (tune this)
-  weights <- exp(-neg_log_mae_norm / temperature)
+  weights <- exp(-log_mae_norm / temperature)
   weights <- weights / sum(weights)
 
   # Define the parameter columns to process
