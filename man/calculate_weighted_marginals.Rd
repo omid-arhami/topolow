@@ -29,4 +29,9 @@ ensures weights are comparable across evaluations with different numbers
 of validation points (e.g., different subsamples or CV configurations).
 When the number of validation points is constant, this produces identical
 weights to the previous NLL-based scheme.
+Using -log(MAE) produces identical weights to the previous -NLL scheme when
+the number of validation points (n) is constant across samples, because
+NLL = n*(1 + log(2*MAE)) and the n factor cancels during normalization.
+Unlike NLL, -log(MAE) is invariant to n, making weights comparable across
+different subsamples and CV configurations.
 }

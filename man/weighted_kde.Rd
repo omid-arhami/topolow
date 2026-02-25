@@ -4,7 +4,7 @@
 \alias{weighted_kde}
 \title{Weighted Kernel Density Estimation}
 \usage{
-weighted_kde(x, weights, n = 512, from = min(x), to = max(x))
+weighted_kde(x, weights, n = 512, from = NULL, to = NULL)
 }
 \arguments{
 \item{x}{A numeric vector of samples.}

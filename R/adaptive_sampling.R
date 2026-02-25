@@ -1808,8 +1808,9 @@ generate_kde_samples <- function(samples, n, epsilon = 0) {
   }
 
   # First, remove outliers from the input samples to stabilize the KDE
-  samples <- as.data.frame(lapply(samples, clean_data, k = 3))
-  samples <- na.omit(samples)
+  # NEW: Only clean Holdout_MAE; leave parameter columns untouched
+  samples$Holdout_MAE <- clean_data(samples$Holdout_MAE, k = 3)
+  samples <- samples[!is.na(samples$Holdout_MAE) & samples$Holdout_MAE > 0, ]
 
   # Remove non-positive MAE values (needed for log)
   samples <- samples[samples$Holdout_MAE > 0, ]
@@ -1820,10 +1821,13 @@ generate_kde_samples <- function(samples, n, epsilon = 0) {
   }
 
   # Calculate importance weights from MAE (lower MAE = better = higher weight)
+  # Temperature-scaled softmax (tunable)
   neg_log_mae <- -log(samples$Holdout_MAE)
-  # Shift to be positive for stability
-  std_neg_log_mae <- neg_log_mae - min(neg_log_mae) + 0.05
-  weights <- std_neg_log_mae / sum(std_neg_log_mae)
+  # Normalize to [0, 1] range, then apply temperature
+  neg_log_mae_norm <- (neg_log_mae - min(neg_log_mae)) / (max(neg_log_mae) - min(neg_log_mae) + 1e-10)
+  temperature <- 0.2  # lower = sharper (tune this)
+  weights <- exp(-neg_log_mae_norm / temperature)
+  weights <- weights / sum(weights)
 
    # Check for NA weights
   if (any(is.na(weights))) {
@@ -1894,12 +1898,16 @@ generate_kde_samples <- function(samples, n, epsilon = 0) {
 #' @importFrom stats sd dnorm
 #' @importFrom parallel detectCores mclapply
 #' @export
-weighted_kde <- function(x, weights, n = 512, from = min(x), to = max(x)) {
+weighted_kde <- function(x, weights, n = 512, from = NULL, to = NULL) {
   # Normalize weights to ensure they sum to 1
   weights <- weights / sum(weights)
 
   # Calculate bandwidth using Silverman's rule of thumb
   bw <- 1.06 * sd(x) * length(x)^(-1/5)
+
+  if (is.null(from)) from <- min(x) - bw
+  if (is.null(to)) to <- max(x) + bw
+
   eval_points <- seq(from, to, length.out = n)
 
   # Define the function to compute density at a single point z
@@ -2116,6 +2124,7 @@ get_grid <- function(samples, param, num_points, start_factor, end_factor) {
   # Shift to be positive and normalize
   std_log_likelihoods <- log_likelihoods - min(log_likelihoods, na.rm = TRUE) + 0.05
   weights <- std_log_likelihoods / sum(std_log_likelihoods, na.rm = TRUE)
+
 
   # Calculate weighted marginal for the specific parameter
   marginal <- weighted_kde(clean_samples[[param]], weights = weights)
@@ -2437,6 +2446,11 @@ print.parameter_sensitivity <- function(x, ...) {
 #' of validation points (e.g., different subsamples or CV configurations).
 #' When the number of validation points is constant, this produces identical
 #' weights to the previous NLL-based scheme.
+#' Using -log(MAE) produces identical weights to the previous -NLL scheme when
+#' the number of validation points (n) is constant across samples, because
+#' NLL = n*(1 + log(2*MAE)) and the n factor cancels during normalization.
+#' Unlike NLL, -log(MAE) is invariant to n, making weights comparable across
+#' different subsamples and CV configurations.
 #'
 #' @importFrom stats na.omit
 #' @export
@@ -2471,8 +2485,9 @@ calculate_weighted_marginals <- function(samples) {
 
   # --- Data Cleaning and Weight Calculation ---
   # Remove outliers to stabilize density estimation
-  samples <- as.data.frame(lapply(samples, clean_data, k = 3))
-  samples <- na.omit(samples)
+  # NEW: Only clean Holdout_MAE; leave parameter columns untouched
+  samples$Holdout_MAE <- clean_data(samples$Holdout_MAE, k = 3)
+  samples <- samples[!is.na(samples$Holdout_MAE) & samples$Holdout_MAE > 0, ]
 
   # Calculate importance weights from MAE (lower MAE = better = higher weight).
   # Using -log(MAE) produces identical weights to the previous -NLL scheme when
@@ -2480,10 +2495,14 @@ calculate_weighted_marginals <- function(samples) {
   # NLL = n*(1 + log(2*MAE)) and the n factor cancels during normalization.
   # Unlike NLL, -log(MAE) is invariant to n, making weights comparable across
   # different subsamples and CV configurations.
+  
+  # Temperature-scaled softmax (tunable)
   neg_log_mae <- -log(samples$Holdout_MAE)
-  # Shift to be positive and normalize
-  std_neg_log_mae <- neg_log_mae - min(neg_log_mae, na.rm = TRUE) + 0.05
-  weights <- std_neg_log_mae / sum(std_neg_log_mae, na.rm = TRUE)
+  # Normalize to [0, 1] range, then apply temperature
+  neg_log_mae_norm <- (neg_log_mae - min(neg_log_mae)) / (max(neg_log_mae) - min(neg_log_mae) + 1e-10)
+  temperature <- 0.2  # lower = sharper (tune this)
+  weights <- exp(-neg_log_mae_norm / temperature)
+  weights <- weights / sum(weights)
 
   # Define the parameter columns to process
   vars <- c("log_N", "log_k0", "log_cooling_rate", "log_c_repulsion")

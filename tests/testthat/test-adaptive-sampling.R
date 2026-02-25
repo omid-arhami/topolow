@@ -74,8 +74,8 @@ test_that("weighted_kde handles different parameters", {
 
   # Test with default range
   kde2 <- weighted_kde(x, weights)
-  expect_equal(min(kde2$x), min(x))
-  expect_equal(max(kde2$x), max(x))
+  expect_true(min(kde2$x) <= min(x))
+  expect_true(max(kde2$x) >= max(x))
 })
 
 test_that("calculate_weighted_marginals works correctly", {

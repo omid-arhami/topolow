@@ -491,6 +491,9 @@ analyze_network_structure <- function(dissimilarity_matrix) {
 #'   running minimum. This produces a smooth monotonic improvement curve that is not
 #'   biased by chain ordering. If FALSE, chains are concatenated sequentially (original
 #'   behavior). Default: TRUE
+#' @param trim_worst Numeric between 0 and 1. Fraction of the worst-performing samples to
+#'   remove before plotting when `combine_chains = TRUE` and `sort_combined = TRUE`.
+#'   This focuses the visualization on the convergence plateau. Default: 0.1
 #' @param show_raw Logical. If TRUE, shows raw values as points behind the running minimum.
 #'   Default: TRUE
 #' @param window_size Integer. Window size for computing rolling mean (optional smoothing).

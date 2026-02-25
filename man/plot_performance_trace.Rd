@@ -9,6 +9,7 @@ plot_performance_trace(
   metric = "both",
   combine_chains = TRUE,
   sort_combined = TRUE,
+  trim_worst = 0.1,
   show_raw = TRUE,
   window_size = NULL,
   output_file = NULL,
@@ -30,6 +31,10 @@ samples from worst to best for each metric independently before computing the
 running minimum. This produces a smooth monotonic improvement curve that is not
 biased by chain ordering. If FALSE, chains are concatenated sequentially (original
 behavior). Default: TRUE}
+
+\item{trim_worst}{Numeric between 0 and 1. Fraction of the worst-performing samples to
+remove before plotting when \code{combine_chains = TRUE} and \code{sort_combined = TRUE}.
+This focuses the visualization on the convergence plateau. Default: 0.1}
 
 \item{show_raw}{Logical. If TRUE, shows raw values as points behind the running minimum.
 Default: TRUE}
