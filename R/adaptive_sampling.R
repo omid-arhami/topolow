@@ -1825,7 +1825,7 @@ generate_kde_samples <- function(samples, n, epsilon = 0) {
   neg_log_mae <- -log(samples$Holdout_MAE)
   # Normalize to [0, 1] range, then apply temperature
   neg_log_mae_norm <- (neg_log_mae - min(neg_log_mae)) / (max(neg_log_mae) - min(neg_log_mae) + 1e-10)
-  temperature <- 0.2  # lower = sharper (tune this)
+  temperature <- 0.1  # lower = sharper (tune this)
   weights <- exp(-neg_log_mae_norm / temperature)
   weights <- weights / sum(weights)
 
@@ -2500,7 +2500,7 @@ calculate_weighted_marginals <- function(samples) {
   log_mae <- log(samples$Holdout_MAE)
   # Normalize to [0, 1] range, then apply temperature
   log_mae_norm <- (log_mae - min(log_mae)) / (max(log_mae) - min(log_mae) + 1e-10)
-  temperature <- 0.2  # lower = sharper (tune this)
+  temperature <- 0.1  # lower = sharper (tune this)
   weights <- exp(-log_mae_norm / temperature)
   weights <- weights / sum(weights)
 
