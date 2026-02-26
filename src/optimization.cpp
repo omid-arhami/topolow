@@ -166,10 +166,14 @@ List optimize_layout_exact_cpp(
   
   // State variables
   double k = k0;
-  // NOTE: c_repulsion is CONSTANT throughout - no decay!
-  
-  double prev_error = std::numeric_limits<double>::max();
-  int converge_count = convergence_window;
+  // NOTE: c_repulsion is CONSTANT throughout - no decay.
+  double best_mae = std::numeric_limits<double>::max();
+  arma::mat best_pos = pos;
+  double best_k = k0;
+  int best_iter = 0;
+  int worsening_count = 0;
+  const int worsening_patience = convergence_window;  // consecutive checks
+  int converge_count = 0;
   bool converged = false;
   int final_iter = n_iter;
   double final_mae = 0.0;
@@ -291,29 +295,68 @@ List optimize_layout_exact_cpp(
       auto error_result = compute_error_vectorized(pos, edge_i_vec, edge_j_vec, target_vec, thresh_vec);
       double current_error = (error_result.second > 0) ? error_result.first / error_result.second : 0.0;
       
-      if (verbose && ((iter + 1) % 100 == 0 || iter == n_iter - 1)) {
+      if (verbose && ((iter + 1) % 10 == 0 || iter == n_iter - 1)) {
         Rcpp::Rcout << "Iter " << (iter + 1) << "/" << n_iter 
                     << ", MAE=" << current_error << ", k=" << k << "\n";
       }
       
-      if (prev_error < std::numeric_limits<double>::max()) {
-        double diff = std::abs(prev_error - current_error);
-        if ((diff < 1e-12) || (diff < relative_epsilon * prev_error)) {
-          if (--converge_count <= 0) {
-            converged = true;
-            final_iter = iter + 1;
-            final_mae = current_error;
-            if (verbose) Rcpp::Rcout << "Converged at iteration " << final_iter << "\n";
-            break;
-          }
+      // Three-way classification using relative_epsilon
+      const double improvement_threshold = best_mae * (1.0 - relative_epsilon);
+      const double worsening_threshold  = best_mae * (1.0 + relative_epsilon);
+      
+      if (current_error < improvement_threshold) {
+        // MEANINGFUL IMPROVEMENT: error dropped well below best
+        best_mae = current_error;
+        best_pos = pos;
+        best_k = k;
+        best_iter = iter + 1;
+        worsening_count = 0;
+        converge_count = 0;
+        
+      } else if (current_error <= worsening_threshold) {
+        // PLATEAU: error is hovering near best (within ±epsilon band)
+        // Update best if this is still a slight improvement
+        if (current_error < best_mae) {
+          best_mae = current_error;
+          best_pos = pos;
+          best_k = k;
+          best_iter = iter + 1;
+        }
+        worsening_count = 0;  // not worsening, just stagnant
+        converge_count++;
+        
+        if (converge_count >= convergence_window) {
+          final_mae = best_mae;
+          final_iter = best_iter;
+          pos = best_pos;
+          k = best_k;
+          converged = true;
+          if (verbose)
+            Rcpp::Rcout << "Converged (plateau) at iter "
+                        << best_iter << ", MAE=" << best_mae << "\n";
+          break;
+        }
+        
+      } else {
+        // WORSENING: error has risen above the tolerance band
+        converge_count = 0;  // no longer on a plateau
+        worsening_count++;
+        
+        if (worsening_count >= worsening_patience) {
+          final_mae = best_mae;
+          final_iter = best_iter;
+          pos = best_pos;
+          k = best_k;
+          converged = true;
+          if (verbose)
+            Rcpp::Rcout << "Converged (MAE worsening, best restored) at iter "
+                        << best_iter << ", MAE=" << best_mae << "\n";
+          break;
         }
       }
-      prev_error = current_error;
-      final_mae = current_error;
     }
-    
     // Numerical stability check
-    if ((iter + 1) % 100 == 0 && !pos.is_finite()) {
+    if ((iter + 1) % 10 == 0 && !pos.is_finite()) {
       Rcpp::stop("Numerical instability at iteration %d. Reduce k0 or c_repulsion.", iter + 1);
     }
     
@@ -322,8 +365,13 @@ List optimize_layout_exact_cpp(
     
   } // End iteration loop
   
-  if (!converged) final_iter = n_iter;
-  
+  if (!converged) {
+    // Always restore best state, even if patience wasn't triggered
+    pos = best_pos;
+    k = best_k;
+    final_mae = best_mae;
+    final_iter = best_iter;
+  }
   return List::create(
     Named("positions") = pos,
     Named("converged") = converged,
