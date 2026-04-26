@@ -376,6 +376,68 @@ new_dim_reduction_config <- function(
 }
 
 
+
+#' Create Base Theme
+#'
+#' @description
+#' Creates a ggplot2 theme based on aesthetic and layout configurations.
+#'
+#' @param aesthetic_config Aesthetic configuration object
+#' @param layout_config Layout configuration object
+#' @return ggplot2 theme object
+#' @importFrom ggplot2 theme_minimal theme element_text element_blank element_line element_rect
+#' @keywords internal
+create_base_theme <- function(aesthetic_config, layout_config) {
+  theme_minimal() +
+    theme(
+      # Title 
+      plot.title = if(aesthetic_config$show_title) 
+        element_text(
+          size = aesthetic_config$title_size,
+          face = "bold",
+          hjust = 0.5
+        ) else element_blank(),
+      
+      # Text sizes  
+      axis.title = element_text(size = aesthetic_config$axis_title_size),
+      axis.text = element_text(size = aesthetic_config$axis_text_size),
+      
+      # Legend
+      legend.position = if(aesthetic_config$show_legend) 
+        aesthetic_config$legend_position else "none",
+      legend.text = element_text(size = aesthetic_config$legend_text_size),
+      legend.title = element_text(size = aesthetic_config$legend_title_size),
+      
+      # Grid
+      panel.grid.major = if(layout_config$show_grid && 
+                            layout_config$grid_type %in% c("major", "both"))
+        element_line(color = layout_config$grid_color,
+                     linetype = layout_config$grid_linetype) else element_blank(),
+      panel.grid.minor = if(layout_config$show_grid && 
+                            layout_config$grid_type %in% c("minor", "both"))
+        element_line(color = layout_config$grid_color,
+                     linetype = layout_config$grid_linetype) else element_blank(),
+      
+      # Backgrounds - Remove outer border by setting linewidth=0
+      plot.background = element_rect(fill = layout_config$background_color, 
+                                     color = NA, linewidth = 0),
+      panel.background = element_rect(fill = layout_config$panel_background_color,
+                                      color = NA, linewidth = 0),
+      
+      # Panel border and axis lines
+      panel.border = if(layout_config$panel_border)
+        element_rect(color = layout_config$panel_border_color,
+                     fill = NA,
+                     linewidth = 0.5) else element_blank(),
+      axis.line = if(!layout_config$panel_border) 
+        element_line(color = "black", size = 0.5) else element_blank(),
+      
+      # Margin
+      plot.margin = layout_config$plot_margin
+    )
+}
+
+
 #' Validate Input Data Frame
 #'
 #' @description
@@ -544,93 +606,267 @@ scale_to_original_distances <- function(reduced_coords, orig_dist) {
 }
 
 
-#' Create Base Theme
+#' Compute clade-membership lookup tables for an antigen set
 #'
 #' @description
-#' Creates a ggplot2 theme based on aesthetic and layout configurations.
+#' Internal helper used by \code{plot_temporal_mapping} and
+#' \code{plot_cluster_mapping}.  Given a vector of antigen names (already
+#' upper-cased) and a phylogenetic tree, returns a list mapping each tip to
+#' the tip names of its clade, together with bookkeeping objects used by the
+#' velocity computation.
 #'
-#' @param aesthetic_config Aesthetic configuration object
-#' @param layout_config Layout configuration object
-#' @return ggplot2 theme object
-#' @importFrom ggplot2 theme_minimal theme element_text element_blank element_line element_rect
+#' The clade depth, when not supplied, is derived from the tree spine
+#' (longest tip-to-tip path in unit edge lengths) as the median leaf-to-spine
+#' distance.  This matches the previous in-line behaviour exactly.
+#'
+#' @param point_names_upper Character vector of antigen names, upper-cased.
+#'   Names that are not present in the tree are reported and excluded from the
+#'   returned \code{tree_present_points}.
+#' @param phylo_tree A \code{phylo} object.  Will be unrooted internally if
+#'   rooted.
+#' @param clade_node_depth Optional integer.  If \code{NULL}, computed from the
+#'   tree spine.
+#'
+#' @return A named list:
+#' \describe{
+#'   \item{clade_members}{Named list. \code{clade_members[[tip]]} is the
+#'     character vector of tip labels of the clade that contains \code{tip}.}
+#'   \item{tree_present_points}{Character vector of input names that exist in
+#'     the tree (deduplicated, upper-cased).}
+#'   \item{clade_node_depth}{The depth value actually used.}
+#' }
+#'
 #' @keywords internal
-create_base_theme <- function(aesthetic_config, layout_config) {
-  theme_minimal() +
-    theme(
-      # Title 
-      plot.title = if(aesthetic_config$show_title) 
-        element_text(
-          size = aesthetic_config$title_size,
-          face = "bold",
-          hjust = 0.5
-        ) else element_blank(),
-      
-      # Text sizes  
-      axis.title = element_text(size = aesthetic_config$axis_title_size),
-      axis.text = element_text(size = aesthetic_config$axis_text_size),
-      
-      # Legend
-      legend.position = if(aesthetic_config$show_legend) 
-        aesthetic_config$legend_position else "none",
-      legend.text = element_text(size = aesthetic_config$legend_text_size),
-      legend.title = element_text(size = aesthetic_config$legend_title_size),
-      
-      # Grid
-      panel.grid.major = if(layout_config$show_grid && 
-                            layout_config$grid_type %in% c("major", "both"))
-        element_line(color = layout_config$grid_color,
-                     linetype = layout_config$grid_linetype) else element_blank(),
-      panel.grid.minor = if(layout_config$show_grid && 
-                            layout_config$grid_type %in% c("minor", "both"))
-        element_line(color = layout_config$grid_color,
-                     linetype = layout_config$grid_linetype) else element_blank(),
-      
-      # Backgrounds - Remove outer border by setting linewidth=0
-      plot.background = element_rect(fill = layout_config$background_color, 
-                                     color = NA, linewidth = 0),
-      panel.background = element_rect(fill = layout_config$panel_background_color,
-                                      color = NA, linewidth = 0),
-      
-      # Panel border and axis lines
-      panel.border = if(layout_config$panel_border)
-        element_rect(color = layout_config$panel_border_color,
-                     fill = NA,
-                     linewidth = 0.5) else element_blank(),
-      axis.line = if(!layout_config$panel_border) 
-        element_line(color = "black", size = 0.5) else element_blank(),
-      
-      # Margin
-      plot.margin = layout_config$plot_margin
+#' @importFrom stats median
+prepare_clade_membership <- function(point_names_upper,
+                                     phylo_tree,
+                                     clade_node_depth = NULL) {
+  if (!requireNamespace("ape", quietly = TRUE)) {
+    stop("Package 'ape' is required when phylo_tree is provided. ",
+         "Please install it.")
+  }
+  if (ape::is.rooted(phylo_tree)) {
+    phylo_tree <- ape::unroot(phylo_tree)
+  }
+
+  tree_tips_upper <- toupper(phylo_tree$tip.label)
+  present_mask    <- point_names_upper %in% tree_tips_upper
+  tree_present_points <- unique(point_names_upper[present_mask])
+  absent_tips         <- setdiff(point_names_upper, tree_present_points)
+
+  if (length(absent_tips) > 0) {
+    cat(
+      "\nThe following antigens are not in the provided phylo_tree.\n",
+      "They did not contribute to limiting antigenic velocity.\n",
+      paste(absent_tips, collapse = ", "), "\n"
     )
+  }
+
+  # Tree-spine clade-depth heuristic: longest tip-to-tip path in unit edges.
+  tree_unit              <- phylo_tree
+  tree_unit$edge.length  <- rep(1, nrow(tree_unit$edge))
+  DN                     <- ape::dist.nodes(tree_unit)
+  n_tip                  <- length(tree_unit$tip.label)
+  tip_idx_seq            <- seq_len(n_tip)
+  tip_dist_mat           <- DN[tip_idx_seq, tip_idx_seq, drop = FALSE]
+  max_pair               <- which(tip_dist_mat == max(tip_dist_mat),
+                                  arr.ind = TRUE)[1, ]
+  path_nodes             <- ape::nodepath(tree_unit, max_pair[1], max_pair[2])
+  leaf_distances         <- apply(DN[tip_idx_seq, path_nodes, drop = FALSE],
+                                  1, min)
+
+  clade_node_depth <- ifelse(
+    is.null(clade_node_depth),
+    ceiling(stats::median(leaf_distances)),
+    clade_node_depth
+  )
+
+  cat(sprintf(
+    "Average leaf-to-backbone distance of the tree (%.3f) was used as clades' depth cutoff.\n",
+    clade_node_depth
+  ))
+
+  get_clade_node <- function(phy, tip_label, depth) {
+    ix <- match(toupper(tip_label), tree_tips_upper)
+    if (is.na(ix)) {
+      stop("Internal error: tip '", tip_label, "' lookup failed")
+    }
+    node <- ix
+    for (k in seq_len(depth)) {
+      parent <- phy$edge[phy$edge[, 2] == node, 1]
+      if (length(parent) != 1) break
+      node <- parent
+    }
+    node
+  }
+
+  clade_nodes <- setNames(
+    lapply(tree_present_points, get_clade_node,
+           phy = phylo_tree, depth = clade_node_depth),
+    tree_present_points
+  )
+  clade_members <- lapply(
+    clade_nodes,
+    function(nd) ape::extract.clade(phylo_tree, nd)$tip.label
+  )
+
+  list(
+    clade_members       = clade_members,
+    tree_present_points = tree_present_points,
+    clade_node_depth    = clade_node_depth
+  )
 }
+
+
+
+#' Kernel-weighted antigenic velocity in arbitrary dimension
+#'
+#' @description
+#' For each row \eqn{i} of \code{positions}, computes the Gaussian-kernel-
+#' weighted average of position-difference / time-difference against all rows
+#' \eqn{j} with an earlier time:
+#' \deqn{v_i \;=\; \frac{\sum_{j:\, t_j < t_i} w_{ij}\, (x_i - x_j)/(t_i - t_j)}
+#'                  {\sum_{j:\, t_j < t_i} w_{ij}}}
+#' with weights
+#' \deqn{w_{ij} = \exp\!\big(-\|x_i - x_j\|^2 / (2\sigma_x^2)\big)\;
+#'                \exp\!\big(-(t_i - t_j)^2 / (2\sigma_t^2)\big)}.
+#'
+#' If a phylogenetic clade-membership lookup is supplied, only earlier rows
+#' that lie in the same clade as row \eqn{i} contribute to that row's velocity.
+#'
+#' This helper is used twice by \code{plot_temporal_mapping} and
+#' \code{plot_cluster_mapping}: once on the original n-dimensional coordinates
+#' (to produce the velocity object returned to the caller), and once on the
+#' 2-dimensional plot coordinates (to produce the arrow vectors drawn on the
+#' map).
+#'
+#' @param positions Data frame containing at minimum a \code{name} column,
+#'   the time column named by \code{time_col}, and the coordinate columns
+#'   named by \code{coord_cols}.  Other columns are passed through unchanged.
+#' @param coord_cols Character vector of coordinate column names (length
+#'   \eqn{k \ge 1}).
+#' @param time_col Character.  Name of the time/year column.
+#' @param sigma_t Numeric.  Bandwidth for the temporal Gaussian kernel.
+#' @param sigma_x Numeric.  Bandwidth for the spatial Gaussian kernel, in the
+#'   same units/space as \code{coord_cols}.
+#' @param clade_members Optional named list as returned by
+#'   \code{prepare_clade_membership}.  If \code{NULL}, all earlier points
+#'   contribute to every velocity.
+#' @param tree_present_points Optional character vector of point names present
+#'   in the tree (used together with \code{clade_members}).
+#'
+#' @return The input data frame with two appended sets of columns:
+#' \describe{
+#'   \item{\code{v1}, \code{v2}, ..., \code{v}\eqn{k}}{velocity components,
+#'     one per coordinate dimension, in the same order as \code{coord_cols}.}
+#'   \item{\code{velocity_magnitude}}{Euclidean magnitude
+#'     \eqn{\sqrt{\sum_d v_d^2}}.}
+#' }
+#' Rows with no eligible past points have \code{NA} velocity components.
+#'
+#' @keywords internal
+compute_kernel_velocity <- function(positions, coord_cols, time_col,
+                                    sigma_t, sigma_x,
+                                    clade_members       = NULL,
+                                    tree_present_points = NULL) {
+  X <- as.matrix(positions[, coord_cols, drop = FALSE])
+  t <- positions[[time_col]]
+  n <- nrow(positions)
+  k <- length(coord_cols)
+  V <- matrix(NA_real_, nrow = n, ncol = k)
+
+  for (i in seq_len(n)) {
+    this_pt <- positions$name[i]
+
+    # Determine eligible past points
+    if (!is.null(clade_members) && this_pt %in% names(clade_members)) {
+      out_of_clade_tips <- setdiff(tree_present_points,
+                                   clade_members[[this_pt]])
+      past_indices <- which(t < t[i] &
+                            !(positions$name %in% out_of_clade_tips))
+    } else {
+      past_indices <- which(t < t[i])
+    }
+
+    if (length(past_indices)) {
+      dt <- t[i] - t[past_indices]
+      # dX[r, ] == X[i, ] - X[past_indices[r], ]
+      dX <- -sweep(X[past_indices, , drop = FALSE], 2, X[i, ], "-")
+      d2 <- rowSums(dX^2)
+      w  <- exp(-d2          / (2 * sigma_x^2)) *
+            exp(-(dt^2)      / (2 * sigma_t^2))
+      w_sum <- sum(w)
+      if (w_sum > 0) {
+        V[i, ] <- colSums(w * (dX / dt)) / w_sum
+      }
+    }
+  }
+
+  velocity_cols <- paste0("v", seq_len(k))
+  positions[velocity_cols]    <- as.data.frame(V)
+  positions$velocity_magnitude <- sqrt(rowSums(V^2))
+  positions
+}
+
 
 
 #' Create Temporal Mapping Plot
 #'
 #' @description
-#' Antigenic Mapping and Antigenic Velocity Function. Creates a visualization of points colored by time (year) using dimension reduction, with optional antigenic velocity arrows.
-#' Points are colored on a gradient scale based on their temporal values, with
-#' different shapes for antigens and antisera.
+#' Antigenic Mapping and Antigenic Velocity Function.  Creates a visualization
+#' of points coloured by time (year) using dimension reduction, with optional
+#' antigenic velocity arrows.  Points are coloured on a gradient scale based
+#' on their temporal values, with different shapes for antigens and antisera.
+#'
+#' Antigenic velocity is computed in two spaces:
+#' \itemize{
+#'   \item the original \code{ndim}-dimensional space (using \code{V1..V_ndim}
+#'         in \code{df_coords}); the result is returned to the caller as
+#'         \code{antigenic_velocity}.
+#'   \item the 2-dimensional plot space (after dimension reduction); used only
+#'         to draw arrows on the map.
+#' }
+#' This means the magnitudes and directions you see on the map are
+#' plot-space quantities, while the magnitudes and directions in the returned
+#' \code{antigenic_velocity} object are the geometrically meaningful n-D
+#' values.  The two will agree exactly only when \code{ndim == 2}.
 #'
 #' @param df_coords Data frame containing:
 #'        - V1, V2, ... Vn: Coordinate columns
-#'        - antigen: Binary indicator for antigen points 
+#'        - antigen: Binary indicator for antigen points
 #'        - antiserum: Binary indicator for antiserum points
-#'        - year: Numeric year values for temporal coloring
+#'        - year: Numeric year values for temporal colouring
 #' @param ndim Number of dimensions in input coordinates
-#' @param draw_arrows logical; if TRUE, compute and draw antigenic drift vectors
-#' @param annotate_arrows logical; if TRUE, show names of the points having arrows
-#' @param phylo_tree Optional; phylo object in Newick format. Does not need to be rooted. If provided, used to compute antigenic velocity arrows.
-#' @param clade_node_depth Optional; integer; number of levels of parent nodes to define clades. Antigens from different clades will be excluded from the calculation antigenic velocity arrows. (Default: Automatically calculated mode of leaf-to-backbone distance of the tree)
-#' @param dim_config Dimension reduction configuration object specifying method and parameters
-#' @param aesthetic_config Aesthetic configuration object controlling plot appearance
-#' @param layout_config Layout configuration object controlling plot dimensions and style.
-#'        Use x_limits and y_limits in layout_config to set axis limits.
-#' @param output_dir Character. Directory for output files. Required if `layout_config$save_plot` is `TRUE`.
-#' @param show_shape_legend Logical. Whether to show the shape legend (default: TRUE)
-#' @param annotation_config Annotation configuration object for labeling notable points
-#' @param sigma_t Optional; numeric; bandwidth for the Gaussian kernel discounting on time in years or the time unit of the data. If NULL, uses Silverman's rule of thumb.
-#' @param sigma_x Optional; numeric; bandwidth for the Gaussian kernel discounting on antigenic distancein antigenic units. If NULL, uses Silverman's rule of thumb.
+#' @param draw_arrows logical; if TRUE, compute velocity (n-D and 2-D) and
+#'        draw the 2-D vectors on the map.
+#' @param annotate_arrows logical; if TRUE, show names of the points having
+#'        arrows.
+#' @param phylo_tree Optional; \code{phylo} object.  Does not need to be
+#'        rooted.  If provided, antigens from different clades do not
+#'        contribute to each other's velocity.
+#' @param clade_node_depth Optional integer; number of parent levels used to
+#'        define a clade.  Default: median leaf-to-backbone node-distance of
+#'        the tree.
+#' @param dim_config Dimension reduction configuration object.
+#' @param aesthetic_config Aesthetic configuration object.
+#' @param layout_config Layout configuration object.  Use \code{x_limits} /
+#'        \code{y_limits} to set axis limits.
+#' @param output_dir Character. Directory for output files.  Required if
+#'        \code{layout_config$save_plot} is \code{TRUE}.
+#' @param show_shape_legend Logical.
+#' @param annotation_config Annotation configuration object.
+#' @param sigma_t Optional numeric; bandwidth for the Gaussian kernel on time
+#'        (years, or whatever units \code{year} is in).  Used in BOTH the n-D
+#'        and 2-D passes.  Default: Silverman's rule on pairwise time
+#'        differences.
+#' @param sigma_x Optional numeric; bandwidth for the Gaussian kernel on
+#'        antigenic distance in the 2-D plot space.  Controls the arrows on
+#'        the map.  Default: Silverman's rule on the 2-D coordinates.
+#' @param sigma_x_nd Optional numeric; bandwidth for the Gaussian kernel on
+#'        antigenic distance in the original n-D space.  Controls the
+#'        velocities returned to the caller in \code{antigenic_velocity}.
+#'        Default: RMS of per-dimension Silverman bandwidths over
+#'        \code{V1..V_ndim}.
 #' 
 #' @details
 #' The function performs these steps:
@@ -643,7 +879,18 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #' Different shapes distinguish between antigens and antisera points, while
 #' color represents temporal progression.
 #'
-#' @return A \code{ggplot} object containing the temporal mapping visualization.
+#' @return If \code{draw_arrows = FALSE}, a single \code{ggplot} object.
+#'         If \code{draw_arrows = TRUE}, a list with elements:
+#' \describe{
+#'   \item{\code{plot}}{The \code{ggplot} object.}
+#'   \item{\code{antigenic_velocity}}{Data frame with one row per antigen and
+#'     columns \code{name}, \code{V1..V_ndim} (original n-D coordinates),
+#'     \code{year}, \code{v1..v_ndim} (n-D velocity components),
+#'     \code{velocity_magnitude} (Euclidean magnitude of the n-D velocity).
+#'     This replaces the previous \code{velocity_data} element, which was
+#'     2-D; pre-existing scripts that read \code{result$velocity_data} or
+#'     reference \code{$mag} must be updated.}
+#' }
 #'
 #' @examples
 #' # Basic usage with default configurations
@@ -664,6 +911,20 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #'                                  output_dir = temp_dir)
 #' list.files(temp_dir) # Check that file was created
 #' unlink(temp_dir, recursive = TRUE) # Clean up
+#' 
+#' # With antigenic velocity vectors (returned object structure)
+#' set.seed(1)
+#' n <- 60
+#' data2 <- data.frame(
+#'   V1 = rnorm(n), V2 = rnorm(n), V3 = rnorm(n),
+#'   name = paste0("v", seq_len(n)),
+#'   antigen = rep(c(0, 1), n / 2),
+#'   antiserum = rep(c(1, 0), n / 2),
+#'   year = sample(2000:2015, n, replace = TRUE)
+#' )
+#' result <- plot_temporal_mapping(data2, ndim = 3, draw_arrows = TRUE)
+#' result$plot
+#' head(result$antigenic_velocity)   # name, V1..V3, year, v1..v3, velocity_magnitude
 #'
 #' @seealso 
 #' \code{\link{plot_cluster_mapping}} for cluster-based visualization
@@ -671,111 +932,98 @@ create_base_theme <- function(aesthetic_config, layout_config) {
 #' \code{\link{new_dim_reduction_config}} for dimension reduction options
 #' \code{\link{new_aesthetic_config}} for aesthetic options
 #' \code{\link{new_layout_config}} for layout options
-#' \code{\link{new_annotation_config}} for annotation options
-#' @importFrom ggplot2 ggplot aes geom_point geom_text geom_segment scale_colour_gradient scale_shape_manual scale_x_continuous scale_y_continuous labs
+#' \code{\link{new_annotation_config}} for annotation options#' @importFrom ggplot2 ggplot aes geom_point geom_text geom_segment scale_colour_gradient scale_shape_manual scale_x_continuous scale_y_continuous labs
 #' @importFrom grid unit arrow
-#' @importFrom stats dist bw.nrd median
+#' @importFrom stats dist bw.nrd
 #' @export
-plot_temporal_mapping <- function(df_coords, ndim, 
-                                  dim_config = new_dim_reduction_config(),
-                                  aesthetic_config = new_aesthetic_config(),
-                                  layout_config = new_layout_config(),
+plot_temporal_mapping <- function(df_coords, ndim,
+                                  dim_config        = new_dim_reduction_config(),
+                                  aesthetic_config  = new_aesthetic_config(),
+                                  layout_config     = new_layout_config(),
                                   annotation_config = new_annotation_config(),
                                   output_dir,
                                   show_shape_legend = TRUE,
-                                  draw_arrows = FALSE,
-                                  annotate_arrows = TRUE,
-                                  phylo_tree = NULL,
-                                  sigma_t = NULL,
-                                  sigma_x = NULL,
-                                  clade_node_depth = NULL) {
-  
-  # Ensure ggrepel is available
+                                  draw_arrows       = FALSE,
+                                  annotate_arrows   = TRUE,
+                                  phylo_tree        = NULL,
+                                  sigma_t           = NULL,
+                                  sigma_x           = NULL,
+                                  sigma_x_nd        = NULL,   # NEW
+                                  clade_node_depth  = NULL) {
+
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
-    warning("The ggrepel package is required for optimal label placement. Install with: install.packages('ggrepel')")
+    warning("The ggrepel package is required for optimal label placement. ",
+            "Install with: install.packages('ggrepel')")
   }
-  
   if (layout_config$save_plot && missing(output_dir)) {
-    stop("An 'output_dir' must be provided when 'layout_config$save_plot' is TRUE.", call. = FALSE)
+    stop("An 'output_dir' must be provided when 'layout_config$save_plot' is TRUE.",
+         call. = FALSE)
   }
-  
-  # Validate input data
-  df_coords <- validate_topolow_df(df_coords, ndim, require_temporal = TRUE)
-  
-  # Perform dimension reduction
+
+  # ---- Validate input + reduce to 2-D for plotting -------------------------
+  df_coords  <- validate_topolow_df(df_coords, ndim, require_temporal = TRUE)
   reduced_df <- reduce_dimensions(df_coords, dim_config)
-  
-  # Apply axis reversals
-  reduced_df$plot_x <- reduced_df$dim2 * layout_config$reverse_x
-  reduced_df$plot_y <- reduced_df$dim1 * layout_config$reverse_y
-  
-  # Process row names to get strain names
+  reduced_df$plot_x     <- reduced_df$dim2 * layout_config$reverse_x
+  reduced_df$plot_y     <- reduced_df$dim1 * layout_config$reverse_y
   reduced_df$clean_name <- sub("^(V/|S/)", "", reduced_df$name)
-  
-  # Create base theme
+
   base_theme <- create_base_theme(aesthetic_config, layout_config)
-  
-  # Flag notable points
-  if (!is.null(annotation_config$notable_points) && length(annotation_config$notable_points) > 0) {
-    reduced_df$is_notable <- reduced_df$clean_name %in% annotation_config$notable_points
+
+  # ---- Notable points ------------------------------------------------------
+  if (!is.null(annotation_config$notable_points) &&
+      length(annotation_config$notable_points) > 0) {
+    reduced_df$is_notable <- reduced_df$clean_name %in%
+                             annotation_config$notable_points
     annotation_df <- reduced_df[reduced_df$is_notable, ]
-    
     if (nrow(annotation_df) == 0) {
       warning("None of the specified notable points found in the data")
     }
   } else {
     reduced_df$is_notable <- FALSE
-    annotation_df <- reduced_df[0, ]  # Empty dataframe
+    annotation_df         <- reduced_df[0, ]
   }
-  
-  # Create point type with explicit factor levels - this is just for regular points
-  reduced_df$point_type <- NA_character_  # Initialize
-  reduced_df$point_type[reduced_df$antigen & !reduced_df$is_notable] <- "antigen"
+
+  reduced_df$point_type <- NA_character_
+  reduced_df$point_type[reduced_df$antigen   & !reduced_df$is_notable] <- "antigen"
   reduced_df$point_type[reduced_df$antiserum & !reduced_df$is_notable] <- "antiserum"
-  reduced_df$point_type <- factor(reduced_df$point_type, 
+  reduced_df$point_type <- factor(reduced_df$point_type,
                                   levels = names(aesthetic_config$point_shapes))
-  
-  # Create plot
+
+  # ---- Base plot -----------------------------------------------------------
   p <- ggplot(
-    data = reduced_df[!reduced_df$is_notable, ],
-    aes(x = .data$plot_x, y = .data$plot_y, color = .data$year,
-        shape = .data$point_type)) +
-    geom_point(size = aesthetic_config$point_size,
+        data = reduced_df[!reduced_df$is_notable, ],
+        aes(x = .data$plot_x, y = .data$plot_y, color = .data$year,
+            shape = .data$point_type)) +
+    geom_point(size  = aesthetic_config$point_size,
                alpha = aesthetic_config$point_alpha) +
-    # Plot notable points with filled shapes and outlines
     geom_point(
       data = reduced_df[reduced_df$is_notable & reduced_df$antigen, ],
-      aes(x = .data$plot_x, y = .data$plot_y, 
-          fill = .data$year),
-      shape = 21,  # Filled circle with outline
-      color = "black",  # Outline color
-      size = aesthetic_config$point_size * 1.2,
+      aes(x = .data$plot_x, y = .data$plot_y, fill = .data$year),
+      shape = 21, color = "black",
+      size  = aesthetic_config$point_size * 1.2,
       stroke = annotation_config$outline_size,
       alpha = aesthetic_config$point_alpha
     ) +
-    # Notable antisera with different filled shape
     geom_point(
       data = reduced_df[reduced_df$is_notable & reduced_df$antiserum, ],
-      aes(x = .data$plot_x, y = .data$plot_y, 
-          fill = .data$year),
-      shape = 22,  # Filled square with outline
-      color = "black",  # Outline color
-      size = aesthetic_config$point_size * 1.2,
+      aes(x = .data$plot_x, y = .data$plot_y, fill = .data$year),
+      shape = 22, color = "black",
+      size  = aesthetic_config$point_size * 1.2,
       stroke = annotation_config$outline_size,
       alpha = aesthetic_config$point_alpha
     ) +
-    scale_colour_gradient(low = aesthetic_config$gradient_colors$low,
+    scale_colour_gradient(low  = aesthetic_config$gradient_colors$low,
                           high = aesthetic_config$gradient_colors$high,
                           na.value = "gray50") +
     scale_shape_manual(
-      name = "Type",
       values = aesthetic_config$point_shapes,
-      labels = c(antigen = "Antigen", antiserum = "Antiserum")) +
-    base_theme +
-    labs(title = if(aesthetic_config$show_title) "Temporal Mapping" else "",
-         x = "Dimension 1",
-         y = "Dimension 2",
-         colour = "Year")
+      breaks = names(aesthetic_config$point_shapes),
+      guide  = if (show_shape_legend) "legend" else "none"
+    ) +
+    labs(x = "Dimension 1", y = "Dimension 2",
+         color = "Year", shape = "") +
+    base_theme
+
   
   # Add labels to notable points if any exist
   if (nrow(annotation_df) > 0) {
@@ -834,351 +1082,228 @@ plot_temporal_mapping <- function(df_coords, ndim,
     }
   }
   
-  # Initialize velocity data as NULL
-  velocity_data <- NULL
+  antigenic_velocity <- NULL
   if (draw_arrows) {
     if (!"year" %in% names(reduced_df)) {
       stop("`year` column is required when draw_arrows = TRUE")
     }
-    # limit to antigens only:
-    positions <- reduced_df[reduced_df$antigen, ]
-    positions$V1 <- positions$plot_x
-    positions$V2 <- positions$plot_y
-    
-    if (!is.null(phylo_tree)) {
-      if (!requireNamespace("ape", quietly = TRUE)) {
-        stop("Package 'ape' is required for this function. Please install it.")
-      }
-      if (ape::is.rooted(phylo_tree)) {
-        phylo_tree <- ape::unroot(phylo_tree)
-      }
-      #-- identify which tip names actually exist in the tree
-      positions$name <- toupper(positions$name)
-      all_points      <- positions$name
-      tree_tips_up  <- toupper(phylo_tree$tip.label)
-      tip_idx <- match(toupper(positions$name), tree_tips_up)
-      # tip_idx[i] is the row in D_edge (DN) for positions$name[i], or NA if absent
-      
-      # compare in uppercase for consistency
-      present_mask <- toupper(all_points) %in% tree_tips_up
-      tree_present_points <- unique(all_points[present_mask])
-      absent_tips <- setdiff(all_points, tree_present_points)
-      
-      if (length(absent_tips) > 0) {
-        cat(
-          "\nThe following antigens are not in the provided phylo_tree\n ",
-          "Thus, they did not contribute to limiting antigenic velo.\n",
-          paste(absent_tips, collapse = ", "), "\n"
-          
-        )
-      }
-      
-      # phylogenetic clade depth cutoff via leaf-to-backbone (longest-path in terms of nodes, aka tree spine)
-      # 1) force every edge to length 1
-      tree_unit <- phylo_tree
-      tree_unit$edge.length <- rep(1, nrow(tree_unit$edge))
-      
-      # 2) compute node-to-node distances
-      DN <- ape::dist.nodes(tree_unit)
-      
-      # 3) find the two tips with maximum separation
-      n_tip <- length(tree_unit$tip.label)
-      tip_idx <- seq_len(n_tip)
-      tip_dist_mat <- DN[tip_idx, tip_idx, drop = FALSE]
-      # pick the first pair achieving the max
-      max_pair <- which(tip_dist_mat == max(tip_dist_mat), arr.ind = TRUE)[1, ]
-      
-      # 4) get the (internal + tip) nodes along that path
-      path_nodes <- ape::nodepath(tree_unit, max_pair[1], max_pair[2])
-      
-      # 5) for each tip, its distance to the nearest node on that path
-      leaf_distances <- apply(DN[tip_idx, path_nodes, drop = FALSE], 1, min)
-      
-      # 6) clade_node_depth = median distance (unless overridden)
-      clade_node_depth <- ifelse(
-        is.null(clade_node_depth),
-        ceiling(median(leaf_distances)),
-        clade_node_depth
-      )
-      
-      cat(sprintf("Average leaf-to-backbone distance of the tree (%.3f) was used as clades' depth cutoff.\n", clade_node_depth))
-      
-      # 7) get the clade nodes for each tip            
-      get_clade_node <- function(phy, tip_label, depth) {
-        # exact match in uppercase
-        ix <- match(toupper(tip_label), tree_tips_up)
-        if (is.na(ix)) {
-          stop("Internal error: tip '", tip_label, "' lookup failed")
-        }
-        node <- ix
-        for (k in seq_len(depth)) {
-          parent <- phy$edge[phy$edge[,2] == node, 1]
-          if (length(parent) != 1) break
-          node <- parent
-        }
-        node
-      }
-      
-      # only compute clades for points that are present in the tree
-      clade_nodes  <- setNames(
-        lapply(tree_present_points, get_clade_node, phy = phylo_tree, depth = clade_node_depth),
-        tree_present_points
-      )
-      clade_members <- lapply(
-        clade_nodes,
-        function(nd) ape::extract.clade(phylo_tree, nd)$tip.label
-      )
-    }
-    
-    # Estimate kernel bandwidths based on Silverman's rule (bw.nrd)
-    # Use 'dists' is of class "dist" and length n*(n-1)/2
-    distmat_t <- dist(positions$year)
-    sigma_t <- ifelse(is.null(sigma_t), bw.nrd(distmat_t), sigma_t)
-    
-    distmat_x <- dist(positions[, c("V1", "V2")], method = "euclidean")
-    sigma_x <- ifelse(is.null(sigma_x),
-                      sqrt(0.5*( (bw.nrd(positions$V1))^2 + (bw.nrd(positions$V2))^2 )),
-                      sigma_x)
-    
-    cat(sprintf(
-      "Kernel bandwidth for time = %.3f\n", sigma_t
-    ))
-    cat(sprintf(
-      "Kernel bandwidth for antigenic distance = %.3f\n", sigma_x
-    ))
-    
-    
-    
-    n   <- nrow(positions)
-    v1  <- numeric(n)
-    v2  <- numeric(n)
-    
-    for (i in seq_len(n)) {
-      this_pt <- positions$name[i]
-      # determine past indices, excluding only known "non-clade" tips
-      if (!is.null(phylo_tree) && this_pt %in% names(clade_members)) {
-        # those present but *not* in the same clade
-        bad <- setdiff(tree_present_points, clade_members[[this_pt]])
-        past_idx <- which(
-          positions$year < positions$year[i] &
-            !(positions$name %in% bad)
-        )
-      } else {
-        # either no tree or tip absent from tree -> include *all* past points
-        past_idx <- which(positions$year < positions$year[i])
-      }
-      
-      if (length(past_idx)) {
-        #  positive dt = current - past
-        dt <- positions$year[i] - positions$year[past_idx]
-        dx <- positions$V1[i] - positions$V1[past_idx]
-        dy <- positions$V2[i] - positions$V2[past_idx]
-        w  <- exp(-(dx^2 + dy^2)/(2*sigma_x^2)) * exp(- (dt^2)/(2*sigma_t^2))
-        v1[i] <- sum(w * (dx / dt)) / sum(w)
-        v2[i] <- sum(w * (dy / dt)) / sum(w)
-      } else {
-        v1[i] <- NA
-        v2[i] <- NA
-      }
-    }
-    positions$v1  <- v1
-    positions$v2  <- v2
-    positions$mag <- sqrt(v1^2 + v2^2)
-    # Store velocity data for return
-    velocity_data <- positions[, c("name", "V1", "V2", "year", "v1", "v2", "mag")]
-    
-    top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
-    cat(sprintf("Showing only arrows with magnitude >= %.3f (figure unit)\n", layout_config$arrow_plot_threshold))
-    
 
-    # -- overlay top-velocity points with filled shape + black outline --
+    # ---- Antigens-only data in BOTH spaces ----
+    coord_cols_nd  <- paste0("V", seq_len(ndim))
+    nd_positions   <- df_coords[df_coords$antigen, ,
+                                drop = FALSE][, c("name", coord_cols_nd, "year"),
+                                              drop = FALSE]
+
+    plot_positions <- reduced_df[reduced_df$antigen, , drop = FALSE]
+    plot_positions$V1 <- plot_positions$plot_x
+    plot_positions$V2 <- plot_positions$plot_y
+    coord_cols_plot   <- c("V1", "V2")
+
+    # ---- Phylo / clade membership (computed once, shared across passes) ----
+    clade_info <- NULL
+    if (!is.null(phylo_tree)) {
+      nd_positions$name   <- toupper(nd_positions$name)
+      plot_positions$name <- toupper(plot_positions$name)
+
+      clade_info <- prepare_clade_membership(
+        point_names_upper = nd_positions$name,
+        phylo_tree        = phylo_tree,
+        clade_node_depth  = clade_node_depth
+      )
+      clade_node_depth <- clade_info$clade_node_depth   # for save filename
+    }
+
+    # ---- Bandwidths --------------------------------------------------------
+    if (is.null(sigma_t)) {
+      sigma_t <- bw.nrd(dist(nd_positions$year))
+    }
+    # 2-D plot bandwidth (governs on-screen arrows)
+    if (is.null(sigma_x)) {
+      sigma_x <- sqrt(0.5 * ((bw.nrd(plot_positions$V1))^2 +
+                             (bw.nrd(plot_positions$V2))^2))
+    }
+    # n-D bandwidth (governs returned velocity)
+    if (is.null(sigma_x_nd)) {
+      sigma_x_nd <- sqrt(mean(vapply(
+        coord_cols_nd,
+        function(col) bw.nrd(nd_positions[[col]])^2,
+        numeric(1)
+      )))
+    }
+
+    cat(sprintf("Kernel bandwidth for time = %.3f\n",                      sigma_t))
+    cat(sprintf("Kernel bandwidth for n-D antigenic distance = %.3f\n",    sigma_x_nd))
+    cat(sprintf("Kernel bandwidth for 2-D plot distance = %.3f\n",         sigma_x))
+
+    # ---- Pass 1: n-D velocity (returned to caller) ------------------------
+    nd_positions <- compute_kernel_velocity(
+      positions           = nd_positions,
+      coord_cols          = coord_cols_nd,
+      time_col            = "year",
+      sigma_t             = sigma_t,
+      sigma_x             = sigma_x_nd,
+      clade_members       = clade_info$clade_members,
+      tree_present_points = clade_info$tree_present_points
+    )
+    velocity_cols_nd  <- paste0("v", seq_len(ndim))
+    antigenic_velocity <- nd_positions[, c("name", coord_cols_nd, "year",
+                                           velocity_cols_nd,
+                                           "velocity_magnitude"),
+                                       drop = FALSE]
+
+    # ---- Pass 2: 2-D velocity (used only for arrows on the map) -----------
+    plot_positions <- compute_kernel_velocity(
+      positions           = plot_positions,
+      coord_cols          = coord_cols_plot,
+      time_col            = "year",
+      sigma_t             = sigma_t,
+      sigma_x             = sigma_x,
+      clade_members       = clade_info$clade_members,
+      tree_present_points = clade_info$tree_present_points
+    )
+    # Rename v1/v2 -> v_plot_x/v_plot_y to make the arrow-drawing code
+    # unambiguous about which space it's working in.
+    plot_positions$v_plot_x <- plot_positions$v1
+    plot_positions$v_plot_y <- plot_positions$v2
+    plot_positions$v1       <- NULL
+    plot_positions$v2       <- NULL
+
+    # ---- Subset arrows by 2-D plot magnitude (unchanged behaviour) --------
+    arrow_data <- subset(plot_positions,
+                         velocity_magnitude >= layout_config$arrow_plot_threshold)
+    cat(sprintf(
+      "Showing only arrows with magnitude >= %.3f (figure unit)\n",
+      layout_config$arrow_plot_threshold
+    ))
+
+    # ---- Arrow point overlay ---------------------------------------------
     p <- p +
       geom_point(
-        data        = top_vel,
+        data        = arrow_data,
         inherit.aes = FALSE,
         aes(x = .data$V1, y = .data$V2),
-        shape       = 21,   # same filled-circle shape you used for notable antigens
-        color       = "black",
-        size        = aesthetic_config$point_size * 1.2,
-        stroke      = annotation_config$outline_size,
-        alpha       = aesthetic_config$point_alpha
+        shape  = 21, color = "black",
+        size   = aesthetic_config$point_size * 1.2,
+        stroke = annotation_config$outline_size,
+        alpha  = aesthetic_config$point_alpha
       )
-    
-    # add arrow layer
+
+    # ---- Arrow segments (use 2-D plot-space velocity components) ---------
     p <- p +
       geom_segment(
-        data      = top_vel,
+        data        = arrow_data,
         inherit.aes = FALSE,
-        aes(x    = .data$V1 - .data$v1,
-            y    = .data$V2 - .data$v2,
+        aes(x    = .data$V1 - .data$v_plot_x,
+            y    = .data$V2 - .data$v_plot_y,
             xend = .data$V1,
             yend = .data$V2),
         arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm")),
         alpha = aesthetic_config$arrow_alpha
       )
-    
-    
+
     if (annotate_arrows) {
-      # Add arrow labels (length in parentheses) at midpoint
-      p <- p + 
+      # Magnitude label at the arrow midpoint (2-D plot magnitude).
+      p <- p +
         geom_text(
-          data = top_vel,
-          aes(
-            x = .data$V1 - .data$v1 / 2,
-            y = .data$V2 - .data$v2 / 2,
-            label = sprintf("(%.2f)", .data$mag)
-          ),
-          size = 0.8*(annotation_config$size / ggplot2::.pt),  # Small font size
-          hjust = 0.5,
-          vjust = 0.5,
-          alpha = 0.8*annotation_config$alpha
+          data = arrow_data,
+          aes(x = .data$V1 - .data$v_plot_x / 2,
+              y = .data$V2 - .data$v_plot_y / 2,
+              label = sprintf("(%.2f)", .data$velocity_magnitude)),
+          size  = 0.8 * (annotation_config$size / ggplot2::.pt),
+          hjust = 0.5, vjust = 0.5,
+          alpha = 0.8 * annotation_config$alpha
         )
-      # Annotate top-velocity points exactly like notable-point labels
+
       if (requireNamespace("ggrepel", quietly = TRUE)) {
-        if (annotation_config$box) {
-          p <- p +
-            ggrepel::geom_label_repel(
-              data        = top_vel,
-              inherit.aes = FALSE,
-              aes(x = .data$V1, y = .data$V2, label = .data$name),
-              size              = annotation_config$size / ggplot2::.pt,
-              color             = annotation_config$color,
-              alpha             = annotation_config$alpha,
-              fontface          = annotation_config$fontface,
-              segment.size      = annotation_config$segment_size,
-              segment.alpha     = annotation_config$segment_alpha,
-              min.segment.length= annotation_config$min_segment_length,
-              max.overlaps      = annotation_config$max_overlaps,
-              box.padding       = unit(0.4, "lines"),
-              point.padding     = unit(0.3, "lines"),
-              force             = 1,
-              direction         = "both"
-            )
-        } else {
-          p <- p +
-            ggrepel::geom_text_repel(
-              data        = top_vel,
-              inherit.aes = FALSE,
-              aes(x = .data$V1, y = .data$V2, label = .data$name),
-              size              = annotation_config$size / ggplot2::.pt,
-              color             = annotation_config$color,
-              alpha             = annotation_config$alpha,
-              fontface          = annotation_config$fontface,
-              segment.size      = annotation_config$segment_size,
-              segment.alpha     = annotation_config$segment_alpha,
-              min.segment.length= annotation_config$min_segment_length,
-              max.overlaps      = annotation_config$max_overlaps,
-              box.padding       = unit(0.4, "lines"),
-              point.padding     = unit(0.3, "lines"),
-              force             = 1,
-              direction         = "both"
-            )
-        }
+        repel_geom <- if (annotation_config$box) ggrepel::geom_label_repel
+                      else                       ggrepel::geom_text_repel
+        p <- p +
+          repel_geom(
+            data        = arrow_data,
+            inherit.aes = FALSE,
+            aes(x = .data$V1, y = .data$V2, label = .data$name),
+            size               = annotation_config$size / ggplot2::.pt,
+            color              = annotation_config$color,
+            alpha              = annotation_config$alpha,
+            fontface           = annotation_config$fontface,
+            segment.size       = annotation_config$segment_size,
+            segment.alpha      = annotation_config$segment_alpha,
+            min.segment.length = annotation_config$min_segment_length,
+            max.overlaps       = annotation_config$max_overlaps,
+            box.padding        = unit(0.4, "lines"),
+            point.padding      = unit(0.3, "lines"),
+            force              = 1,
+            direction          = "both"
+          )
       } else {
         warning("ggrepel package not available - using basic text labels without repulsion")
         p <- p + geom_text(
-          data = top_vel,
+          data = arrow_data,
           aes(x = .data$V1, y = .data$V2, label = .data$name),
-          size           = annotation_config$size / ggplot2::.pt,
-          color          = annotation_config$color,
-          alpha          = annotation_config$alpha,
-          fontface       = annotation_config$fontface,
-          nudge_x        = - 0.15,
-          nudge_y        = - 0.15,
-          check_overlap  = TRUE
+          size          = annotation_config$size / ggplot2::.pt,
+          color         = annotation_config$color,
+          alpha         = annotation_config$alpha,
+          fontface      = annotation_config$fontface,
+          nudge_x       = -0.15, nudge_y = -0.15,
+          check_overlap = TRUE
         )
       }
     }
   }
-  
-  # Add axis limits if specified in layout_config
-  if (!is.null(layout_config$x_limits)) {
+
+  # ---- Axis limits / fixed coordinates / save (unchanged) -----------------
+  if (!is.null(layout_config$x_limits))
     p <- p + scale_x_continuous(limits = layout_config$x_limits)
-  }
-  if (!is.null(layout_config$y_limits)) {
+  if (!is.null(layout_config$y_limits))
     p <- p + scale_y_continuous(limits = layout_config$y_limits)
-  }
-  
-  # Add fixed coordinates if specified
-  if(layout_config$coord_type == "fixed") {
-    p <- p + coord_fixed(ratio = layout_config$aspect_ratio)
-  }
-  
-  # Save plot if requested
+  if (layout_config$coord_type == "fixed")
+    p <- p + ggplot2::coord_fixed(ratio = layout_config$aspect_ratio)
+
   if (layout_config$save_plot) {
-    if (draw_arrows){
-      if (!is.null(phylo_tree)) {
-        filename <- sprintf(
-          "temporal_map_ndim_%d_s_t_%g_s_x_%g_cladeDepth_%g_arrowthresh_%g.%s",
-          ndim,
-          sigma_t,
-          sigma_x,
-          clade_node_depth,
-          layout_config$arrow_plot_threshold,
-          layout_config$save_format
-        )
+    if (draw_arrows) {
+      filename <- if (!is.null(phylo_tree)) {
+        sprintf("temporal_map_ndim_%d_s_t_%g_s_x_%g_s_x_nd_%g_cladeDepth_%g_arrowthresh_%g.%s",
+                ndim, sigma_t, sigma_x, sigma_x_nd, clade_node_depth,
+                layout_config$arrow_plot_threshold, layout_config$save_format)
       } else {
-        filename <- sprintf(
-          "temporal_map_ndim_%d_s_t_%g_s_x_%g_arrowthresh_%g.%s",
-          ndim,
-          sigma_t,
-          sigma_x,
-          layout_config$arrow_plot_threshold,
-          layout_config$save_format
-        )
+        sprintf("temporal_map_ndim_%d_s_t_%g_s_x_%g_s_x_nd_%g_arrowthresh_%g.%s",
+                ndim, sigma_t, sigma_x, sigma_x_nd,
+                layout_config$arrow_plot_threshold, layout_config$save_format)
       }
     } else {
-      filename <- sprintf(
-        "temporal_map_ndim_%d.%s",
-        ndim,
-        layout_config$save_format
-      )
+      filename <- sprintf("temporal_map_ndim_%d.%s",
+                          ndim, layout_config$save_format)
     }
     save_plot(p, filename, layout_config, output_dir)
   }
-  
-  # Return both plot and velocity data
-  if (!is.null(velocity_data)) {
+
+  # ---- Return -------------------------------------------------------------
+  if (!is.null(antigenic_velocity)) {
     return(list(
-      plot = p,
-      velocity_data = velocity_data
+      plot               = p,
+      antigenic_velocity = antigenic_velocity   # was: velocity_data
     ))
-  } else {
-    return(p)
   }
+  return(p)
 }
+
 
 
 #' Create Clustered Mapping Plots
 #'
 #' @description
-#' Antigenic Mapping and Antigenic Velocity Function. Creates a visualization of points colored by cluster assignment using dimension 
-#' reduction, with optional antigenic velocity arrows. Points are colored by cluster with different shapes for antigens and 
-#' antisera.
+#' Antigenic Mapping and Antigenic Velocity Function.  See
+#' \code{plot_temporal_mapping} for the meaning of the new \code{sigma_x_nd}
+#' parameter and the structure of the returned \code{antigenic_velocity}
+#' object.  All velocity behaviour is identical between the two functions;
+#' the on-screen arrows are 2-D plot-space, the returned velocities are n-D.
 #'
-#' @param df_coords Data frame containing:
-#'        - V1, V2, ... Vn: Coordinate columns
-#'        - antigen: Binary indicator for antigen points 
-#'        - antiserum: Binary indicator for antiserum points
-#'        - cluster: Factor or integer cluster assignments
-#' @param ndim Number of dimensions in input coordinates
-#' @param draw_arrows logical; if TRUE, compute and draw antigenic drift vectors
-#' @param annotate_arrows logical; if TRUE, show names of the points having arrows
-#' @param phylo_tree Optional; phylo object in Newick format. Does not need to be rooted. If provided, used to compute antigenic velocity arrows.
-#' @param clade_node_depth Optional; integer; number of levels of parent nodes to define clades. Antigens from different clades will be excluded from the calculation antigenic velocity arrows. (Default: Automatically calculated mode of leaf-to-backbone distance of the tree)
-#' @param dim_config Dimension reduction configuration object specifying method and parameters
-#' @param aesthetic_config Aesthetic configuration object controlling plot appearance
-#' @param layout_config Layout configuration object controlling plot dimensions and style.
-#'        Use x_limits and y_limits in layout_config to set axis limits.
-#' @param output_dir Character. Directory for output files. Required if `layout_config$save_plot` is `TRUE`.
-#' @param show_shape_legend Logical. Whether to show the shape legend (default: TRUE)
-#' @param cluster_legend_title Character. Custom title for the cluster legend (default: "Cluster")
-#' @param annotation_config Annotation configuration object for labeling notable points
-#' @param sigma_t Optional; numeric; bandwidth for the Gaussian kernel discounting on time in years or the time unit of the data. If NULL, uses Silverman's rule of thumb.
-#' @param sigma_x Optional; numeric; bandwidth for the Gaussian kernel discounting on antigenic distance in antigenic units. If NULL, uses Silverman's rule of thumb.
-#' @param show_one_arrow_per_cluster Shows only the largest antigenic velocity arrow in each cluster
-#' @param cluster_legend_order in case you prefer a certain order for clusters in the legend, 
-#'        provide a list with that order here; e.g., c("cluster 2", "cluster 1")
+#' @inheritParams plot_temporal_mapping
+#' @param cluster_legend_title Character. Custom title for the cluster legend.
+#' @param show_one_arrow_per_cluster Show only the largest 2-D arrow per
+#'   cluster (filtering is on the 2-D plot magnitude, matching prior
+#'   behaviour).
+#' @param cluster_legend_order Optional ordering for clusters in the legend.
 #' 
 #' @details
 #' The function performs these steps:
@@ -1192,7 +1317,9 @@ plot_temporal_mapping <- function(df_coords, ndim,
 #' color represents cluster assignment. The color palette can be customized
 #' through the aesthetic_config.
 #'
-#' @return A \code{ggplot} object containing the cluster mapping visualization.
+#' @return If \code{draw_arrows = FALSE}, a single \code{ggplot} object.
+#'         If \code{draw_arrows = TRUE}, a list with elements \code{plot} and
+#'         \code{antigenic_velocity} (see \code{plot_temporal_mapping}).
 #'
 #' @examples
 #' # Basic usage with default configurations
@@ -1243,25 +1370,26 @@ plot_temporal_mapping <- function(df_coords, ndim,
 #' @importFrom ggplot2 ggplot aes coord_fixed theme geom_point geom_text geom_segment scale_colour_manual scale_fill_manual scale_shape_manual guides guide_legend labs scale_x_continuous scale_y_continuous
 #' @importFrom grid unit arrow
 #' @importFrom dplyr group_by filter ungroup
-#' @importFrom stats dist bw.nrd median
+#' @importFrom stats dist bw.nrd
 #' @export
 plot_cluster_mapping <- function(df_coords, ndim,
-                                 dim_config = new_dim_reduction_config(),
-                                 aesthetic_config = new_aesthetic_config(),
-                                 layout_config = new_layout_config(),
-                                 annotation_config = new_annotation_config(),
+                                 dim_config                 = new_dim_reduction_config(),
+                                 aesthetic_config           = new_aesthetic_config(),
+                                 layout_config              = new_layout_config(),
+                                 annotation_config          = new_annotation_config(),
                                  output_dir,
-                                 show_shape_legend = TRUE,
-                                 cluster_legend_title = "Cluster",
-                                 draw_arrows = FALSE,
-                                 annotate_arrows = TRUE,
-                                 phylo_tree = NULL,
-                                 sigma_t = NULL,
-                                 sigma_x = NULL,
-                                 clade_node_depth = NULL,
+                                 show_shape_legend          = TRUE,
+                                 cluster_legend_title       = "Cluster",
+                                 draw_arrows                = FALSE,
+                                 annotate_arrows            = TRUE,
+                                 phylo_tree                 = NULL,
+                                 sigma_t                    = NULL,
+                                 sigma_x                    = NULL,
+                                 sigma_x_nd                 = NULL,   # NEW
+                                 clade_node_depth           = NULL,
                                  show_one_arrow_per_cluster = FALSE,
-                                 cluster_legend_order = NULL) {
-  
+                                 cluster_legend_order       = NULL) {
+
   # Ensure ggrepel is available
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
     warning("The ggrepel package is required for optimal label placement. Install with: install.packages('ggrepel')")
@@ -1478,331 +1606,210 @@ plot_cluster_mapping <- function(df_coords, ndim,
     }
   }
   
-  # Initialize velocity data as NULL
-  velocity_data <- NULL
+  # =========================================================================
+  # Velocity block 
+  # =========================================================================
+  antigenic_velocity <- NULL
   if (draw_arrows) {
     if (!"year" %in% names(reduced_df)) {
       stop("`year` column is required when draw_arrows = TRUE")
     }
-    # limit to antigens only:
-    positions <- reduced_df[reduced_df$antigen, ]
-    positions$V1 <- positions$plot_x
-    positions$V2 <- positions$plot_y
-    
+
+    # ---- Antigens-only data in BOTH spaces ----
+    coord_cols_nd  <- paste0("V", seq_len(ndim))
+    nd_positions   <- df_coords[df_coords$antigen, ,
+                                drop = FALSE][, c("name", coord_cols_nd, "year"),
+                                              drop = FALSE]
+
+    plot_positions <- reduced_df[reduced_df$antigen, , drop = FALSE]
+    plot_positions$V1 <- plot_positions$plot_x
+    plot_positions$V2 <- plot_positions$plot_y
+    coord_cols_plot   <- c("V1", "V2")
+
+    # ---- Phylo / clade membership ----
+    clade_info <- NULL
     if (!is.null(phylo_tree)) {
-      if (!requireNamespace("ape", quietly = TRUE)) {
-        stop("Package 'ape' is required for this function. Please install it.")
-      }
-      if (ape::is.rooted(phylo_tree)) {
-        phylo_tree <- ape::unroot(phylo_tree)
-      }
-      #-- identify which tip names actually exist in the tree
-      positions$name <- toupper(positions$name)
-      all_points      <- positions$name
-      tree_tips_up  <- toupper(phylo_tree$tip.label)
-      tip_idx <- match(toupper(positions$name), tree_tips_up)
-      # tip_idx[i] is the row in D_edge (DN) for positions$name[i], or NA if absent
-      
-      # compare in uppercase for consistency
-      present_mask <- toupper(all_points) %in% tree_tips_up
-      tree_present_points <- unique(all_points[present_mask])
-      absent_tips <- setdiff(all_points, tree_present_points)
-      
-      if (length(absent_tips) > 0) {
-        cat(
-          "\nThe following antigens are not in the provided phylo_tree\n ",
-          "Thus, they did not contribute to limiting antigenic velo.\n",
-          paste(absent_tips, collapse = ", "), "\n"
-          
-        )
-      }
-      
-      # phylogenetic clade depth cutoff via leaf-to-backbone (longest-path in terms of edges, aka tree spine)
-      # 1) force every edge to length 1
-      tree_unit <- phylo_tree
-      tree_unit$edge.length <- rep(1, nrow(tree_unit$edge))
-      
-      # 2) compute node-to-node distances
-      DN <- ape::dist.nodes(tree_unit)
-      
-      # 3) find the two tips with maximum separation
-      n_tip <- length(tree_unit$tip.label)
-      tip_idx <- seq_len(n_tip)
-      tip_dist_mat <- DN[tip_idx, tip_idx, drop = FALSE]
-      # pick the first pair achieving the max
-      max_pair <- which(tip_dist_mat == max(tip_dist_mat), arr.ind = TRUE)[1, ]
-      
-      # 4) get the (internal + tip) nodes along that path
-      path_nodes <- ape::nodepath(tree_unit, max_pair[1], max_pair[2])
-      
-      # 5) for each tip, its distance to the nearest node on that path
-      leaf_distances <- apply(DN[tip_idx, path_nodes, drop = FALSE], 1, min)
-      
-      # 6) clade_node_depth = median distance (unless overridden)
-      clade_node_depth <- ifelse(
-        is.null(clade_node_depth),
-        ceiling(median(leaf_distances)),
-        clade_node_depth
+      nd_positions$name   <- toupper(nd_positions$name)
+      plot_positions$name <- toupper(plot_positions$name)
+
+      clade_info <- prepare_clade_membership(
+        point_names_upper = nd_positions$name,
+        phylo_tree        = phylo_tree,
+        clade_node_depth  = clade_node_depth
       )
-      
-      cat(sprintf("Average leaf-to-backbone distance of the tree (%.3f) was used as clades' depth cutoff.\n", clade_node_depth))
-      
-      # 7) get the clade nodes for each tip      
-      get_clade_node <- function(phy, tip_label, depth) {
-        # exact match in uppercase
-        ix <- match(toupper(tip_label), tree_tips_up)
-        if (is.na(ix)) {
-          stop("Internal error: tip '", tip_label, "' lookup failed")
-        }
-        node <- ix
-        for (k in seq_len(depth)) {
-          parent <- phy$edge[phy$edge[,2] == node, 1]
-          if (length(parent) != 1) break
-          node <- parent
-        }
-        node
-      }
-      
-      # only compute clades for points that are present in the tree
-      clade_nodes  <- setNames(
-        lapply(tree_present_points, get_clade_node, phy = phylo_tree, depth = clade_node_depth),
-        tree_present_points
-      )
-      clade_members <- lapply(
-        clade_nodes,
-        function(nd) ape::extract.clade(phylo_tree, nd)$tip.label
-      )
+      clade_node_depth <- clade_info$clade_node_depth
     }
-    
-    # Estimate kernel bandwidths based on Silverman's rule (bw.nrd)
-    # Use 'dists' is of class "dist" and length n*(n-1)/2
-    distmat_t <- dist(positions$year)
-    sigma_t <- ifelse(is.null(sigma_t), bw.nrd(distmat_t), sigma_t)
-    
-    distmat_x <- dist(positions[, c("V1", "V2")], method = "euclidean")
-    sigma_x <- ifelse(is.null(sigma_x),
-                      sqrt(0.5*( (bw.nrd(positions$V1))^2 + (bw.nrd(positions$V2))^2 )),
-                      sigma_x)
-    
-    cat(sprintf(
-      "Kernel bandwidth for time = %.3f\n", sigma_t
-    ))
-    cat(sprintf(
-      "Kernel bandwidth for antigenic distance = %.3f\n", sigma_x
-    ))
-    
-    
-    
-    n   <- nrow(positions)
-    v1  <- numeric(n)
-    v2  <- numeric(n)
-    
-    for (i in seq_len(n)) {
-      this_pt <- positions$name[i]
-      # determine past indices, excluding only known "non-clade" tips
-      if (!is.null(phylo_tree) && this_pt %in% names(clade_members)) {
-        # those present but *not* in the same clade
-        bad <- setdiff(tree_present_points, clade_members[[this_pt]])
-        past_idx <- which(
-          positions$year < positions$year[i] &
-            !(positions$name %in% bad)
-        )
-      } else {
-        # either no tree or tip absent from tree -> include *all* past points
-        past_idx <- which(positions$year < positions$year[i])
-      }
-      
-      if (length(past_idx)) {
-        #  positive dt = current - past
-        dt <- positions$year[i] - positions$year[past_idx]
-        dx <- positions$V1[i] - positions$V1[past_idx]
-        dy <- positions$V2[i] - positions$V2[past_idx]
-        w  <- exp(-(dx^2 + dy^2)/(2*sigma_x^2)) * exp(- (dt^2)/(2*sigma_t^2)) 
-        v1[i] <- sum(w * (dx / dt)) / sum(w)
-        v2[i] <- sum(w * (dy / dt)) / sum(w)
-      } else {
-        v1[i] <- NA
-        v2[i] <- NA
-      }
+
+    # ---- Bandwidths ----
+    if (is.null(sigma_t)) {
+      sigma_t <- bw.nrd(dist(nd_positions$year))
     }
-    positions$v1  <- v1
-    positions$v2  <- v2
-    positions$mag <- sqrt(v1^2 + v2^2)
-    
-    # Store velocity data for return
-    velocity_data <- positions[, c("name", "V1", "V2", "year", "v1", "v2", "mag")]
-    
+    if (is.null(sigma_x)) {
+      sigma_x <- sqrt(0.5 * ((bw.nrd(plot_positions$V1))^2 +
+                             (bw.nrd(plot_positions$V2))^2))
+    }
+    if (is.null(sigma_x_nd)) {
+      sigma_x_nd <- sqrt(mean(vapply(
+        coord_cols_nd,
+        function(col) bw.nrd(nd_positions[[col]])^2,
+        numeric(1)
+      )))
+    }
+
+    cat(sprintf("Kernel bandwidth for time = %.3f\n",                   sigma_t))
+    cat(sprintf("Kernel bandwidth for n-D antigenic distance = %.3f\n", sigma_x_nd))
+    cat(sprintf("Kernel bandwidth for 2-D plot distance = %.3f\n",      sigma_x))
+
+    # ---- Pass 1: n-D velocity (returned to caller) ----
+    nd_positions <- compute_kernel_velocity(
+      positions           = nd_positions,
+      coord_cols          = coord_cols_nd,
+      time_col            = "year",
+      sigma_t             = sigma_t,
+      sigma_x             = sigma_x_nd,
+      clade_members       = clade_info$clade_members,
+      tree_present_points = clade_info$tree_present_points
+    )
+    velocity_cols_nd  <- paste0("v", seq_len(ndim))
+    antigenic_velocity <- nd_positions[, c("name", coord_cols_nd, "year",
+                                           velocity_cols_nd,
+                                           "velocity_magnitude"),
+                                       drop = FALSE]
+
+    # ---- Pass 2: 2-D velocity (arrows only) ----
+    plot_positions <- compute_kernel_velocity(
+      positions           = plot_positions,
+      coord_cols          = coord_cols_plot,
+      time_col            = "year",
+      sigma_t             = sigma_t,
+      sigma_x             = sigma_x,
+      clade_members       = clade_info$clade_members,
+      tree_present_points = clade_info$tree_present_points
+    )
+    plot_positions$v_plot_x <- plot_positions$v1
+    plot_positions$v_plot_y <- plot_positions$v2
+    plot_positions$v1       <- NULL
+    plot_positions$v2       <- NULL
+
+    # ---- Pick arrows to display (2-D thresholding, unchanged) ----
     if (show_one_arrow_per_cluster) {
-      top_vel <- positions %>%
-        dplyr::group_by(cluster) %>%
-        dplyr::filter(mag == max(mag, na.rm = TRUE)) %>%
+      arrow_data <- plot_positions %>%
+        dplyr::group_by(.data$cluster) %>%
+        dplyr::filter(.data$velocity_magnitude ==
+                      max(.data$velocity_magnitude, na.rm = TRUE)) %>%
         dplyr::ungroup()
       cat("Showing one longest arrow per cluster\n")
     } else {
-      top_vel <- subset(positions, mag >= layout_config$arrow_plot_threshold)
-      cat(sprintf("Showing only arrows with magnitude >= %.3f (figure unit)\n", layout_config$arrow_plot_threshold))
+      arrow_data <- subset(plot_positions,
+                           velocity_magnitude >= layout_config$arrow_plot_threshold)
+      cat(sprintf(
+        "Showing only arrows with magnitude >= %.3f (figure unit)\n",
+        layout_config$arrow_plot_threshold
+      ))
     }
-    
-    top_vel$cluster <- factor(top_vel$cluster, levels = cluster_levels)
-    
-    # mark `top_vel` rows in reduced_df as arrows
-    reduced_df$is_arrow[match(top_vel$name, reduced_df$name)] <- TRUE
-    
-    # -- overlay top-velocity points with filled shape + black outline --
+
+    arrow_data$cluster <- factor(arrow_data$cluster, levels = cluster_levels)
+    reduced_df$is_arrow[match(arrow_data$name, reduced_df$name)] <- TRUE
+
+    # ---- Arrow point overlay (coloured by cluster) ----
     p <- p +
       geom_point(
-        data        = top_vel,
+        data        = arrow_data,
         inherit.aes = FALSE,
         aes(x = .data$V1, y = .data$V2, fill = .data$cluster),
-        shape       = 21,   # same filled-circle shape used for notable antigens
-        color       = "black",
-        size        = aesthetic_config$point_size * 1.2,
-        stroke      = annotation_config$outline_size,
-        alpha       = aesthetic_config$point_alpha
+        shape  = 21, color = "black",
+        size   = aesthetic_config$point_size * 1.2,
+        stroke = annotation_config$outline_size,
+        alpha  = aesthetic_config$point_alpha
       )
-    
-    # add arrow layer
+
+    # ---- Arrow segments ----
     p <- p +
       geom_segment(
-        data      = top_vel,
+        data        = arrow_data,
         inherit.aes = FALSE,
-        aes(x = .data$V1 - .data$v1,
-            y = .data$V2 - .data$v2,
+        aes(x    = .data$V1 - .data$v_plot_x,
+            y    = .data$V2 - .data$v_plot_y,
             xend = .data$V1,
             yend = .data$V2),
         arrow = arrow(length = unit(aesthetic_config$arrow_head_size, "cm")),
         alpha = aesthetic_config$arrow_alpha
       )
-    
+
     if (annotate_arrows) {
-      # Add arrow labels (length in parentheses) at midpoint
-      # p <- p + 
-      # geom_text(
-      #   data = top_vel,
-      #   aes(
-      #     x = V1 - v1 / 2,
-      #     y = V2 - v2 / 2,
-      #     label = sprintf("(%.2f)", mag)
-      #   ),
-      #   size = 0.8*(annotation_config$size / ggplot2::.pt),  # Small font size
-      #   hjust = 0.5,
-      #   vjust = 0.5,
-      #   alpha = 0.8*annotation_config$alpha
-      # )
-      # Annotate top-velocity points exactly like notable-point labels
       if (requireNamespace("ggrepel", quietly = TRUE)) {
-        if (annotation_config$box) {
-          p <- p +
-            ggrepel::geom_label_repel(
-              data        = top_vel,
-              inherit.aes = FALSE,
-              aes(x = .data$V1, y = .data$V2, label = .data$name),
-              size              = annotation_config$size / ggplot2::.pt,
-              color             = annotation_config$color,
-              alpha             = annotation_config$alpha,
-              fontface          = annotation_config$fontface,
-              segment.size      = annotation_config$segment_size,
-              segment.alpha     = annotation_config$segment_alpha,
-              min.segment.length= annotation_config$min_segment_length,
-              max.overlaps      = annotation_config$max_overlaps,
-              box.padding       = unit(0.4, "lines"),
-              point.padding     = unit(0.3, "lines"),
-              force             = 1,
-              direction         = "both"
-            )
-        } else {
-          p <- p +
-            ggrepel::geom_text_repel(
-              data        = top_vel,
-              inherit.aes = FALSE,
-              aes(x = .data$V1, y = .data$V2, label = .data$name),
-              size              = annotation_config$size / ggplot2::.pt,
-              color             = annotation_config$color,
-              alpha             = annotation_config$alpha,
-              fontface          = annotation_config$fontface,
-              segment.size      = annotation_config$segment_size,
-              segment.alpha     = annotation_config$segment_alpha,
-              min.segment.length= annotation_config$min_segment_length,
-              max.overlaps      = annotation_config$max_overlaps,
-              box.padding       = unit(0.4, "lines"),
-              point.padding     = unit(0.3, "lines"),
-              force             = 1,
-              direction         = "both"
-            )
-        }
+        repel_geom <- if (annotation_config$box) ggrepel::geom_label_repel
+                      else                       ggrepel::geom_text_repel
+        p <- p +
+          repel_geom(
+            data        = arrow_data,
+            inherit.aes = FALSE,
+            aes(x = .data$V1, y = .data$V2, label = .data$name),
+            size               = annotation_config$size / ggplot2::.pt,
+            color              = annotation_config$color,
+            alpha              = annotation_config$alpha,
+            fontface           = annotation_config$fontface,
+            segment.size       = annotation_config$segment_size,
+            segment.alpha      = annotation_config$segment_alpha,
+            min.segment.length = annotation_config$min_segment_length,
+            max.overlaps       = annotation_config$max_overlaps,
+            box.padding        = unit(0.4, "lines"),
+            point.padding      = unit(0.3, "lines"),
+            force              = 1,
+            direction          = "both"
+          )
       } else {
         warning("ggrepel package not available - using basic text labels without repulsion")
         p <- p + geom_text(
-          data = top_vel,
+          data = arrow_data,
           aes(x = .data$V1, y = .data$V2, label = .data$name),
-          size           = annotation_config$size / ggplot2::.pt,
-          color          = annotation_config$color,
-          alpha          = annotation_config$alpha,
-          fontface       = annotation_config$fontface,
-          nudge_x        = - 0.15,
-          nudge_y        = - 0.15,
-          check_overlap  = TRUE
+          size          = annotation_config$size / ggplot2::.pt,
+          color         = annotation_config$color,
+          alpha         = annotation_config$alpha,
+          fontface      = annotation_config$fontface,
+          nudge_x       = -0.15, nudge_y = -0.15,
+          check_overlap = TRUE
         )
       }
     }
   }
-  
-  # Add axis limits if specified in layout_config
-  if (!is.null(layout_config$x_limits)) {
+
+  # ---- Axis limits / fixed coords / save (unchanged save filename gains s_x_nd) ----
+  if (!is.null(layout_config$x_limits))
     p <- p + scale_x_continuous(limits = layout_config$x_limits)
-  }
-  if (!is.null(layout_config$y_limits)) {
+  if (!is.null(layout_config$y_limits))
     p <- p + scale_y_continuous(limits = layout_config$y_limits)
-  }
-  
-  # Add fixed coordinates if specified
-  if(layout_config$coord_type == "fixed") {
+  if (layout_config$coord_type == "fixed")
     p <- p + coord_fixed(ratio = layout_config$aspect_ratio)
-  }
-  
-  # Save plot if requested
+
   if (layout_config$save_plot) {
-    if (draw_arrows){
-      if (!is.null(phylo_tree)) {
-        filename <- sprintf(
-          "clustered_map_ndim_%d_s_t_%g_s_x_%g_cladeDepth_%g_arrowthresh_%g.%s",
-          ndim,
-          sigma_t,
-          sigma_x,
-          clade_node_depth,
-          layout_config$arrow_plot_threshold,
-          layout_config$save_format
-        )
+    if (draw_arrows) {
+      filename <- if (!is.null(phylo_tree)) {
+        sprintf("clustered_map_ndim_%d_s_t_%g_s_x_%g_s_x_nd_%g_cladeDepth_%g_arrowthresh_%g.%s",
+                ndim, sigma_t, sigma_x, sigma_x_nd, clade_node_depth,
+                layout_config$arrow_plot_threshold, layout_config$save_format)
       } else {
-        filename <- sprintf(
-          "clustered_map_ndim_%d_s_t_%g_s_x_%g_arrowthresh_%g.%s",
-          ndim,
-          sigma_t,
-          sigma_x,
-          layout_config$arrow_plot_threshold,
-          layout_config$save_format
-        )
+        sprintf("clustered_map_ndim_%d_s_t_%g_s_x_%g_s_x_nd_%g_arrowthresh_%g.%s",
+                ndim, sigma_t, sigma_x, sigma_x_nd,
+                layout_config$arrow_plot_threshold, layout_config$save_format)
       }
     } else {
-      filename <- sprintf(
-        "clustered_map_ndim_%d.%s",
-        ndim,
-        layout_config$save_format
-      )
+      filename <- sprintf("clustered_map_ndim_%d.%s",
+                          ndim, layout_config$save_format)
     }
     save_plot(p, filename, layout_config, output_dir)
   }
-  
-  # Return both plot and velocity data
-  if (!is.null(velocity_data)) {
+
+  if (!is.null(antigenic_velocity)) {
     return(list(
-      plot = p,
-      velocity_data = velocity_data
+      plot               = p,
+      antigenic_velocity = antigenic_velocity   # was: velocity_data
     ))
-  } else {
-    return(p)
   }
+  return(p)
 }
+
+
 
 
 #' Create 3D Visualization
