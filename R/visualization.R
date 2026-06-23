@@ -1017,6 +1017,13 @@ plot_temporal_mapping <- function(df_coords, ndim,
     annotation_df         <- reduced_df[0, ]
   }
 
+  # Resolve label text via notable_labels lookup (falls back to cleaned name)
+  annotation_df$label <- annotation_df$clean_name
+  if (!is.null(annotation_config$notable_labels) && nrow(annotation_df) > 0) {
+    mapped <- annotation_config$notable_labels[annotation_df$clean_name]
+    annotation_df$label <- ifelse(is.na(mapped), annotation_df$clean_name, mapped)
+  }
+
   reduced_df$point_type <- NA_character_
   reduced_df$point_type[reduced_df$antigen   & !reduced_df$is_notable] <- "antigen"
   reduced_df$point_type[reduced_df$antiserum & !reduced_df$is_notable] <- "antiserum"
@@ -1649,7 +1656,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
         # Use label boxes with background
         p <- p + ggrepel::geom_label_repel(
           data = annotation_df,
-          aes(x = .data$plot_x, y = .data$plot_y, label = .data$clean_name),
+          aes(x = .data$plot_x, y = .data$plot_y, label = .data$label),
           size = annotation_config$size / ggplot2::.pt,
           color = annotation_config$color,
           alpha = annotation_config$alpha,
@@ -1667,7 +1674,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
         # Use simple text without background
         p <- p + ggrepel::geom_text_repel(
           data = annotation_df,
-          aes(x = .data$plot_x, y = .data$plot_y, label = .data$clean_name),
+          aes(x = .data$plot_x, y = .data$plot_y, label = .data$label),
           size = annotation_config$size / ggplot2::.pt,
           color = annotation_config$color,
           alpha = annotation_config$alpha,
@@ -1687,7 +1694,7 @@ plot_cluster_mapping <- function(df_coords, ndim,
       warning("ggrepel package not available - using basic text labels without repulsion")
       p <- p + geom_text(
         data = annotation_df,
-        aes(x = .data$plot_x, y = .data$plot_y, label = .data$clean_name),
+        aes(x = .data$plot_x, y = .data$plot_y, label = .data$label),
         size = annotation_config$size / ggplot2::.pt,
         color = annotation_config$color,
         alpha = annotation_config$alpha,
