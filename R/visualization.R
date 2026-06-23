@@ -25,6 +25,11 @@
 #'   emphasized (filled square) and labeled. If FALSE, notable antisera are drawn
 #'   as ordinary antisera and are neither emphasized nor labeled, so each notable
 #'   strain is labeled once (at its antigen point).
+#' @param notable_labels Optional named character vector mapping notable-point
+#'   names (matching \code{notable_points} / the cleaned point name) to the text
+#'   actually drawn, e.g. \code{c("A/DARWIN/9/2021" = "DA/21")}. Names not found
+#'   fall back to the cleaned point name. If NULL (default), the cleaned point
+#'   name is shown.
 #' @return An S3 object of class \code{annotation_config}, which is a list
 #'         containing the specified configuration parameters for plot annotations.
 #' @export
@@ -40,7 +45,8 @@ new_annotation_config <- function(
     min_segment_length = 0,
     max_overlaps = Inf,
     outline_size = 0.4,
-    annotate_antisera = TRUE
+    annotate_antisera = TRUE,
+    notable_labels = NULL
 ) {
     config <- list(
         notable_points = notable_points,
@@ -54,9 +60,10 @@ new_annotation_config <- function(
         min_segment_length = min_segment_length,
         max_overlaps = max_overlaps,
         outline_size = outline_size,
-        annotate_antisera = annotate_antisera
+        annotate_antisera = annotate_antisera,
+        notable_labels = notable_labels
     )
-    
+
     # Validate inputs
     stopifnot(
         is.null(notable_points) || is.character(notable_points),
@@ -70,7 +77,8 @@ new_annotation_config <- function(
         is.numeric(min_segment_length), min_segment_length >= 0,
         is.numeric(max_overlaps), max_overlaps >= 0,
         is.numeric(outline_size), outline_size >= 0,
-        is.logical(annotate_antisera)
+        is.logical(annotate_antisera),
+        is.null(notable_labels) || is.character(notable_labels)
     )
     
     structure(config, class = "annotation_config")
@@ -1058,7 +1066,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
         # Use label boxes with background
         p <- p + ggrepel::geom_label_repel(
           data = annotation_df,
-          aes(x = .data$plot_x, y = .data$plot_y, label = .data$clean_name),
+          aes(x = .data$plot_x, y = .data$plot_y, label = .data$label),
           size = annotation_config$size / ggplot2::.pt,
           color = annotation_config$color,
           alpha = annotation_config$alpha,
@@ -1076,7 +1084,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
         # Use simple text without background
         p <- p + ggrepel::geom_text_repel(
           data = annotation_df,
-          aes(x = .data$plot_x, y = .data$plot_y, label = .data$clean_name),
+          aes(x = .data$plot_x, y = .data$plot_y, label = .data$label),
           size = annotation_config$size / ggplot2::.pt,
           color = annotation_config$color,
           alpha = annotation_config$alpha,
@@ -1096,7 +1104,7 @@ plot_temporal_mapping <- function(df_coords, ndim,
       warning("ggrepel package not available - using basic text labels without repulsion")
       p <- p + geom_text(
         data = annotation_df,
-        aes(x = .data$plot_x, y = .data$plot_y, label = .data$clean_name),
+        aes(x = .data$plot_x, y = .data$plot_y, label = .data$label),
         size = annotation_config$size / ggplot2::.pt,
         color = annotation_config$color,
         alpha = annotation_config$alpha,
@@ -1531,6 +1539,14 @@ plot_cluster_mapping <- function(df_coords, ndim,
 
   # Labels are placed on emphasized rows only
   annotation_df <- reduced_df[reduced_df$is_notable_draw, ]
+
+  # Resolve the text drawn for each label: use notable_labels[clean_name] when
+  # provided, otherwise the cleaned point name.
+  annotation_df$label <- annotation_df$clean_name
+  if (!is.null(annotation_config$notable_labels) && nrow(annotation_df) > 0) {
+    mapped <- annotation_config$notable_labels[annotation_df$clean_name]
+    annotation_df$label <- ifelse(is.na(mapped), annotation_df$clean_name, mapped)
+  }
 
   # Create point type with explicit factor levels - this is just for regular points
   reduced_df$point_type <- NA_character_  # Initialize
