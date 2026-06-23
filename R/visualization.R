@@ -21,7 +21,11 @@
 #' @param min_segment_length Numeric. Minimum length of connecting segments
 #' @param max_overlaps Numeric. Maximum number of overlaps allowed for annotations
 #' @param outline_size Numeric. Size of the outline for annotations
-#' @return An S3 object of class \code{annotation_config}, which is a list 
+#' @param annotate_antisera Logical. If TRUE (default), notable antisera are
+#'   emphasized (filled square) and labeled. If FALSE, notable antisera are drawn
+#'   as ordinary antisera and are neither emphasized nor labeled, so each notable
+#'   strain is labeled once (at its antigen point).
+#' @return An S3 object of class \code{annotation_config}, which is a list
 #'         containing the specified configuration parameters for plot annotations.
 #' @export
 new_annotation_config <- function(
@@ -35,20 +39,22 @@ new_annotation_config <- function(
     segment_alpha = 0.6,
     min_segment_length = 0,
     max_overlaps = Inf,
-    outline_size = 0.4
+    outline_size = 0.4,
+    annotate_antisera = TRUE
 ) {
     config <- list(
         notable_points = notable_points,
         size = size,
         color = color,
         alpha = alpha,
-        fontface = fontface, 
+        fontface = fontface,
         box = box,
         segment_size = segment_size,
         segment_alpha = segment_alpha,
         min_segment_length = min_segment_length,
         max_overlaps = max_overlaps,
-        outline_size = outline_size
+        outline_size = outline_size,
+        annotate_antisera = annotate_antisera
     )
     
     # Validate inputs
@@ -63,7 +69,8 @@ new_annotation_config <- function(
         is.numeric(segment_alpha), segment_alpha >= 0, segment_alpha <= 1,
         is.numeric(min_segment_length), min_segment_length >= 0,
         is.numeric(max_overlaps), max_overlaps >= 0,
-        is.numeric(outline_size), outline_size >= 0
+        is.numeric(outline_size), outline_size >= 0,
+        is.logical(annotate_antisera)
     )
     
     structure(config, class = "annotation_config")
@@ -94,7 +101,13 @@ new_annotation_config <- function(
 #' @param legend_position Legend position ("none", "right", "left", "top", "bottom")
 #' @param arrow_head_size Size of the arrow head for velocity arrows (in cm)
 #' @param arrow_alpha Transparency of arrows (0 = invisible, 1 = fully opaque)
-#' @return An S3 object of class \code{aesthetic_config}, which is a list 
+#' @param antiserum_color Optional character. If supplied, antiserum points are
+#'   drawn in this single fixed color instead of the cluster color scale, and are
+#'   kept off the cluster color legend. If NULL (default), antisera share the
+#'   cluster colors (original behavior).
+#' @param antiserum_alpha Optional numeric. Transparency for antiserum points when
+#'   \code{antiserum_color} is set. If NULL, \code{point_alpha} is used.
+#' @return An S3 object of class \code{aesthetic_config}, which is a list
 #'         containing the specified configuration parameters for plot aesthetics.
 #' @export
 new_aesthetic_config <- function(
@@ -115,7 +128,9 @@ new_aesthetic_config <- function(
     show_legend = TRUE,
     legend_position = "right",
     arrow_head_size=0.2,
-    arrow_alpha=0.6
+    arrow_alpha=0.6,
+    antiserum_color = NULL,
+    antiserum_alpha = NULL
 ) {
   # Validate point_shapes
   if (!is.numeric(point_shapes) || !all(c("antigen", "antiserum") %in% names(point_shapes))) {
@@ -155,7 +170,10 @@ new_aesthetic_config <- function(
     is.logical(show_legend),
     legend_position %in% c("none", "right", "left", "top", "bottom"),
     is.numeric(arrow_head_size), arrow_head_size >= 0, arrow_head_size <= 1,
-    is.numeric(arrow_alpha), arrow_alpha >= 0, arrow_alpha <= 1
+    is.numeric(arrow_alpha), arrow_alpha >= 0, arrow_alpha <= 1,
+    is.null(antiserum_color) || is.character(antiserum_color),
+    is.null(antiserum_alpha) ||
+      (is.numeric(antiserum_alpha) && antiserum_alpha >= 0 && antiserum_alpha <= 1)
   )
     
   config <- list(
@@ -176,7 +194,9 @@ new_aesthetic_config <- function(
     show_legend = show_legend,
     legend_position = legend_position,
     arrow_head_size= arrow_head_size,
-    arrow_alpha= arrow_alpha
+    arrow_alpha= arrow_alpha,
+    antiserum_color = antiserum_color,
+    antiserum_alpha = antiserum_alpha
   )
   structure(config, class = "aesthetic_config")
 }
@@ -208,6 +228,9 @@ new_aesthetic_config <- function(
 #' @param save_format Plot save format ("png", "pdf", "svg", "eps")
 #' @param reverse_x Numeric multiplier for x-axis direction (1 or -1)
 #' @param reverse_y Numeric multiplier for y-axis direction (1 or -1)
+#' @param swap_axes Logical. If TRUE, map the first reduced dimension (dim1) to the
+#'   x-axis and dim2 to the y-axis. Default FALSE keeps dim2 on x and dim1 on y.
+#'   Useful when the dominant axis of variation should read horizontally.
 #' @param x_limits Numeric vector of length 2 specifying c(min, max) for x-axis. If NULL, limits are set automatically.
 #' @param y_limits Numeric vector of length 2 specifying c(min, max) for y-axis. If NULL, limits are set automatically.
 #' @param arrow_plot_threshold Threshold for velocity arrows to be drawn in the same antigenic distance unit (default: 0.10)
@@ -236,6 +259,7 @@ new_layout_config <- function(
   save_format = "png",
   reverse_x = 1,
   reverse_y = 1,
+  swap_axes = FALSE,
   x_limits = NULL,
   y_limits = NULL,
   arrow_plot_threshold   = 0.1  # velocity arrows larger than this are shown
@@ -261,6 +285,7 @@ new_layout_config <- function(
     save_format = save_format,
     reverse_x = reverse_x,
     reverse_y = reverse_y,
+    swap_axes = swap_axes,
     x_limits = x_limits,
     y_limits = y_limits,
     arrow_plot_threshold   = arrow_plot_threshold
@@ -288,6 +313,7 @@ new_layout_config <- function(
     save_format %in% c("png", "pdf", "svg", "eps"),
     reverse_x %in% c(1, -1),
     reverse_y %in% c(1, -1),
+    is.logical(swap_axes),
     is.numeric(arrow_plot_threshold), arrow_plot_threshold >= 0
   )
   
@@ -1417,10 +1443,15 @@ plot_cluster_mapping <- function(df_coords, ndim,
   # Perform dimension reduction
   reduced_df <- reduce_dimensions(df_coords, dim_config)
   
-  # Apply axis reversals
-  reduced_df$plot_x <- reduced_df$dim2 * layout_config$reverse_x
-  reduced_df$plot_y <- reduced_df$dim1 * layout_config$reverse_y
-  
+  # Apply axis reversals (optionally swapping which reduced dimension maps to x/y)
+  if (isTRUE(layout_config$swap_axes)) {
+    reduced_df$plot_x <- reduced_df$dim1 * layout_config$reverse_x
+    reduced_df$plot_y <- reduced_df$dim2 * layout_config$reverse_y
+  } else {
+    reduced_df$plot_x <- reduced_df$dim2 * layout_config$reverse_x
+    reduced_df$plot_y <- reduced_df$dim1 * layout_config$reverse_y
+  }
+
   # Process row names to get strain names
   reduced_df$clean_name <- sub("^(V/|S/)", "", reduced_df$name)
   
@@ -1474,44 +1505,90 @@ plot_cluster_mapping <- function(df_coords, ndim,
     theme()  # Empty theme if no legend
   }
   
+  # Whether to emphasize/label notable antisera. When FALSE, the antiserum points
+  # of notable strains are rendered as ordinary antisera (no filled-square
+  # highlight, no label), while their antigen counterpart is still emphasized and
+  # labeled -- so each notable strain is labeled once. Defaults to TRUE, and old
+  # annotation_config objects lacking the field keep the original behavior.
+  annotate_antisera <- !isFALSE(annotation_config$annotate_antisera)
+
   # Flag notable points
   if (!is.null(annotation_config$notable_points) && length(annotation_config$notable_points) > 0) {
     reduced_df$is_notable <- reduced_df$clean_name %in% annotation_config$notable_points
-    annotation_df <- reduced_df[reduced_df$is_notable, ]
-    
-    if (nrow(annotation_df) == 0) {
+    if (!any(reduced_df$is_notable)) {
       warning("None of the specified notable points found in the data")
     }
   } else {
     reduced_df$is_notable <- FALSE
-    annotation_df <- reduced_df[0, ]  # Empty dataframe
   }
-  
+
+  # Rows drawn/labeled with notable emphasis. Notable antisera are demoted to
+  # ordinary points when annotate_antisera = FALSE.
+  reduced_df$is_notable_draw <- reduced_df$is_notable
+  if (!annotate_antisera) {
+    reduced_df$is_notable_draw[as.logical(reduced_df$antiserum)] <- FALSE
+  }
+
+  # Labels are placed on emphasized rows only
+  annotation_df <- reduced_df[reduced_df$is_notable_draw, ]
+
   # Create point type with explicit factor levels - this is just for regular points
   reduced_df$point_type <- NA_character_  # Initialize
-  reduced_df$point_type[reduced_df$antigen & !reduced_df$is_notable] <- "antigen"
-  reduced_df$point_type[reduced_df$antiserum & !reduced_df$is_notable] <- "antiserum"
-  reduced_df$point_type <- factor(reduced_df$point_type, 
+  reduced_df$point_type[reduced_df$antigen & !reduced_df$is_notable_draw] <- "antigen"
+  reduced_df$point_type[reduced_df$antiserum & !reduced_df$is_notable_draw] <- "antiserum"
+  reduced_df$point_type <- factor(reduced_df$point_type,
                                   levels = names(aesthetic_config$point_shapes))
   
   # Create plot
   p <- ggplot()
   
-  ## Regular points   ------ EXCLUDING notable and arrow points ------ 
+  ## Regular points   ------ EXCLUDING emphasized notable and arrow points ------
+  regular_df <- reduced_df[!reduced_df$is_notable_draw & !reduced_df$is_arrow, ]
+  antiserum_fixed <- aesthetic_config$antiserum_color
+  antiserum_pt_alpha <- if (!is.null(aesthetic_config$antiserum_alpha))
+    aesthetic_config$antiserum_alpha else aesthetic_config$point_alpha
+
+  if (is.null(antiserum_fixed)) {
+    # Antigens and antisera share the cluster color scale (original behavior)
+    p <- p +
+      geom_point(
+        data = regular_df,
+        aes(x = .data$plot_x, y = .data$plot_y,
+            color = .data$cluster,
+            shape = .data$point_type),
+        size = aesthetic_config$point_size,
+        alpha = aesthetic_config$point_alpha
+      )
+  } else {
+    # Antisera drawn in a fixed, de-emphasized color (kept off the cluster legend),
+    # underneath the antigens; antigens keep the cluster color scale.
+    .as_rows <- as.logical(regular_df$antiserum)
+    .as_rows[is.na(.as_rows)] <- FALSE
+    p <- p +
+      geom_point(
+        data = regular_df[.as_rows, ],
+        aes(x = .data$plot_x, y = .data$plot_y,
+            shape = .data$point_type),
+        color = antiserum_fixed,
+        size = aesthetic_config$point_size,
+        alpha = antiserum_pt_alpha
+      ) +
+      geom_point(
+        data = regular_df[!.as_rows, ],
+        aes(x = .data$plot_x, y = .data$plot_y,
+            color = .data$cluster,
+            shape = .data$point_type),
+        size = aesthetic_config$point_size,
+        alpha = aesthetic_config$point_alpha
+      )
+  }
+
+  ## Emphasized notable points and scales
   p <- p +
+    # Plot notable antigens with filled circle and outline
     geom_point(
-      data = reduced_df[!reduced_df$is_notable & !reduced_df$is_arrow, ],
-      aes(x = .data$plot_x, y = .data$plot_y, 
-          color = .data$cluster,
-          shape = .data$point_type),
-      size = aesthetic_config$point_size,
-      alpha = aesthetic_config$point_alpha
-    ) +
-    
-    # Plot notable points with filled shapes and outlines
-    geom_point(
-      data = reduced_df[reduced_df$is_notable & reduced_df$antigen, ],
-      aes(x = .data$plot_x, y = .data$plot_y, 
+      data = reduced_df[reduced_df$is_notable_draw & reduced_df$antigen, ],
+      aes(x = .data$plot_x, y = .data$plot_y,
           fill = .data$cluster),
       shape = 21,  # Filled circle with outline
       color = "black",  # Outline color
@@ -1519,10 +1596,10 @@ plot_cluster_mapping <- function(df_coords, ndim,
       stroke = annotation_config$outline_size,
       alpha = aesthetic_config$point_alpha
     ) +
-    # Notable antisera with different filled shape
+    # Notable antisera with different filled shape (only when emphasized)
     geom_point(
-      data = reduced_df[reduced_df$is_notable & reduced_df$antiserum, ],
-      aes(x = .data$plot_x, y = .data$plot_y, 
+      data = reduced_df[reduced_df$is_notable_draw & reduced_df$antiserum, ],
+      aes(x = .data$plot_x, y = .data$plot_y,
           fill = .data$cluster),
       shape = 22,  # Filled square with outline
       color = "black",  # Outline color
