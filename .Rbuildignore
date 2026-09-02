@@ -14,3 +14,4 @@
 ^inst/examples$
 ^doc$
 ^Meta$
+^CLAUDE\.md$
