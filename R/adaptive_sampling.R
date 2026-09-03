@@ -1293,7 +1293,10 @@ run_adaptive_sampling <- function(initial_samples_file,
       )
     })
     
-    parallel::stopCluster(cl)
+    # The cluster is shut down by the on.exit() handler registered above,
+    # which also covers the case where parLapply() raises. Calling
+    # stopCluster() here as well left that handler writing to closed worker
+    # connections, which failed with "invalid connection" on Windows.
     
   } else {
     # For Unix-like systems (Linux, macOS)
