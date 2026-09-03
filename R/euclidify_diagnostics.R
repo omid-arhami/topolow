@@ -47,7 +47,7 @@
 #' # choose; tempdir() is used here.
 #' result <- Euclidify(
 #'   dissimilarity_matrix = dist_mat,
-#'   output_dir = tempdir(),
+#'   output_dir = tempdir(check = TRUE),
 #'   n_initial_samples = 5,
 #'   n_adaptive_samples = 3,
 #'   folds = 3,
@@ -314,7 +314,7 @@ plot_cv_errors <- function(all_samples) {
 #'
 #' result <- Euclidify(
 #'   dissimilarity_matrix = dist_mat,
-#'   output_dir = tempdir(),
+#'   output_dir = tempdir(check = TRUE),
 #'   n_initial_samples = 5,
 #'   n_adaptive_samples = 3,
 #'   folds = 3,
@@ -329,7 +329,7 @@ plot_cv_errors <- function(all_samples) {
 #' # output_file is optional; supply a path only if you want the report saved.
 #' report <- create_diagnostic_report(
 #'   result,
-#'   output_file = file.path(tempdir(), "report.txt")
+#'   output_file = file.path(tempdir(check = TRUE), "report.txt")
 #' )
 #' cat(report, sep = "\n")
 #' }

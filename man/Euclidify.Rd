@@ -142,7 +142,7 @@ dist_mat[1, 3] <- dist_mat[3, 1] <- NA
 # Euclidify() will choose a sensible number of cores itself.
 result <- Euclidify(
   dissimilarity_matrix = dist_mat,
-  output_dir = tempdir(),
+  output_dir = tempdir(check = TRUE),
   n_initial_samples = 10,
   n_adaptive_samples = 7,
   max_cores = 1,

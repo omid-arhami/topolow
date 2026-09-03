@@ -67,7 +67,7 @@ dist_mat <- list_to_matrix(
 # choose; tempdir() is used here.
 result <- Euclidify(
   dissimilarity_matrix = dist_mat,
-  output_dir = tempdir(),
+  output_dir = tempdir(check = TRUE),
   n_initial_samples = 5,
   n_adaptive_samples = 3,
   folds = 3,
