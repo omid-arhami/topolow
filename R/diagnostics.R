@@ -111,6 +111,56 @@ plot_mcmc_diagnostics <- function(chain_files,
   return(combined_plot)
 }
 
+#' Create MCMC Diagnostic Plots
+#'
+#' @description
+#' `r lifecycle::badge("deprecated")`
+#' `create_diagnostic_plots()` was renamed to [plot_mcmc_diagnostics()] so that
+#' every plotting function in the package shares the `plot_*` prefix. Its `res`
+#' argument was renamed to `dpi` for the same reason.
+#'
+#' @param ... Arguments passed on to [plot_mcmc_diagnostics()].
+#' @param res `r lifecycle::badge("deprecated")` Use `dpi` instead.
+#'
+#' @return A `ggplot` object of the combined plots, as returned by
+#'   [plot_mcmc_diagnostics()].
+#'
+#' @examples
+#' chain_files <- c(
+#'   system.file("extdata", "diag_chain1.csv", package = "topolow"),
+#'   system.file("extdata", "diag_chain2.csv", package = "topolow"),
+#'   system.file("extdata", "diag_chain3.csv", package = "topolow")
+#' )
+#' if (all(nzchar(chain_files))) {
+#'   # Deprecated; use plot_mcmc_diagnostics() instead.
+#'   suppressWarnings(
+#'     create_diagnostic_plots(chain_files, mutual_size = 50, save_plot = FALSE)
+#'   )
+#' }
+#'
+#' @seealso [plot_mcmc_diagnostics()] for the replacement function.
+#'
+#' @keywords internal
+#' @export
+create_diagnostic_plots <- function(..., res = lifecycle::deprecated()) {
+  lifecycle::deprecate_warn(
+    when = "2.1.0",
+    what = "create_diagnostic_plots()",
+    with = "plot_mcmc_diagnostics()"
+  )
+
+  if (lifecycle::is_present(res)) {
+    lifecycle::deprecate_warn(
+      when = "2.1.0",
+      what = "create_diagnostic_plots(res)",
+      with = "plot_mcmc_diagnostics(dpi)"
+    )
+    return(plot_mcmc_diagnostics(..., dpi = res))
+  }
+
+  plot_mcmc_diagnostics(...)
+}
+
 
 #' Plot Embedding Quality
 #'
@@ -524,20 +574,32 @@ analyze_network_structure <- function(dissimilarity_matrix) {
 #' - ESS (which measures autocorrelation)
 #'
 #' @examples
-#' \dontrun{
-#' # Basic usage (sorted by default)
-#' chain_files <- c("chain1.csv", "chain2.csv", "chain3.csv")
-#' plot_performance_trace(chain_files)
-#'
-#' # Original sequential concatenation behavior
-#' plot_performance_trace(chain_files, sort_combined = FALSE)
-#'
-#' # Plot only NLL with separate chains
-#' plot_performance_trace(chain_files, metric = "NLL", combine_chains = FALSE)
-#'
-#' # Save the plot
-#' plot_performance_trace(chain_files, output_file = "fig/convergence_plateau.png")
+#' # Chain files are CSVs written by run_adaptive_sampling(); each must have
+#' # NLL and Holdout_MAE columns. Small synthetic chains stand in here.
+#' chain_files <- file.path(tempdir(), paste0("perf_chain", 1:2, ".csv"))
+#' for (f in chain_files) {
+#'   utils::write.csv(
+#'     data.frame(NLL = rnorm(50, 100, 10), Holdout_MAE = runif(50, 0.5, 2)),
+#'     f, row.names = FALSE
+#'   )
 #' }
+#'
+#' # Basic usage (sorted by default)
+#' p <- plot_performance_trace(chain_files)
+#'
+#' # Original sequential concatenation behaviour
+#' p <- plot_performance_trace(chain_files, sort_combined = FALSE)
+#'
+#' # Plot only NLL, with the chains kept separate
+#' p <- plot_performance_trace(chain_files, metric = "NLL", combine_chains = FALSE)
+#'
+#' # Save the plot. Write only to a directory you choose; tempdir() here.
+#' p <- plot_performance_trace(
+#'   chain_files,
+#'   output_file = file.path(tempdir(), "convergence_plateau.png")
+#' )
+#'
+#' unlink(chain_files)
 #'
 #' @importFrom ggplot2 ggplot aes geom_point geom_line geom_step labs theme_minimal
 #' @importFrom ggplot2 scale_color_manual facet_wrap theme element_text ggsave

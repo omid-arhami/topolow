@@ -107,79 +107,19 @@ A user-friendly wrapper function that automatically optimizes parameters and
 performs Euclidean embedding on a dissimilarity matrix. This function handles
 the entire workflow from parameter optimization to final embedding,  with comprehensive diagnostic tracking and visualization.
 }
+\section{Reproducibility}{
+
+\code{Euclidify()} calls \code{\link[=euclidean_embedding]{euclidean_embedding()}}, whose sweep order is randomized
+by a generator independent of R's RNG. Repeated runs therefore give similar
+but not identical coordinates even under \code{set.seed()}. See the
+Reproducibility section of \code{\link[=euclidean_embedding]{euclidean_embedding()}} for what is and is not
+seeded, and for how to obtain a canonical map.
+}
+
 \examples{
-# Example 1: Basic usage with small matrix
-test_data <- data.frame(
-object = rep(paste0("Obj", 1:4), each = 4),
-reference = rep(paste0("Ref", 1:4), 4),
-score = sample(c(1, 2, 4, 8, 16, 32, 64, "<1", ">12"), 16, replace = TRUE)
-)
-dist_mat <- list_to_matrix(
-  data = test_data,  # Pass the data frame, not file path
-  object_col = "object",
-  reference_col = "reference",
-  value_col = "score",
-  is_similarity = TRUE
-)
-\dontrun{
-# Note: output_dir is required for actual use
-result <- Euclidify(
-  dissimilarity_matrix = dist_mat,
-  output_dir = tempdir()  # Use temp directory for example
-)
-coordinates <- result$positions
-}
-
-# Example 2: Using custom parameter ranges
-\dontrun{
-result <- Euclidify(
-  dissimilarity_matrix = dist_mat,
-  output_dir = tempdir(),
-  n_initial_samples = 10,
-  n_adaptive_samples = 7,
-  verbose = "off"
-)
-}
-
-# Example 3: Handling missing data
-dist_mat_missing <- dist_mat
-dist_mat_missing[1, 3] <- dist_mat_missing[3, 1] <- NA
-\dontrun{
-result <- Euclidify(
-  dissimilarity_matrix = dist_mat_missing,
-  output_dir = tempdir(),
-  n_initial_samples = 10,
-  n_adaptive_samples = 7,
-  verbose = "off"
-)
-}
-
-# Example 4: Using threshold indicators
-dist_mat_threshold <- dist_mat
-dist_mat_threshold[1, 2] <- ">2"
-dist_mat_threshold[2, 1] <- ">2"
-\dontrun{
-result <- Euclidify(
-  dissimilarity_matrix = dist_mat_threshold,
-  output_dir = tempdir(),
-  n_initial_samples = 10,
-  n_adaptive_samples = 7,
-  verbose = "off"
-)
-}
-
-# Example 5: Parallel processing with custom cores
-\dontrun{
-result <- Euclidify(
-  dissimilarity_matrix = dist_mat,
-  output_dir = tempdir(),
-  max_cores = 4,
-  n_adaptive_samples = 100,
-  save_results = TRUE  # Save positions to CSV
-)
-}
-
-# Example 6: Basic usage
+# Build a small dissimilarity matrix from a long-format table. The scores
+# include censored values ("<1", ">12"), which are carried through as
+# thresholds rather than being discarded.
 test_data <- data.frame(
   object = rep(paste0("Obj", 1:4), each = 4),
   reference = rep(paste0("Ref", 1:4), 4),
@@ -192,21 +132,32 @@ dist_mat <- list_to_matrix(
   value_col = "score",
   is_similarity = TRUE
 )
-\dontrun{
-# Basic usage with diagnostics
+
+# Missing measurements need no imputation; leave them as NA.
+dist_mat[1, 3] <- dist_mat[3, 1] <- NA
+
+\donttest{
+# `output_dir` is required. Examples must not write outside tempdir().
+# `max_cores = 1` keeps this example fast; omit it in real use and
+# Euclidify() will choose a sensible number of cores itself.
 result <- Euclidify(
   dissimilarity_matrix = dist_mat,
   output_dir = tempdir(),
-  create_diagnostic_plots = TRUE
+  n_initial_samples = 10,
+  n_adaptive_samples = 7,
+  max_cores = 1,
+  verbose = "off"
 )
 
-# View diagnostic report
-report <- create_diagnostic_report(result)
-cat(report, sep = "\n")
+# Embedded coordinates, one row per object
+head(result$positions)
 
-# Access specific diagnostic plots
-print(result$diagnostic_plots$parameter_search)
-print(result$diagnostic_plots$convergence)
+# Dimensionality and parameters chosen by the search
+result$optimal_params
+
+# Fit of the embedding to the input dissimilarities
+result$mae
 }
+
 
 }

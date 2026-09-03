@@ -18,9 +18,36 @@ Character vector with report lines (invisibly).
 Generates a text summary of the Euclidify optimization process.
 }
 \examples{
-\dontrun{
-result <- Euclidify(..., create_diagnostic_plots = TRUE)
-report <- create_diagnostic_report(result, "diagnostics/report.txt")
+\donttest{
+test_data <- data.frame(
+  object = rep(paste0("Obj", 1:4), each = 4),
+  reference = rep(paste0("Ref", 1:4), 4),
+  score = sample(c(1, 2, 4, 8, 16, 32, 64, "<1", ">12"), 16, replace = TRUE)
+)
+dist_mat <- list_to_matrix(
+  data = test_data, object_col = "object", reference_col = "reference",
+  value_col = "score", is_similarity = TRUE
+)
+
+result <- Euclidify(
+  dissimilarity_matrix = dist_mat,
+  output_dir = tempdir(),
+  n_initial_samples = 5,
+  n_adaptive_samples = 3,
+  folds = 3,
+  mapping_max_iter = 50,
+  ndim_range = c(2, 4),
+  max_cores = 1,
+  verbose = "off",
+  create_diagnostic_plots = TRUE,
+  diagnostic_plot_types = "parameter_search"
+)
+
+# output_file is optional; supply a path only if you want the report saved.
+report <- create_diagnostic_report(
+  result,
+  output_file = file.path(tempdir(), "report.txt")
+)
 cat(report, sep = "\n")
 }
 

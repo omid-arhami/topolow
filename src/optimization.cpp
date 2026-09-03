@@ -4,21 +4,14 @@
 // Optimized C++ backend for Topolow Euclidean Embedding
 //
 // =============================================================================
-// This file contains two distinct implementations of the embedding algorithm:
+// This file provides one exported implementation of the embedding algorithm:
 //
-// 1. optimize_layout_cpp (APPROXIMATE / SCALABLE)
-//    - Complexity: O(E + N*k) per iteration
-//    - Strategy: Decoupled Two-Phase (Phase 1: Edges, Phase 2: Node-centric sampling)
-//    - Best for: Large datasets (N > 500) where O(N²) is prohibitive
-//    - Trade-off: Approximates between-cluster repulsion via negative sampling
-//
-// 2. optimize_layout_exact_cpp (EXACT / HIGH FIDELITY)
-//    - Complexity: O(N²) per iteration
+//   optimize_layout_exact_cpp (EXACT / HIGH FIDELITY)
+//    - Complexity: O(N^2) per iteration
 //    - Strategy: Full pairwise iteration over all N(N-1)/2 pairs
-//    - Best for: Small to medium datasets (N ≤ 500) or when exact topology is critical
 //    - Advantage: Exactly matches the original R algorithm behavior
 //
-// PHYSICS NOTES (applies to both):
+// PHYSICS NOTES:
 // - Spring constant k DECAYS exponentially: k(t+1) = k(t) * (1 - cooling_rate)
 // - Repulsion constant c_repulsion is CONSTANT (does NOT decay)
 // - This ensures stable separation as springs weaken in the fine-tuning phase
@@ -144,7 +137,7 @@ inline std::pair<double, int> compute_error_vectorized(
 
 
 // =============================================================================
-// 2. EXACT ALGORITHM (O(N²) Full Pairwise)
+// EXACT ALGORITHM (O(N^2) Full Pairwise)
 // =============================================================================
 //
 // Processes ALL N(N-1)/2 pairs in shuffled order each iteration.
@@ -214,7 +207,29 @@ List optimize_layout_exact_cpp(
     }
   }
   
-  // RNG
+  // RNG for sweep ordering only.
+  //
+  // This generator is seeded from std::random_device and is therefore
+  // INDEPENDENT of R's RNG stream: set.seed() in R does not control it.
+  // That is deliberate. Its only use is std::shuffle() on all_pairs below,
+  // which permutes the ORDER in which pairs are visited within a sweep. It
+  // never changes which pairs exist, their observed dissimilarities, their
+  // weights, the spring/repulsion physics, the cooling schedule, or the
+  // convergence test -- all of which are fully deterministic.
+  //
+  // Because updates are Gauss-Seidel (applied in place, see the sweep loop),
+  // a FIXED visiting order imposes a systematic positional bias: points early
+  // in the order are always moved against stale neighbour positions.
+  // Reshuffling every iteration removes that bias and supplies the stochastic
+  // perturbation that lets the configuration escape local optima.
+  //
+  // set.seed() DOES control the starting configuration, which is drawn with
+  // stats::runif() in R/core.R before this function is called. Run-to-run
+  // variation in the final embedding is expected and by design; see the
+  // Reproducibility section of ?euclidean_embedding.
+  //
+  // Distinct from the finiteness fail-safe documented on
+  // compute_error_vectorized above, which concerns non-finite positions.
   std::random_device rd;
   std::mt19937 rng(rd());
   
@@ -240,7 +255,7 @@ List optimize_layout_exact_cpp(
   if (convergence_check_freq < 1) convergence_check_freq = 10;
   
   if (verbose) {
-    Rcpp::Rcout << "=== Exact Algorithm (O(N²) Full Pairwise) ===" << "\n";
+    Rcpp::Rcout << "=== Exact Algorithm (O(N^2) Full Pairwise) ===" << "\n";
     Rcpp::Rcout << "Points: " << n << ", Pairs per iteration: " << num_pairs << "\n";
     Rcpp::Rcout << "Parameters: k0=" << k0 << ", cooling=" << cooling_rate 
                 << ", c_rep=" << c_repulsion << "\n";
@@ -252,6 +267,8 @@ List optimize_layout_exact_cpp(
   for (int iter = 0; iter < n_iter; ++iter) {
     
     // Shuffle ALL pairs - critical for stochastic optimization
+    // Re-permute the sweep order each iteration (see the RNG note above):
+    // order-only randomization, deterministic physics.
     std::shuffle(all_pairs.begin(), all_pairs.end(), rng);
     
     // Process each pair
@@ -373,7 +390,7 @@ List optimize_layout_exact_cpp(
         converge_count = 0;
         
       } else if (current_error <= worsening_threshold) {
-        // PLATEAU: error is hovering near best (within ±epsilon band)
+        // PLATEAU: error is hovering near best (within +/-epsilon band)
         // Update best if this is still a slight improvement
         if (current_error < best_mae) {
           best_mae = current_error;

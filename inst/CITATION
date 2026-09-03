@@ -1,0 +1,28 @@
+citHeader("To cite topolow in publications, please use the Bioinformatics paper for the method and its applications, and the arXiv preprint for the mathematical properties of the algorithm.")
+
+bibentry(
+  bibtype  = "Article",
+  title    = "Topolow: a mapping algorithm for antigenic cross-reactivity and binding affinity assays",
+  author   = c(person("Omid", "Arhami"),
+               person("Pejman", "Rohani")),
+  journal  = "Bioinformatics",
+  year     = "2025",
+  volume   = "41",
+  number   = "7",
+  pages    = "btaf372",
+  doi      = "10.1093/bioinformatics/btaf372",
+  issn     = "1367-4811"
+)
+
+bibentry(
+  bibtype      = "Misc",
+  title        = "Topolow: Force-Directed Euclidean Embedding of Dissimilarity Data with Robustness Against Non-Metricity and Sparsity",
+  author       = c(person("Omid", "Arhami"),
+                   person("Pejman", "Rohani")),
+  year         = "2025",
+  eprint       = "2508.01733",
+  archiveprefix = "arXiv",
+  primaryclass = "cs.CG",
+  doi          = "10.48550/arXiv.2508.01733",
+  url          = "https://arxiv.org/abs/2508.01733"
+)

@@ -1,6 +1,6 @@
 # topolow 0.3.2
 
-*  Initial release to CRAN (revised per CRAN reviewr's instructions).
+*  Initial public release on GitHub (pre-CRAN). The first CRAN release was 1.0.0.
 *  Introduces the Topolow algorithm, a physics-inspired method for antigenic cartography.
 *  Provides robust mapping and complete positioning of all antigens, even with highly sparse datasets (>95% missing values).
 *  Implements automatic, likelihood-based estimation to determine the optimal dimensionality of the antigenic map.
@@ -11,7 +11,7 @@
 # topolow 1.0.0 (2025-07-01)
 
 * All exported methods now include `\value` documentation describing the output's class, structure, and meaning.
-* Examples for unexported functions have been omitted, and `\dontrun{}` wrappers have been removed5. Slower examples are now wrapped in `\donttest{}` as appropriate.
+* Examples for unexported functions have been omitted, and `\dontrun{}` wrappers have been removed. Slower examples are now wrapped in `\donttest{}` as appropriate.
 * Functions no longer write to user directories by default. Functions where writing a file is the main purpose now require the user to specify an output directory.
 * The complex distributed processing functionality has been removed, as it was not essential for typical use cases.
 * The link to our paper and citation information have been updated.
@@ -116,11 +116,15 @@ result <- euclidean_embedding(dissimilarity_matrix = my_matrix,  # parameter nam
 Included figures in the vignette.
 
 
-# topolow 2.1.0 (2025-10-02)
+# topolow 2.1.0
 
-## Breaking Changes
+## Deprecations
 
-* **`create_diagnostic_plots()`** renamed to `plot_mcmc_diagnostics()` and its parameter `res` renamed to `dpi` for naming consistency
+* `create_diagnostic_plots()` is deprecated in favor of `plot_mcmc_diagnostics()`,
+  so that every plotting function shares the `plot_*` prefix. The old function
+  still works and warns; it will be removed in version 3.0.0.
+  - **Migration**: `create_diagnostic_plots(...)` --> `plot_mcmc_diagnostics(...)`
+  - **Migration**: argument `res` --> `dpi`
 
 ## New Features
 
@@ -133,6 +137,9 @@ Included figures in the vignette.
   - `subsample_dissimilarity_matrix()`: Creates random subsamples with automatic connectivity validation and adaptive size adjustment
   - `sanity_check_subsample()`: Validates subsample suitability for cross-validation
   - `prune_sparse_matrix()`: Prunes sparse dissimilarity matrices to a well-connected subset
+  - `plot_mcmc_diagnostics()`: Replacement for `create_diagnostic_plots()` (see Deprecations)
+  - `plot_ll_improvement()`, `plot_performance_trace()`: Diagnostics for the parameter search
+  - `plot_euclidify_diagnostics()`, `create_diagnostic_report()`: Diagnostics for `Euclidify()` output
 
 * **Enhanced Functions**:
   - `initial_parameter_optimization()`: Now accepts `opt_subsample` parameter
@@ -143,6 +150,7 @@ Included figures in the vignette.
 ### How Subsampling Works
 
 When `opt_subsample` is specified:
+
 1. Each parameter evaluation uses a random subsample of the specified size
 2. Connectivity is automatically validated; disconnected subsamples are rejected
 3. If connectivity fails, sample size needs to be increased
@@ -153,12 +161,11 @@ The `opt_subsample` parameter is optional (default: NULL = use full data).
 
 ### Performance Benefits
 
-- Speeds up parameter optimization by ~10-50x on large datasets (>500 points)
+- Substantially reduces the cost of parameter optimization on large datasets
+  (>500 points), since each evaluation embeds a subsample rather than the full
+  matrix
 - Reduces memory usage proportional to subsample size
 - Parameters found on subsamples generalize well to full data
-
-### Other changes
-- Package gridExtra is a required import now.
 
 ### Recommendations
 
@@ -166,9 +173,39 @@ The `opt_subsample` parameter is optional (default: NULL = use full data).
 - Datasets > 500 points: Recommended `opt_subsample = 200-500`
 - Always ensure `opt_subsample >= folds` for reliable cross-validation
 
+### Epoch-Based Parameter Search
+
+* `initial_parameter_optimization()` gained an `epochs` argument (default: 1).
+  With more than one epoch the search runs as a simple evolutionary strategy:
+
+  1. **Initialization**: start from the user-provided parameter ranges.
+  2. **Epoch loop**, for each epoch:
+     a. Generate `num_samples` points by Latin hypercube sampling within the
+        current ranges.
+     b. If `opt_subsample` is set, each evaluation uses its own random subsample.
+     c. Evaluate the parameter sets by cross-validation, in parallel batches.
+     d. **Range update** (after every epoch but the last): sort by NLL, keep the
+        top 50%, and set the next epoch's range to
+        `0.75 * min(survivors)` through `1.25 * max(survivors)`. This lets the
+        search drift toward and zoom in on promising regions.
+  3. **Finalization**: log-transform the results of the final epoch for direct
+     use with adaptive sampling.
+
+### Other changes
+
+- Package `gridExtra` is a required import now.
+
 ## Bug Fixes
 
-- Conversion of matrices to numeric in "R/adaptive_sampling.R" are now properly handled by extract_numeric_values() function of the Topolow package.
+- `initial_parameter_optimization()` (and therefore `Euclidify()`) could fail on
+  Windows with `invalid connection` whenever the parameter search ran in more
+  than one batch. A cluster shutdown handler was registered per batch, and all
+  of them referred to the last cluster, so it was stopped repeatedly while the
+  earlier clusters leaked. Each batch's cluster is now stopped as soon as that
+  batch finishes. The failure was reliably triggered by `max_cores = 2`, which
+  is the configuration used on CRAN check machines.
+- Conversion of matrices to numeric in `R/adaptive_sampling.R` is now handled
+  by the package's `extract_numeric_values()` function.
 
 ## Improvements
 
@@ -178,70 +215,66 @@ The `opt_subsample` parameter is optional (default: NULL = use full data).
 * Comprehensive logging of subsampling operations
 * New diagnostic plots including MCMC exploration and parameter fit traces
 
-### New changes towards v3:
+## C++ Backend for Core Optimization
 
-#' The function performs these steps in an epoch-based evolutionary strategy:
-#' 1. **Initialization**: Starts with the user-provided parameter ranges.
-#' 2. **Epoch Loop**: For each epoch:
-#'    a. Generates `num_samples` using LHS within the current parameter ranges.
-#'    b. If `opt_subsample` is specified, each evaluation uses a random subsample.
-#'    c. Evaluates parameter sets via cross-validation (in parallel batches).
-#'    d. **Range Update** (after all but the final epoch):
-#'       - Sorts results by NLL and keeps the top 50%.
-#'       - Updates parameter ranges for the next epoch based on survivors:
-#'         New Min = 0.75 * Min(Survivors), New Max = 1.25 * Max(Survivors).
-#'       - This allows the search to drift and zoom in on optimal regions.
-#' 3. **Finalization**: Automatically log-transforms the results from the **final epoch**
-#'    for direct use with adaptive sampling.
+* **This is the first release of topolow containing compiled code.** The core
+  optimization loop of `euclidean_embedding()` has been rewritten in C++ using
+  Rcpp, which speeds up the embedding substantially, most visibly on larger
+  matrices. The remaining R-level loops in that function were replaced with
+  vectorized operations.
 
-#' @param epochs Integer. Number of optimization epochs. In each epoch, parameters are sampled,
-#'   evaluated, and the best 50% are used to refine the search space for the next epoch.
-#'   Default: 3.
+* **New parameter for `euclidean_embedding()`**:
+  - `convergence_check_freq`: How often, in iterations, to test for convergence
+    (default: 3). Larger values reduce the bookkeeping overhead; smaller values
+    stop more promptly.
 
-### C++ Backend for Core Optimization (Performance)
+* **Implementation details**:
+  - **COO format**: edge data is held as a coordinate list, which avoids the
+    zero-dropping behaviour of sparse matrix classes
+  - **Shuffled sweep order**: the sweep order is permuted each iteration with a
+    C++ Mersenne Twister (`std::mt19937`), which is what lets the configuration
+    escape local optima
+  - **Immediate updates**: Gauss-Seidel style in-place position updates, as in
+    the original R implementation
+  - **Single-pass error calculation**: the MAE over active constraints is
+    accumulated in one pass over the edge list at each convergence check
+  - **Cache-friendly layout**: edge data is stored in contiguous arrays
+  - **Pre-computed factors**: degree-based normalization factors are computed
+    once, before the iteration begins
+  - **Direct memory access**: the inner loop writes to the raw column-major
+    position buffer
 
-* **Major Performance Enhancement**: The core optimization loop in `euclidean_embedding()` has been rewritten in C++ using Rcpp, providing significant speedups for large datasets. All for loops in the core function `euclidean_embedding()` have been replaced with vector operations.
+* **Return value enhancement**: the `convergence` field of the returned
+  `topolow` object now includes:
+  - `achieved`: whether convergence was reached
+  - `error`: final MAE on active constraints
+  - `final_k`: final spring constant after cooling
 
-* **New Algorithm: Negative Sampling (not used)**
-  - Implements negative sampling to approximate unmeasured pair repulsion
-  - Reduces complexity from O(N²) per iteration to O(E × k), where E is the number of measured edges and k is the number of negative samples
-  - New parameter `n_negative_samples` (default: 5) controls the approximation quality vs. speed tradeoff
-  - Particularly beneficial for sparse matrices (>90% missing values)
+* **Dependencies**: added `Rcpp` to `LinkingTo` (compile-time only; no new
+  runtime dependency). The backend is Rcpp-only and links no BLAS or LAPACK
+  routines, so no `src/Makevars` is required on any platform.
 
-* **New Parameters for `euclidean_embedding()`**:
-  - `n_negative_samples`: Number of negative samples per edge endpoint (default: 5). Higher values better approximate the original O(N²) algorithm but increase computation time.
-  - `convergence_check_freq`: How often to check for convergence in iterations (default: 10). Lower values give more precise stopping but add overhead.
+### Reproducibility and numerical equivalence
 
-* **Implementation Details**:
-  - **COO Format**: Uses Coordinate List format for edge data to avoid sparse matrix zero-dropping issues
-  - **Edge Shuffling**: C++ native random number generator (`std::mt19937`) for stochastic edge ordering, critical for escaping local optima
-  - **Immediate Updates**: Preserves Gauss-Seidel style position updates from the original R implementation for identical convergence behavior
-  - **Single-Pass Error Calculation**: Computes the MAE over active constraints in one pass across the edge list during convergence checks
-  - **Cache-Friendly Layout**: Edge data stored in contiguous arrays for better CPU cache utilization
-  - **Pre-computed Factors**: Degree-based normalization factors computed once before optimization
-  - **Direct Memory Access**: Position updates in the inner loop operate on the raw column-major buffer
-
-* **Return Value Enhancement**: The `convergence` field in the returned `topolow` object now includes:
-  - `achieved`: Boolean indicating whether convergence was reached
-  - `error`: Final MAE on active constraints
-  - `final_k`: Final spring constant value after cooling
-
-* **Dependencies**: Added `Rcpp` to `LinkingTo` (compile-time only, no runtime dependency added). The backend is Rcpp-only and links no BLAS or LAPACK routines, so no `src/Makevars` is required on any platform.
-
-* **Note on numerical output**: The convergence MAE (`result$convergence$error`) is now accumulated in package code rather than through a BLAS routine, so it may differ from earlier development builds in the last representable digit. This is far below the run-to-run variation produced by the randomized pair shuffle, and it makes the value consistent across platforms, which it previously was not. Embedded positions are unaffected.
-
-### Performance Comparison
-
-| Dataset Size | Sparsity | R (v2.0) | C++ (v2.1) | Speedup |
-|--------------|----------|----------|------------|---------|
-| 100 points   | 50%      | ~2s      | ~0.3s      | ~7×     |
-| 500 points   | 80%      | ~45s     | ~4s        | ~11×    |
-| 1000 points  | 95%      | ~180s    | ~12s       | ~15×    |
-
-*Benchmarks on 1000 iterations, 3 dimensions. Actual speedup varies with data characteristics.*
+* The algorithm, its force model, cooling schedule and convergence criterion are
+  unchanged from 2.0.1. Results from this version are **statistically
+  equivalent** to 2.0.1 but **not bit-identical**, for two reasons:
+  - The sweep order is randomized by a C++ generator seeded from
+    `std::random_device`, independent of R's RNG. `set.seed()` fixes the
+    starting configuration (drawn with `stats::runif()`) but not the sweep
+    order, so repeated runs differ slightly. The R implementation in 2.0.1
+    shuffled the sweep order in the same way.
+  - The convergence MAE (`result$convergence$error`) is now accumulated in
+    package code rather than by a BLAS routine, so it can differ in the last
+    representable digit from earlier development builds. This is far below the
+    run-to-run variation produced by the shuffle, and it makes the value
+    consistent across platforms, which it previously was not. Embedded
+    positions are unaffected.
+* See the new `Reproducibility` section of `?euclidean_embedding` for what is
+  and is not seeded, and for how to obtain a single canonical map.
 
 ### Backward Compatibility
 
 - All existing code using `euclidean_embedding()` will work without modification
-- Default parameter values preserve original algorithm behavior
+- Default parameter values preserve the original algorithm's behavior
 - Output structure remains compatible with downstream functions (`Euclidify()`, parameter optimization, etc.)

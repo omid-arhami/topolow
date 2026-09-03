@@ -258,3 +258,35 @@ test_that("profile_likelihood input validation", {
     "bandwidth_factor must be positive"
   )
 })
+
+test_that("initial_parameter_optimization survives a multi-batch parallel run", {
+  # Regression test. The Windows branch used to register one
+  # on.exit(stopCluster(cl)) handler per batch, each closing over the same
+  # `cl` binding. Whenever the batch loop ran more than once, exiting the
+  # function stopped the last cluster repeatedly ("invalid connection") and
+  # leaked the earlier ones. batch_size is cores_to_use * 4, so max_cores = 2
+  # with 10 samples forces two batches -- the shape of a CRAN check host.
+  test_mat <- matrix(c(0, 1, 2, 3, 1, 0, 2.5, 3.5, 2, 2.5, 0, 4, 3, 3.5, 4, 0), 4, 4)
+  rownames(test_mat) <- colnames(test_mat) <- paste0("Point", 1:4)
+
+  results <- initial_parameter_optimization(
+    dissimilarity_matrix = test_mat,
+    mapping_max_iter = 20,
+    relative_epsilon = 1e-3,
+    convergence_counter = 3,
+    scenario_name = "test_multibatch",
+    N_min = 2, N_max = 3,
+    k0_min = 0.5, k0_max = 5,
+    c_repulsion_min = 0.001, c_repulsion_max = 0.01,
+    cooling_rate_min = 0.001, cooling_rate_max = 0.05,
+    num_samples = 10,
+    folds = 2,
+    max_cores = 2,
+    write_files = FALSE
+  )
+
+  expect_true(is.data.frame(results))
+  expect_gt(nrow(results), 0)
+  expect_true(all(c("log_N", "log_k0", "log_cooling_rate",
+                    "log_c_repulsion", "Holdout_MAE", "NLL") %in% names(results)))
+})

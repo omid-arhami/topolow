@@ -31,22 +31,46 @@
 #' }
 #'
 #' @examples
-#' \dontrun{
-#' # Run Euclidify with diagnostic plots
-#' result <- Euclidify(
-#'   dissimilarity_matrix = my_data,
-#'   output_dir = "output",
-#'   create_diagnostic_plots = TRUE
+#' \donttest{
+#' # A small dissimilarity matrix to keep the example fast.
+#' test_data <- data.frame(
+#'   object = rep(paste0("Obj", 1:4), each = 4),
+#'   reference = rep(paste0("Ref", 1:4), 4),
+#'   score = sample(c(1, 2, 4, 8, 16, 32, 64, "<1", ">12"), 16, replace = TRUE)
 #' )
-#' 
-#' # Plots are automatically saved to output/diagnostics/
-#' # View diagnostic report
+#' dist_mat <- list_to_matrix(
+#'   data = test_data, object_col = "object", reference_col = "reference",
+#'   value_col = "score", is_similarity = TRUE
+#' )
+#'
+#' # Run Euclidify with diagnostics enabled. Write only to a directory you
+#' # choose; tempdir() is used here.
+#' result <- Euclidify(
+#'   dissimilarity_matrix = dist_mat,
+#'   output_dir = tempdir(),
+#'   n_initial_samples = 5,
+#'   n_adaptive_samples = 3,
+#'   folds = 3,
+#'   mapping_max_iter = 50,
+#'   ndim_range = c(2, 4),
+#'   max_cores = 1,
+#'   verbose = "off",
+#'   create_diagnostic_plots = TRUE,
+#'   diagnostic_plot_types = "parameter_search"
+#' )
+#'
+#' # Build the plots without writing them to disk. plot_types = "all" (the
+#' # default) additionally produces the convergence, quality and cv_errors
+#' # panels; one type is requested here to keep the example quick.
+#' plots <- plot_euclidify_diagnostics(
+#'   result,
+#'   plot_types = "parameter_search",
+#'   save_plots = FALSE
+#' )
+#'
+#' # Text summary of the same run
 #' report <- create_diagnostic_report(result)
 #' cat(report, sep = "\n")
-#' 
-#' # Access specific diagnostic plots
-#' print(result$diagnostic_plots$parameter_search)
-#' print(result$diagnostic_plots$quality)
 #' }
 #'
 #' @importFrom ggplot2 ggplot aes geom_point geom_line geom_density facet_wrap
@@ -277,9 +301,36 @@ plot_cv_errors <- function(all_samples) {
 #' @return Character vector with report lines (invisibly).
 #'
 #' @examples
-#' \dontrun{
-#' result <- Euclidify(..., create_diagnostic_plots = TRUE)
-#' report <- create_diagnostic_report(result, "diagnostics/report.txt")
+#' \donttest{
+#' test_data <- data.frame(
+#'   object = rep(paste0("Obj", 1:4), each = 4),
+#'   reference = rep(paste0("Ref", 1:4), 4),
+#'   score = sample(c(1, 2, 4, 8, 16, 32, 64, "<1", ">12"), 16, replace = TRUE)
+#' )
+#' dist_mat <- list_to_matrix(
+#'   data = test_data, object_col = "object", reference_col = "reference",
+#'   value_col = "score", is_similarity = TRUE
+#' )
+#'
+#' result <- Euclidify(
+#'   dissimilarity_matrix = dist_mat,
+#'   output_dir = tempdir(),
+#'   n_initial_samples = 5,
+#'   n_adaptive_samples = 3,
+#'   folds = 3,
+#'   mapping_max_iter = 50,
+#'   ndim_range = c(2, 4),
+#'   max_cores = 1,
+#'   verbose = "off",
+#'   create_diagnostic_plots = TRUE,
+#'   diagnostic_plot_types = "parameter_search"
+#' )
+#'
+#' # output_file is optional; supply a path only if you want the report saved.
+#' report <- create_diagnostic_report(
+#'   result,
+#'   output_file = file.path(tempdir(), "report.txt")
+#' )
 #' cat(report, sep = "\n")
 #' }
 #'

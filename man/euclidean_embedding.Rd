@@ -83,7 +83,7 @@ topolow (topological stochastic pairwise reconstruction for Euclidean embedding)
 point positions in an N-dimensional space to match a target dissimilarity matrix.
 This version uses an \strong{Exact} C++ backend that:
 \itemize{
-\item Iterates over all N(N-1)/2 pairs in every iteration (O(N²) complexity).
+\item Iterates over all N(N-1)/2 pairs in every iteration (O(N^2) complexity).
 \item Ensures perfect fidelity to the original algorithm's force physics.
 \item Uses Gauss-Seidel immediate updates for fast convergence.
 \item Stochastic pair shuffling for escaping local optima.
@@ -106,6 +106,38 @@ the output is adjusted to put high-dissimilarity points in the opposing ends.
 This function replaces the deprecated \code{\link[=create_topolow_map]{create_topolow_map()}}. The core algorithm
 is identical, but includes performance improvements and enhanced validation.
 }
+\section{Reproducibility}{
+
+Two independent sources of randomness act on a run, and \code{set.seed()} governs
+only the first:
+\itemize{
+\item \strong{Starting configuration (seeded).} Initial point positions are drawn with
+\code{\link[stats:runif]{stats::runif()}} in R, so \code{set.seed()} before the call fixes them.
+\item \strong{Sweep order (not seeded).} The C++ backend re-permutes the order in which
+the N(N-1)/2 pairs are visited on every iteration, using a Mersenne Twister
+seeded from \code{std::random_device}. This generator is independent of R's RNG
+stream and is therefore not affected by \code{set.seed()}.
+}
+
+The shuffle is deliberate and confined to ordering. It never changes which
+pairs are considered, their dissimilarities or weights, the spring and
+repulsion physics, the cooling schedule, or the convergence test -- all of
+which are deterministic. Because positions are updated in place
+(Gauss-Seidel), a fixed sweep order would systematically favour points early
+in that order, which are always moved against stale neighbour positions.
+Reshuffling each iteration removes that bias and supplies the perturbation
+that lets the configuration escape local optima.
+
+Consequently, repeated runs on the same input give similar but not identical
+coordinates, and results are not bit-reproducible across runs or platforms.
+This is expected. When a single canonical map is needed, run the embedding
+several times and compare the runs with the package diagnostics -- for
+example \code{\link[=error_calculator_comparison]{error_calculator_comparison()}} and
+\code{\link[=scatterplot_fitted_vs_true]{scatterplot_fitted_vs_true()}} -- then retain the run with the lowest
+holdout error. Agreement across runs is itself the evidence that the
+embedding is well determined by the data.
+}
+
 \examples{
 # Create a simple dissimilarity matrix
 dist_mat <- matrix(c(0, 2, 3, 2, 0, 4, 3, 4, 0), nrow=3)

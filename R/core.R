@@ -86,7 +86,7 @@ vectorized_process_distance_matrix <- function(distances_numeric, threshold_mask
 #' topolow (topological stochastic pairwise reconstruction for Euclidean embedding) optimizes
 #' point positions in an N-dimensional space to match a target dissimilarity matrix.
 #' This version uses an **Exact** C++ backend that:
-#' * Iterates over all N(N-1)/2 pairs in every iteration (O(N²) complexity).
+#' * Iterates over all N(N-1)/2 pairs in every iteration (O(N^2) complexity).
 #' * Ensures perfect fidelity to the original algorithm's force physics.
 #' * Uses Gauss-Seidel immediate updates for fast convergence.
 #' * Stochastic pair shuffling for escaping local optima.
@@ -105,6 +105,35 @@ vectorized_process_distance_matrix <- function(distances_numeric, threshold_mask
 #'
 #' This function replaces the deprecated [create_topolow_map()]. The core algorithm
 #' is identical, but includes performance improvements and enhanced validation.
+#'
+#' @section Reproducibility:
+#' Two independent sources of randomness act on a run, and `set.seed()` governs
+#' only the first:
+#'
+#' * **Starting configuration (seeded).** Initial point positions are drawn with
+#'   [stats::runif()] in R, so `set.seed()` before the call fixes them.
+#' * **Sweep order (not seeded).** The C++ backend re-permutes the order in which
+#'   the N(N-1)/2 pairs are visited on every iteration, using a Mersenne Twister
+#'   seeded from `std::random_device`. This generator is independent of R's RNG
+#'   stream and is therefore not affected by `set.seed()`.
+#'
+#' The shuffle is deliberate and confined to ordering. It never changes which
+#' pairs are considered, their dissimilarities or weights, the spring and
+#' repulsion physics, the cooling schedule, or the convergence test -- all of
+#' which are deterministic. Because positions are updated in place
+#' (Gauss-Seidel), a fixed sweep order would systematically favour points early
+#' in that order, which are always moved against stale neighbour positions.
+#' Reshuffling each iteration removes that bias and supplies the perturbation
+#' that lets the configuration escape local optima.
+#'
+#' Consequently, repeated runs on the same input give similar but not identical
+#' coordinates, and results are not bit-reproducible across runs or platforms.
+#' This is expected. When a single canonical map is needed, run the embedding
+#' several times and compare the runs with the package diagnostics -- for
+#' example [error_calculator_comparison()] and
+#' [scatterplot_fitted_vs_true()] -- then retain the run with the lowest
+#' holdout error. Agreement across runs is itself the evidence that the
+#' embedding is well determined by the data.
 #'
 #' @param dissimilarity_matrix Matrix. A square, symmetric dissimilarity matrix. Can contain
 #'        NA values for missing measurements and character strings with < or > prefixes for
@@ -783,79 +812,17 @@ summary.topolow <- function(object, ...) {
 #'   \item{diagnostic_plots}{List of ggplot objects (if create_diagnostic_plots=TRUE)}
 #'   \item{dissimilarity_matrix}{Input dissimilarity matrix (if create_diagnostic_plots=TRUE)}
 #'
-#' @examples
-#' # Example 1: Basic usage with small matrix
-#' test_data <- data.frame(
-#' object = rep(paste0("Obj", 1:4), each = 4),
-#' reference = rep(paste0("Ref", 1:4), 4),
-#' score = sample(c(1, 2, 4, 8, 16, 32, 64, "<1", ">12"), 16, replace = TRUE)
-#' )
-#' dist_mat <- list_to_matrix(
-#'   data = test_data,  # Pass the data frame, not file path
-#'   object_col = "object",
-#'   reference_col = "reference",
-#'   value_col = "score",
-#'   is_similarity = TRUE
-#' )
-#' \dontrun{
-#' # Note: output_dir is required for actual use
-#' result <- Euclidify(
-#'   dissimilarity_matrix = dist_mat,
-#'   output_dir = tempdir()  # Use temp directory for example
-#' )
-#' coordinates <- result$positions
-#' }
-#' 
-#' # Example 2: Using custom parameter ranges
-#' \dontrun{
-#' result <- Euclidify(
-#'   dissimilarity_matrix = dist_mat,
-#'   output_dir = tempdir(),
-#'   n_initial_samples = 10,
-#'   n_adaptive_samples = 7,
-#'   verbose = "off"
-#' )
-#' }
-#' 
-#' # Example 3: Handling missing data
-#' dist_mat_missing <- dist_mat
-#' dist_mat_missing[1, 3] <- dist_mat_missing[3, 1] <- NA
-#' \dontrun{
-#' result <- Euclidify(
-#'   dissimilarity_matrix = dist_mat_missing,
-#'   output_dir = tempdir(),
-#'   n_initial_samples = 10,
-#'   n_adaptive_samples = 7,
-#'   verbose = "off"
-#' )
-#' }
-#' 
-#' # Example 4: Using threshold indicators
-#' dist_mat_threshold <- dist_mat
-#' dist_mat_threshold[1, 2] <- ">2"
-#' dist_mat_threshold[2, 1] <- ">2"
-#' \dontrun{
-#' result <- Euclidify(
-#'   dissimilarity_matrix = dist_mat_threshold,
-#'   output_dir = tempdir(),
-#'   n_initial_samples = 10,
-#'   n_adaptive_samples = 7,
-#'   verbose = "off"
-#' )
-#' }
-#' 
-#' # Example 5: Parallel processing with custom cores
-#' \dontrun{
-#' result <- Euclidify(
-#'   dissimilarity_matrix = dist_mat,
-#'   output_dir = tempdir(),
-#'   max_cores = 4,
-#'   n_adaptive_samples = 100,
-#'   save_results = TRUE  # Save positions to CSV
-#' )
-#' }
+#' @section Reproducibility:
+#' `Euclidify()` calls [euclidean_embedding()], whose sweep order is randomized
+#' by a generator independent of R's RNG. Repeated runs therefore give similar
+#' but not identical coordinates even under `set.seed()`. See the
+#' Reproducibility section of [euclidean_embedding()] for what is and is not
+#' seeded, and for how to obtain a canonical map.
 #'
-#' # Example 6: Basic usage
+#' @examples
+#' # Build a small dissimilarity matrix from a long-format table. The scores
+#' # include censored values ("<1", ">12"), which are carried through as
+#' # thresholds rather than being discarded.
 #' test_data <- data.frame(
 #'   object = rep(paste0("Obj", 1:4), each = 4),
 #'   reference = rep(paste0("Ref", 1:4), 4),
@@ -868,22 +835,33 @@ summary.topolow <- function(object, ...) {
 #'   value_col = "score",
 #'   is_similarity = TRUE
 #' )
-#' \dontrun{
-#' # Basic usage with diagnostics
+#'
+#' # Missing measurements need no imputation; leave them as NA.
+#' dist_mat[1, 3] <- dist_mat[3, 1] <- NA
+#'
+#' \donttest{
+#' # `output_dir` is required. Examples must not write outside tempdir().
+#' # `max_cores = 1` keeps this example fast; omit it in real use and
+#' # Euclidify() will choose a sensible number of cores itself.
 #' result <- Euclidify(
 #'   dissimilarity_matrix = dist_mat,
 #'   output_dir = tempdir(),
-#'   create_diagnostic_plots = TRUE
+#'   n_initial_samples = 10,
+#'   n_adaptive_samples = 7,
+#'   max_cores = 1,
+#'   verbose = "off"
 #' )
-#' 
-#' # View diagnostic report
-#' report <- create_diagnostic_report(result)
-#' cat(report, sep = "\n")
-#' 
-#' # Access specific diagnostic plots
-#' print(result$diagnostic_plots$parameter_search)
-#' print(result$diagnostic_plots$convergence)
+#'
+#' # Embedded coordinates, one row per object
+#' head(result$positions)
+#'
+#' # Dimensionality and parameters chosen by the search
+#' result$optimal_params
+#'
+#' # Fit of the embedding to the input dissimilarities
+#' result$mae
 #' }
+#'
 #' 
 #' @export
 Euclidify <- function(dissimilarity_matrix,

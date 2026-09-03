@@ -8,7 +8,8 @@
 .DS_Store
 inst/doc
 *.Rcheck/
-cran-comments.md
 CRAN-SUBMISSION
 /doc/
 /Meta/
+Rplots.pdf
+dist/

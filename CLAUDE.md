@@ -187,3 +187,4 @@ git -c user.name="Omid Arhami" -c user.email="o.arhami@gmail.com" commit -m "<me
   churn described in §9 is outstanding.
 - The repository is public on GitHub (`omid-arhami/topolow`). Anything committed is
   published; do not commit data, credentials, or draft manuscript text without asking.
+- Commit over https: git remote set-url origin https://github.com/omid-arhami/topolow.git

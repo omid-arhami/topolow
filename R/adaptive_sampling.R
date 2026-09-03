@@ -645,22 +645,31 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
       if (cores_to_use > 1 && length(batch_indices) > 1) {
         if (.Platform$OS.type == "windows") {
           cl <- parallel::makeCluster(min(cores_to_use, length(batch_indices)))
-          on.exit(parallel::stopCluster(cl), add = TRUE)
           
-          # Load topolow on cluster
-          parallel::clusterEvalQ(cl, library(topolow))
-          
-          # Export required objects
-          # IMPORTANT: We export the current 'lhs_params' which changes per epoch
-          parallel::clusterExport(cl,
-                            c("lhs_params", "full_dissimilarity_matrix", "mapping_max_iter", "relative_epsilon",
-                              "use_subsampling", "opt_subsample", "verbose", "epoch", "num_samples",
-                              "likelihood_function", "euclidean_embedding",
-                              "subsample_dissimilarity_matrix", "sanity_check_subsample",
-                              "error_calculator_comparison", "folds", "preserve_order"),
-                                  envir = environment())
-          
-          batch_results <- parallel::parLapply(cl, batch_indices, process_param_set)
+          # Shut this batch's cluster down as soon as the batch finishes.
+          # on.exit() must not be used here: this runs inside the epoch/batch
+          # loops, so one handler would be registered per batch, and every
+          # handler closes over the same `cl` binding. On exit they would all
+          # stop the LAST cluster -- the second and later calls raising
+          # "invalid connection" -- while every earlier cluster leaked. That
+          # surfaced whenever the batch loop ran more than once, which is the
+          # normal case on a 2-core machine such as a CRAN check host.
+          batch_results <- tryCatch({
+            # Load topolow on cluster
+            parallel::clusterEvalQ(cl, library(topolow))
+            
+            # Export required objects
+            # IMPORTANT: We export the current 'lhs_params' which changes per epoch
+            parallel::clusterExport(cl,
+                              c("lhs_params", "full_dissimilarity_matrix", "mapping_max_iter", "relative_epsilon",
+                                "use_subsampling", "opt_subsample", "verbose", "epoch", "num_samples",
+                                "likelihood_function", "euclidean_embedding",
+                                "subsample_dissimilarity_matrix", "sanity_check_subsample",
+                                "error_calculator_comparison", "folds", "preserve_order"),
+                                    envir = environment())
+            
+            parallel::parLapply(cl, batch_indices, process_param_set)
+          }, finally = parallel::stopCluster(cl))
         } else {
           # Unix-like systems
           batch_results <- parallel::mclapply(batch_indices, process_param_set,

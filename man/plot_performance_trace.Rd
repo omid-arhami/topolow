@@ -78,19 +78,31 @@ This is distinct from:
 }
 }
 \examples{
-\dontrun{
-# Basic usage (sorted by default)
-chain_files <- c("chain1.csv", "chain2.csv", "chain3.csv")
-plot_performance_trace(chain_files)
-
-# Original sequential concatenation behavior
-plot_performance_trace(chain_files, sort_combined = FALSE)
-
-# Plot only NLL with separate chains
-plot_performance_trace(chain_files, metric = "NLL", combine_chains = FALSE)
-
-# Save the plot
-plot_performance_trace(chain_files, output_file = "fig/convergence_plateau.png")
+# Chain files are CSVs written by run_adaptive_sampling(); each must have
+# NLL and Holdout_MAE columns. Small synthetic chains stand in here.
+chain_files <- file.path(tempdir(), paste0("perf_chain", 1:2, ".csv"))
+for (f in chain_files) {
+  utils::write.csv(
+    data.frame(NLL = rnorm(50, 100, 10), Holdout_MAE = runif(50, 0.5, 2)),
+    f, row.names = FALSE
+  )
 }
+
+# Basic usage (sorted by default)
+p <- plot_performance_trace(chain_files)
+
+# Original sequential concatenation behaviour
+p <- plot_performance_trace(chain_files, sort_combined = FALSE)
+
+# Plot only NLL, with the chains kept separate
+p <- plot_performance_trace(chain_files, metric = "NLL", combine_chains = FALSE)
+
+# Save the plot. Write only to a directory you choose; tempdir() here.
+p <- plot_performance_trace(
+  chain_files,
+  output_file = file.path(tempdir(), "convergence_plateau.png")
+)
+
+unlink(chain_files)
 
 }

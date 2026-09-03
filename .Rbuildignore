@@ -5,7 +5,6 @@
 ^check-coverage\.R$
 ^citation\.cff$
 ^cran-comments\.md$
-^github$
 ^install_github\.R$
 ^paper\.md$
 ^set_up_testing\.R$
@@ -15,3 +14,10 @@
 ^doc$
 ^Meta$
 ^CLAUDE\.md$
+^.*\.Rproj$
+^\.Rproj\.user$
+^build/topolow-manual\.pdf$
+^\.Rapp\.history$
+^src/.*\.(o|so|dll)$
+Rplots\.pdf$
+^dist$

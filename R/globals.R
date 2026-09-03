@@ -7,5 +7,6 @@ utils::globalVariables(c(
   "season", "season_num", "total_count", "year", "final_value", 
   "True_dissimilarity", "Pred_for_observed",
   # New variables added to silence R CMD check notes:
-  "chain", "improvement", "iteration", "running_min", "value"
+  "chain", "improvement", "iteration", "running_min", "value",
+  "velocity_magnitude"
 ))
