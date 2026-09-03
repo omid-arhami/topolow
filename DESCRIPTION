@@ -38,8 +38,7 @@ Imports:
     zoo,
     Rcpp (>= 1.0.0)
 LinkingTo: 
-    Rcpp,
-    RcppArmadillo
+    Rcpp
 Suggests:
     coda (>= 0.19-4),
     Rtsne,

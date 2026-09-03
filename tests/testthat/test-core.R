@@ -556,3 +556,157 @@ test_that("Euclidify handles edge case matrices", {
   # Clean up
   unlink(temp_dir, recursive = TRUE)
 })
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for the Rcpp-only optimizer backend (2.1.0)
+# ---------------------------------------------------------------------------
+
+# Recomputes, in R, the MAE the C++ backend reports in convergence$error:
+# the mean absolute error over CONTRIBUTING edges only. An edge contributes
+# when it is exact (no threshold), or when its threshold constraint is
+# violated (">" with dist < target, "<" with dist > target).
+# The optimizer reorders points, so the matrix is realigned to the row order
+# of the returned positions before comparing.
+recompute_active_mae <- function(dissimilarity_matrix, positions) {
+  ord <- rownames(positions)
+  mat <- dissimilarity_matrix[ord, ord]
+  vals <- mat[upper.tri(mat)]
+  idx <- which(upper.tri(mat), arr.ind = TRUE)
+
+  target <- suppressWarnings(as.numeric(gsub("^[<>]", "", vals)))
+  thresh <- ifelse(grepl("^>", vals), 1L, ifelse(grepl("^<", vals), -1L, 0L))
+
+  keep <- !is.na(target)
+  idx <- idx[keep, , drop = FALSE]
+  target <- target[keep]
+  thresh <- thresh[keep]
+
+  d <- sqrt(rowSums((positions[idx[, 2], , drop = FALSE] -
+                     positions[idx[, 1], , drop = FALSE])^2))
+  contributes <- (thresh == 0) |
+                 (thresh == 1 & d < target) |
+                 (thresh == -1 & d > target)
+
+  list(mae = mean(abs(target - d)[contributes]), n_contributing = sum(contributes))
+}
+
+test_that("euclidean_embedding does not modify the caller's initial_positions", {
+  # The C++ backend copies the position matrix before optimizing. A missed copy
+  # would update the caller's R matrix in place.
+  set.seed(101)
+  n <- 6
+  test_mat <- as.matrix(dist(matrix(runif(n * 2), ncol = 2)))
+  dimnames(test_mat) <- list(paste0("Pt", 1:n), paste0("Pt", 1:n))
+
+  init_pos <- matrix(runif(n * 2), nrow = n, ncol = 2)
+  rownames(init_pos) <- rownames(test_mat)
+  init_pos_before <- init_pos
+
+  euclidean_embedding(test_mat, ndim = 2, mapping_max_iter = 50,
+                      k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01,
+                      initial_positions = init_pos, write_positions_to_csv = FALSE)
+
+  expect_identical(init_pos, init_pos_before)
+})
+
+test_that("convergence$error matches the MAE recomputed from the returned positions", {
+  # The reported error is recorded when the best snapshot is saved; the returned
+  # positions are that same snapshot. If the snapshot aliased the live position
+  # buffer instead of being deep-copied, later iterations would overwrite it and
+  # the two would no longer agree.
+  set.seed(102)
+  n <- 8
+  test_mat <- as.matrix(dist(matrix(runif(n * 2, 0, 10), ncol = 2)))
+  dimnames(test_mat) <- list(paste0("Pt", 1:n), paste0("Pt", 1:n))
+
+  result <- euclidean_embedding(test_mat, ndim = 2, mapping_max_iter = 300,
+                                k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01,
+                                write_positions_to_csv = FALSE)
+
+  expect_true(is.finite(result$convergence$error))
+  expect_equal(recompute_active_mae(test_mat, result$positions)$mae,
+               result$convergence$error, tolerance = 1e-10)
+})
+
+test_that("thresholded edges contribute only when their constraint is violated", {
+  # Same self-consistency check on a fixture mixing "<" and ">" entries. It
+  # passes only if the C++ contribution rule for censored edges is unchanged;
+  # averaging over all edges instead of the contributing ones gives a different
+  # number.
+  set.seed(103)
+  n <- 7
+  num <- as.matrix(dist(matrix(runif(n * 2, 0, 10), ncol = 2)))
+  test_mat <- matrix(as.character(round(num, 3)), n, n)
+  diag(test_mat) <- "0"
+  for (p in list(c(1, 3), c(2, 5), c(4, 7))) {
+    test_mat[p[1], p[2]] <- paste0(">", round(num[p[1], p[2]], 3))
+    test_mat[p[2], p[1]] <- test_mat[p[1], p[2]]
+  }
+  for (p in list(c(1, 6), c(3, 5))) {
+    test_mat[p[1], p[2]] <- paste0("<", round(num[p[1], p[2]], 3))
+    test_mat[p[2], p[1]] <- test_mat[p[1], p[2]]
+  }
+  dimnames(test_mat) <- list(paste0("V", 1:n), paste0("V", 1:n))
+
+  result <- euclidean_embedding(test_mat, ndim = 2, mapping_max_iter = 300,
+                                k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01,
+                                write_positions_to_csv = FALSE)
+
+  active <- recompute_active_mae(test_mat, result$positions)
+  expect_true(active$n_contributing < choose(n, 2))   # some constraints satisfied
+  expect_equal(active$mae, result$convergence$error, tolerance = 1e-10)
+})
+
+test_that("diverging positions degrade gracefully rather than always erroring", {
+  # The MAE is computed by multiplying each edge error by its contribution mask,
+  # so a non-finite distance propagates NaN into the total even on edges that do
+  # not contribute. A NaN MAE compares false against both convergence bounds,
+  # lands in the "worsening" branch, and lets the optimizer restore its last
+  # good snapshot and return. With a short patience window that happens before
+  # the every-10-iterations stability guard can fire.
+  set.seed(104)
+  base <- as.matrix(dist(matrix(runif(5 * 2, 0, 5), ncol = 2)))
+  test_mat <- base * 1e250          # spring forces overflow to non-finite
+  dimnames(test_mat) <- list(paste0("A", 1:5), paste0("A", 1:5))
+
+  result <- suppressWarnings(
+    euclidean_embedding(test_mat, ndim = 2, mapping_max_iter = 40,
+                        k0 = 5, cooling_rate = 0.001, c_repulsion = 0.01,
+                        convergence_counter = 3, write_positions_to_csv = FALSE)
+  )
+  expect_true(result$convergence$achieved)
+  expect_true(all(is.finite(result$positions)))
+
+  # With a longer patience window the stability guard is reached first, and the
+  # run stops with an error instead. Both outcomes are intentional.
+  expect_error(
+    suppressWarnings(
+      euclidean_embedding(test_mat, ndim = 2, mapping_max_iter = 40,
+                          k0 = 5, cooling_rate = 0.001, c_repulsion = 0.01,
+                          convergence_counter = 5, write_positions_to_csv = FALSE)
+    ),
+    "Numerical instability"
+  )
+})
+
+test_that("returned positions carry no column names from initial_positions", {
+  # The backend returns a bare matrix; R/core.R then sets the row names. Column
+  # names supplied on initial_positions must not survive into the result.
+  set.seed(105)
+  n <- 5
+  test_mat <- as.matrix(dist(matrix(runif(n * 2), ncol = 2)))
+  dimnames(test_mat) <- list(paste0("Pt", 1:n), paste0("Pt", 1:n))
+
+  init_pos <- matrix(runif(n * 2), nrow = n, ncol = 2)
+  rownames(init_pos) <- rownames(test_mat)
+  colnames(init_pos) <- c("dim_x", "dim_y")
+
+  result <- euclidean_embedding(test_mat, ndim = 2, mapping_max_iter = 50,
+                                k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01,
+                                initial_positions = init_pos,
+                                write_positions_to_csv = FALSE)
+
+  expect_null(colnames(result$positions))
+  expect_equal(sort(rownames(result$positions)), sort(rownames(test_mat)))
+})

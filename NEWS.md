@@ -200,7 +200,7 @@ The `opt_subsample` parameter is optional (default: NULL = use full data).
 
 ### C++ Backend for Core Optimization (Performance)
 
-* **Major Performance Enhancement**: The core optimization loop in `euclidean_embedding()` has been rewritten in C++ using Rcpp and RcppArmadillo, providing significant speedups for large datasets. All for loops in the core function `euclidean_embedding()` have been replaced with vector operations.
+* **Major Performance Enhancement**: The core optimization loop in `euclidean_embedding()` has been rewritten in C++ using Rcpp, providing significant speedups for large datasets. All for loops in the core function `euclidean_embedding()` have been replaced with vector operations.
 
 * **New Algorithm: Negative Sampling (not used)**
   - Implements negative sampling to approximate unmeasured pair repulsion
@@ -216,17 +216,19 @@ The `opt_subsample` parameter is optional (default: NULL = use full data).
   - **COO Format**: Uses Coordinate List format for edge data to avoid sparse matrix zero-dropping issues
   - **Edge Shuffling**: C++ native random number generator (`std::mt19937`) for stochastic edge ordering, critical for escaping local optima
   - **Immediate Updates**: Preserves Gauss-Seidel style position updates from the original R implementation for identical convergence behavior
-  - **Vectorized Error Calculation**: Uses Armadillo batch operations for computing MAE during convergence checks
+  - **Single-Pass Error Calculation**: Computes the MAE over active constraints in one pass across the edge list during convergence checks
   - **Cache-Friendly Layout**: Edge data stored in contiguous arrays for better CPU cache utilization
   - **Pre-computed Factors**: Degree-based normalization factors computed once before optimization
-  - **Direct Memory Access**: Bypasses Armadillo accessors for position updates in the inner loop
+  - **Direct Memory Access**: Position updates in the inner loop operate on the raw column-major buffer
 
 * **Return Value Enhancement**: The `convergence` field in the returned `topolow` object now includes:
   - `achieved`: Boolean indicating whether convergence was reached
   - `error`: Final MAE on active constraints
   - `final_k`: Final spring constant value after cooling
 
-* **Dependencies**: Added `RcppArmadillo` to `LinkingTo` (compile-time only, no runtime dependency added)
+* **Dependencies**: Added `Rcpp` to `LinkingTo` (compile-time only, no runtime dependency added). The backend is Rcpp-only and links no BLAS or LAPACK routines, so no `src/Makevars` is required on any platform.
+
+* **Note on numerical output**: The convergence MAE (`result$convergence$error`) is now accumulated in package code rather than through a BLAS routine, so it may differ from earlier development builds in the last representable digit. This is far below the run-to-run variation produced by the randomized pair shuffle, and it makes the value consistent across platforms, which it previously was not. Embedded positions are unaffected.
 
 ### Performance Comparison
 

@@ -24,14 +24,14 @@
 // - This ensures stable separation as springs weaken in the fine-tuning phase
 // =============================================================================
 
-#include <RcppArmadillo.h>
+#include <Rcpp.h>
 #include <random>
 #include <algorithm>
 #include <vector>
 #include <numeric>
 #include <cmath>
-
-// [[Rcpp::depends(RcppArmadillo)]]
+#include <limits>
+#include <utility>
 
 using namespace Rcpp;
 
@@ -48,35 +48,97 @@ inline bool is_connected(int i, int j, const std::vector<int>& has_meas, int n) 
 }
 
 /**
- * Vectorized MAE calculation for convergence checking.
+ * Deep copy of a position matrix.
+ *
+ * LOAD-BEARING: NumericMatrix assignment and copy-construction are SHALLOW -
+ * the handle rebinds to the same underlying SEXP. Every independent state
+ * snapshot (best_pos <-> pos) must go through this, or the saved best would
+ * alias the live positions and be overwritten in place by the next iteration.
+ */
+inline NumericMatrix copy_matrix(const NumericMatrix& x) {
+  return Rcpp::clone(x);
+}
+
+/**
+ * Numerical stability predicate: TRUE when every element is finite.
+ */
+inline bool all_finite(const NumericMatrix& x) {
+  for (R_xlen_t k = 0; k < x.size(); ++k) {
+    if (!std::isfinite(x[k])) return false;
+  }
+  return true;
+}
+
+/**
+ * MAE calculation for convergence checking.
  * Computes error only on edges where constraints are violated or exact.
+ *
+ * LOAD-BEARING: the contribution mask is applied by MULTIPLICATION, never by
+ * branching. IEEE 754 gives NaN*0 == NaN and Inf*0 == NaN, so a non-finite
+ * distance on a NON-contributing threshold edge still poisons the total. That
+ * is a divergence fail-safe: this function is called every
+ * convergence_check_freq iterations (default 3) while the finiteness guard only
+ * runs every 10, so it is routinely reached with diverging positions. A NaN MAE
+ * compares false against both convergence thresholds, falls into the
+ * "worsening" branch, and makes the optimizer restore best_pos and return
+ * gracefully rather than running on with corrupt positions. Writing
+ * `if (contributes) total_error += abs_err;` would silently hide divergence
+ * confined to threshold edges.
+ *
+ * Edge contract, guaranteed by R/core.R and deliberately not re-validated here:
+ * edge_i and edge_j are 0-based, non-negative and free of NA (they come from
+ * which(..., arr.ind = TRUE) minus 1L), and all four edge vectors share a
+ * length.
+ *
+ * Summation order: this is a plain sequential sum. Earlier development builds
+ * accumulated this total through a BLAS dot product once there were more than
+ * 32 edges, so the value may differ from those builds in the last
+ * representable digit. That is orders of magnitude below the run-to-run
+ * variation already introduced by the randomized pair shuffle, and unlike a
+ * BLAS call it gives the same answer on every platform.
  */
 inline std::pair<double, int> compute_error_vectorized(
-    const arma::mat& pos,
-    const arma::uvec& edge_i_vec,
-    const arma::uvec& edge_j_vec,
-    const arma::vec& target_vec,
-    const arma::ivec& thresh_vec
+    const NumericMatrix& pos,
+    const IntegerVector& edge_i,
+    const IntegerVector& edge_j,
+    const NumericVector& edge_dist,
+    const IntegerVector& edge_thresh
 ) {
-  arma::mat pos_i = pos.rows(edge_i_vec);
-  arma::mat pos_j = pos.rows(edge_j_vec);
-  
-  arma::mat deltas = pos_j - pos_i;
-  arma::vec distances = arma::sqrt(arma::sum(arma::square(deltas), 1));
-  arma::vec abs_errors = arma::abs(target_vec - distances);
-  
-  // Contribution logic:
-  // exact (0): always contributes
-  // > (1): contributes if distance < target (violated)
-  // < (-1): contributes if distance > target (violated)
-  arma::uvec exact_mask = (thresh_vec == 0);
-  arma::uvec gt_violated = (thresh_vec == 1) % (distances < target_vec);
-  arma::uvec lt_violated = (thresh_vec == -1) % (distances > target_vec);
-  arma::uvec contributes = exact_mask + gt_violated + lt_violated;
-  
-  double total_error = arma::accu(abs_errors % arma::conv_to<arma::vec>::from(contributes));
-  int count = arma::accu(contributes);
-  
+  const int n = pos.nrow();
+  const int dim = pos.ncol();
+  const R_xlen_t n_elem = edge_i.size();
+  const double* p = pos.begin();
+
+  double total_error = 0.0;
+  int count = 0;
+
+  for (R_xlen_t e = 0; e < n_elem; ++e) {
+    const int i = edge_i[e];
+    const int j = edge_j[e];
+
+    // Sequential accumulation over dimensions.
+    double dist_sq = 0.0;
+    for (int d = 0; d < dim; ++d) {
+      const double diff = p[j + d * n] - p[i + d * n];
+      dist_sq += diff * diff;
+    }
+    const double dist = std::sqrt(dist_sq);
+    const double target = edge_dist[e];
+    const double abs_err = std::fabs(target - dist);
+
+    // Contribution logic:
+    // exact (0): always contributes
+    // > (1): contributes if distance < target (violated)
+    // < (-1): contributes if distance > target (violated)
+    const int thresh = edge_thresh[e];
+    const int contributes = (thresh ==  0) ||
+                            (thresh ==  1 && dist <  target) ||
+                            (thresh == -1 && dist >  target);
+
+    total_error += abs_err * static_cast<double>(contributes);
+    count += contributes;
+  }
+
   return {total_error, count};
 }
 
@@ -131,8 +193,11 @@ List optimize_layout_exact_cpp(
   if (n < 2) Rcpp::stop("Need at least 2 points for embedding");
   
   // Initialize position matrix
-  arma::mat pos(initial_positions.begin(), n, dim, true);
-  
+  // The dimnames are cleared so the returned matrix is bare; R/core.R sets
+  // the rownames on it after the call.
+  NumericMatrix pos = copy_matrix(initial_positions);
+  pos.attr("dimnames") = R_NilValue;
+
   // Degree + 1 normalization
   std::vector<double> deg_plus_one(n);
   for (int i = 0; i < n; ++i) {
@@ -158,17 +223,11 @@ List optimize_layout_exact_cpp(
   const double* dist_ptr = dissimilarity_matrix.begin();
   const int* thresh_ptr = threshold_matrix.begin();
   
-  // Armadillo vectors for MAE calculation
-  arma::uvec edge_i_vec = arma::conv_to<arma::uvec>::from(as<std::vector<int>>(edge_i));
-  arma::uvec edge_j_vec = arma::conv_to<arma::uvec>::from(as<std::vector<int>>(edge_j));
-  arma::vec target_vec = arma::conv_to<arma::vec>::from(as<std::vector<double>>(edge_dist));
-  arma::ivec thresh_vec = arma::conv_to<arma::ivec>::from(as<std::vector<int>>(edge_thresh));
-  
   // State variables
   double k = k0;
   // NOTE: c_repulsion is CONSTANT throughout - no decay.
   double best_mae = std::numeric_limits<double>::max();
-  arma::mat best_pos = pos;
+  NumericMatrix best_pos = copy_matrix(pos);
   double best_k = k0;
   int best_iter = 0;
   int worsening_count = 0;
@@ -200,8 +259,8 @@ List optimize_layout_exact_cpp(
       const int i = pair.i;
       const int j = pair.j;
       
-      double* pos_i = pos.colptr(0) + i;
-      double* pos_j = pos.colptr(0) + j;
+      double* pos_i = pos.begin() + i;
+      double* pos_j = pos.begin() + j;
       
       // Compute current distance
       double dist_sq = 0.0;
@@ -292,7 +351,7 @@ List optimize_layout_exact_cpp(
     // CONVERGENCE CHECK
     // -----------------------------------------------------------------------
     if ((iter + 1) % convergence_check_freq == 0 || iter == n_iter - 1) {
-      auto error_result = compute_error_vectorized(pos, edge_i_vec, edge_j_vec, target_vec, thresh_vec);
+      auto error_result = compute_error_vectorized(pos, edge_i, edge_j, edge_dist, edge_thresh);
       double current_error = (error_result.second > 0) ? error_result.first / error_result.second : 0.0;
       
       if (verbose && ((iter + 1) % 10 == 0 || iter == n_iter - 1)) {
@@ -307,7 +366,7 @@ List optimize_layout_exact_cpp(
       if (current_error < improvement_threshold) {
         // MEANINGFUL IMPROVEMENT: error dropped well below best
         best_mae = current_error;
-        best_pos = pos;
+        best_pos = copy_matrix(pos);
         best_k = k;
         best_iter = iter + 1;
         worsening_count = 0;
@@ -318,7 +377,7 @@ List optimize_layout_exact_cpp(
         // Update best if this is still a slight improvement
         if (current_error < best_mae) {
           best_mae = current_error;
-          best_pos = pos;
+          best_pos = copy_matrix(pos);
           best_k = k;
           best_iter = iter + 1;
         }
@@ -328,7 +387,7 @@ List optimize_layout_exact_cpp(
         if (converge_count >= convergence_window) {
           final_mae = best_mae;
           final_iter = best_iter;
-          pos = best_pos;
+          pos = copy_matrix(best_pos);
           k = best_k;
           converged = true;
           if (verbose)
@@ -345,7 +404,7 @@ List optimize_layout_exact_cpp(
         if (worsening_count >= worsening_patience) {
           final_mae = best_mae;
           final_iter = best_iter;
-          pos = best_pos;
+          pos = copy_matrix(best_pos);
           k = best_k;
           converged = true;
           if (verbose)
@@ -356,7 +415,7 @@ List optimize_layout_exact_cpp(
       }
     }
     // Numerical stability check
-    if ((iter + 1) % 10 == 0 && !pos.is_finite()) {
+    if ((iter + 1) % 10 == 0 && !all_finite(pos)) {
       Rcpp::stop("Numerical instability at iteration %d. Reduce k0 or c_repulsion.", iter + 1);
     }
     
@@ -367,7 +426,7 @@ List optimize_layout_exact_cpp(
   
   if (!converged) {
     // Always restore best state, even if patience wasn't triggered
-    pos = best_pos;
+    pos = copy_matrix(best_pos);
     k = best_k;
     final_mae = best_mae;
     final_iter = best_iter;
