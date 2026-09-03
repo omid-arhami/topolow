@@ -17,7 +17,6 @@ Description: A robust implementation of Topolow algorithm. It embeds objects int
 License: BSD_3_clause + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Imports:
     future,
     lifecycle,
@@ -62,3 +61,4 @@ LazyData: true
 Depends: 
     R (>= 4.1.0)
 VignetteBuilder: knitr
+Config/roxygen2/version: 8.0.0

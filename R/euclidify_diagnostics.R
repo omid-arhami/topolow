@@ -50,7 +50,7 @@
 #' }
 #'
 #' @importFrom ggplot2 ggplot aes geom_point geom_line geom_density facet_wrap
-#'   labs theme_minimal ggsave geom_hline scale_color_viridis_c
+#' @importFrom ggplot2 labs theme_minimal ggsave geom_hline scale_color_viridis_c
 #' @importFrom gridExtra grid.arrange
 #' @export
 plot_euclidify_diagnostics <- function(euclidify_result,
@@ -146,8 +146,8 @@ plot_euclidify_diagnostics <- function(euclidify_result,
 #'
 #' @return A ggplot object showing parameter space exploration.
 #'
-#' @importFrom ggplot2 ggplot aes geom_point geom_point scale_color_viridis_c
-#'   facet_grid labs theme_minimal theme element_text
+#' @importFrom ggplot2 ggplot aes geom_point scale_color_viridis_c
+#' @importFrom ggplot2 facet_grid labs theme_minimal theme element_text
 #' @keywords internal
 plot_parameter_search <- function(param_history, best_params) {
   

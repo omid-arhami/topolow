@@ -123,7 +123,7 @@ plot_mcmc_diagnostics <- function(chain_files,
 #' @return A ggplot object with quality diagnostic plots.
 #'
 #' @importFrom ggplot2 ggplot aes geom_point geom_abline geom_density2d
-#'   labs theme_minimal stat_smooth
+#' @importFrom ggplot2 labs theme_minimal stat_smooth
 #' @keywords internal
 plot_embedding_quality <- function(true_dissim, est_dissim) {
   
@@ -540,7 +540,7 @@ analyze_network_structure <- function(dissimilarity_matrix) {
 #' }
 #'
 #' @importFrom ggplot2 ggplot aes geom_point geom_line geom_step labs theme_minimal
-#'   scale_color_manual facet_wrap theme element_text ggsave
+#' @importFrom ggplot2 scale_color_manual facet_wrap theme element_text ggsave
 #' @importFrom dplyr mutate group_by ungroup bind_rows
 #' @export
 plot_performance_trace <- function(chain_files,

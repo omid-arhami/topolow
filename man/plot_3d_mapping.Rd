@@ -16,11 +16,13 @@ plot_3d_mapping(
 }
 \arguments{
 \item{df}{Data frame containing:
-- V1, V2, ... Vn: Coordinate columns
-- antigen: Binary indicator for antigen points
-- antiserum: Binary indicator for antiserum points
-- cluster: (Optional) Factor or integer cluster assignments
-- year: (Optional) Numeric year values for temporal coloring}
+\itemize{
+\item V1, V2, ... Vn: Coordinate columns
+\item antigen: Binary indicator for antigen points
+\item antiserum: Binary indicator for antiserum points
+\item cluster: (Optional) Factor or integer cluster assignments
+\item year: (Optional) Numeric year values for temporal coloring
+}}
 
 \item{ndim}{Number of dimensions in input coordinates (must be >= 3)}
 

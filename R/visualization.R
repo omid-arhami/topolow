@@ -966,7 +966,9 @@ compute_kernel_velocity <- function(positions, coord_cols, time_col,
 #' \code{\link{new_dim_reduction_config}} for dimension reduction options
 #' \code{\link{new_aesthetic_config}} for aesthetic options
 #' \code{\link{new_layout_config}} for layout options
-#' \code{\link{new_annotation_config}} for annotation options#' @importFrom ggplot2 ggplot aes geom_point geom_text geom_segment scale_colour_gradient scale_shape_manual scale_x_continuous scale_y_continuous labs
+#' \code{\link{new_annotation_config}} for annotation options
+#' @importFrom ggplot2 ggplot aes geom_point geom_text geom_segment scale_colour_gradient
+#' @importFrom ggplot2 scale_shape_manual scale_x_continuous scale_y_continuous labs
 #' @importFrom grid unit arrow
 #' @importFrom stats dist bw.nrd
 #' @export
@@ -2611,7 +2613,8 @@ plot_network_structure <- function(network_results, output_file = NULL,
 #'
 #' @importFrom stats na.omit cor lm coef
 #' @importFrom ggplot2 ggplot aes geom_point geom_abline geom_smooth geom_hline scale_y_continuous
-#'   annotate labs theme_classic theme element_text element_blank element_rect scale_x_continuous
+#' @importFrom ggplot2 annotate labs theme_classic theme element_text element_blank
+#' @importFrom ggplot2 element_rect scale_x_continuous
 #' @export
 scatterplot_fitted_vs_true <- function(dissimilarity_matrix, p_dissimilarity_mat,
                                        scenario_name, ndim,

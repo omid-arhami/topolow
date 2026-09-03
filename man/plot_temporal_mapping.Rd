@@ -18,50 +18,96 @@ plot_temporal_mapping(
   phylo_tree = NULL,
   sigma_t = NULL,
   sigma_x = NULL,
+  sigma_x_nd = NULL,
   clade_node_depth = NULL
 )
 }
 \arguments{
 \item{df_coords}{Data frame containing:
-- V1, V2, ... Vn: Coordinate columns
-- antigen: Binary indicator for antigen points
-- antiserum: Binary indicator for antiserum points
-- year: Numeric year values for temporal coloring}
+\itemize{
+\item V1, V2, ... Vn: Coordinate columns
+\item antigen: Binary indicator for antigen points
+\item antiserum: Binary indicator for antiserum points
+\item year: Numeric year values for temporal colouring
+}}
 
 \item{ndim}{Number of dimensions in input coordinates}
 
-\item{dim_config}{Dimension reduction configuration object specifying method and parameters}
+\item{dim_config}{Dimension reduction configuration object.}
 
-\item{aesthetic_config}{Aesthetic configuration object controlling plot appearance}
+\item{aesthetic_config}{Aesthetic configuration object.}
 
-\item{layout_config}{Layout configuration object controlling plot dimensions and style.
-Use x_limits and y_limits in layout_config to set axis limits.}
+\item{layout_config}{Layout configuration object.  Use \code{x_limits} /
+\code{y_limits} to set axis limits.}
 
-\item{annotation_config}{Annotation configuration object for labeling notable points}
+\item{annotation_config}{Annotation configuration object.}
 
-\item{output_dir}{Character. Directory for output files. Required if \code{layout_config$save_plot} is \code{TRUE}.}
+\item{output_dir}{Character. Directory for output files.  Required if
+\code{layout_config$save_plot} is \code{TRUE}.}
 
-\item{show_shape_legend}{Logical. Whether to show the shape legend (default: TRUE)}
+\item{show_shape_legend}{Logical.}
 
-\item{draw_arrows}{logical; if TRUE, compute and draw antigenic drift vectors}
+\item{draw_arrows}{logical; if TRUE, compute velocity (n-D and 2-D) and
+draw the 2-D vectors on the map.}
 
-\item{annotate_arrows}{logical; if TRUE, show names of the points having arrows}
+\item{annotate_arrows}{logical; if TRUE, show names of the points having
+arrows.}
 
-\item{phylo_tree}{Optional; phylo object in Newick format. Does not need to be rooted. If provided, used to compute antigenic velocity arrows.}
+\item{phylo_tree}{Optional; \code{phylo} object.  Does not need to be
+rooted.  If provided, antigens from different clades do not
+contribute to each other's velocity.}
 
-\item{sigma_t}{Optional; numeric; bandwidth for the Gaussian kernel discounting on time in years or the time unit of the data. If NULL, uses Silverman's rule of thumb.}
+\item{sigma_t}{Optional numeric; bandwidth for the Gaussian kernel on time
+(years, or whatever units \code{year} is in).  Used in BOTH the n-D
+and 2-D passes.  Default: Silverman's rule on pairwise time
+differences.}
 
-\item{sigma_x}{Optional; numeric; bandwidth for the Gaussian kernel discounting on antigenic distancein antigenic units. If NULL, uses Silverman's rule of thumb.}
+\item{sigma_x}{Optional numeric; bandwidth for the Gaussian kernel on
+antigenic distance in the 2-D plot space.  Controls the arrows on
+the map.  Default: Silverman's rule on the 2-D coordinates.}
 
-\item{clade_node_depth}{Optional; integer; number of levels of parent nodes to define clades. Antigens from different clades will be excluded from the calculation antigenic velocity arrows. (Default: Automatically calculated mode of leaf-to-backbone distance of the tree)}
+\item{sigma_x_nd}{Optional numeric; bandwidth for the Gaussian kernel on
+antigenic distance in the original n-D space.  Controls the
+velocities returned to the caller in \code{antigenic_velocity}.
+Default: RMS of per-dimension Silverman bandwidths over
+\code{V1..V_ndim}.}
+
+\item{clade_node_depth}{Optional integer; number of parent levels used to
+define a clade.  Default: median leaf-to-backbone node-distance of
+the tree.}
 }
 \value{
-A \code{ggplot} object containing the temporal mapping visualization.
+If \code{draw_arrows = FALSE}, a single \code{ggplot} object.
+If \code{draw_arrows = TRUE}, a list with elements:
+\describe{
+\item{\code{plot}}{The \code{ggplot} object.}
+\item{\code{antigenic_velocity}}{Data frame with one row per antigen and
+columns \code{name}, \code{V1..V_ndim} (original n-D coordinates),
+\code{year}, \code{v1..v_ndim} (n-D velocity components),
+\code{velocity_magnitude} (Euclidean magnitude of the n-D velocity).
+This replaces the previous \code{velocity_data} element, which was
+2-D; pre-existing scripts that read \code{result$velocity_data} or
+reference \code{$mag} must be updated.}
+}
 }
 \description{
-Antigenic Mapping and Antigenic Velocity Function. Creates a visualization of points colored by time (year) using dimension reduction, with optional antigenic velocity arrows.
-Points are colored on a gradient scale based on their temporal values, with
-different shapes for antigens and antisera.
+Antigenic Mapping and Antigenic Velocity Function.  Creates a visualization
+of points coloured by time (year) using dimension reduction, with optional
+antigenic velocity arrows.  Points are coloured on a gradient scale based
+on their temporal values, with different shapes for antigens and antisera.
+
+Antigenic velocity is computed in two spaces:
+\itemize{
+\item the original \code{ndim}-dimensional space (using \code{V1..V_ndim}
+in \code{df_coords}); the result is returned to the caller as
+\code{antigenic_velocity}.
+\item the 2-dimensional plot space (after dimension reduction); used only
+to draw arrows on the map.
+}
+This means the magnitudes and directions you see on the map are
+plot-space quantities, while the magnitudes and directions in the returned
+\code{antigenic_velocity} object are the geometrically meaningful n-D
+values.  The two will agree exactly only when \code{ndim == 2}.
 }
 \details{
 The function performs these steps:
@@ -95,6 +141,20 @@ p_saved <- plot_temporal_mapping(data, ndim = 3, layout_config = layout_config_s
                                  output_dir = temp_dir)
 list.files(temp_dir) # Check that file was created
 unlink(temp_dir, recursive = TRUE) # Clean up
+
+# With antigenic velocity vectors (returned object structure)
+set.seed(1)
+n <- 60
+data2 <- data.frame(
+  V1 = rnorm(n), V2 = rnorm(n), V3 = rnorm(n),
+  name = paste0("v", seq_len(n)),
+  antigen = rep(c(0, 1), n / 2),
+  antiserum = rep(c(1, 0), n / 2),
+  year = sample(2000:2015, n, replace = TRUE)
+)
+result <- plot_temporal_mapping(data2, ndim = 3, draw_arrows = TRUE)
+result$plot
+head(result$antigenic_velocity)   # name, V1..V3, year, v1..v3, velocity_magnitude
 
 }
 \seealso{

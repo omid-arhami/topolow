@@ -100,16 +100,14 @@ Useful links:
   \item Report bugs at \url{https://github.com/omid-arhami/topolow/issues}
 }
 
-
-Useful links:
-\itemize{
-  \item \url{https://github.com/omid-arhami/topolow}
-  \item Report bugs at \url{https://github.com/omid-arhami/topolow/issues}
-}
-
 }
 \author{
 \strong{Maintainer}: Omid Arhami \email{omid.arhami@uga.edu} (\href{https://orcid.org/0009-0005-2681-6598}{ORCID}) [copyright holder]
+
+Authors:
+\itemize{
+  \item Omid Arhami \email{omid.arhami@uga.edu} (\href{https://orcid.org/0009-0005-2681-6598}{ORCID}) [copyright holder]
+}
 
 }
 \keyword{internal}

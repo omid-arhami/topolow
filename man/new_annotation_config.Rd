@@ -16,7 +16,9 @@ new_annotation_config(
   segment_alpha = 0.6,
   min_segment_length = 0,
   max_overlaps = Inf,
-  outline_size = 0.4
+  outline_size = 0.4,
+  annotate_antisera = TRUE,
+  notable_labels = NULL
 )
 }
 \arguments{
@@ -41,6 +43,17 @@ new_annotation_config(
 \item{max_overlaps}{Numeric. Maximum number of overlaps allowed for annotations}
 
 \item{outline_size}{Numeric. Size of the outline for annotations}
+
+\item{annotate_antisera}{Logical. If TRUE (default), notable antisera are
+emphasized (filled square) and labeled. If FALSE, notable antisera are drawn
+as ordinary antisera and are neither emphasized nor labeled, so each notable
+strain is labeled once (at its antigen point).}
+
+\item{notable_labels}{Optional named character vector mapping notable-point
+names (matching \code{notable_points} / the cleaned point name) to the text
+actually drawn, e.g. \code{c("A/DARWIN/9/2021" = "DA/21")}. Names not found
+fall back to the cleaned point name. If NULL (default), the cleaned point
+name is shown.}
 }
 \value{
 An S3 object of class \code{annotation_config}, which is a list

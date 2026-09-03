@@ -19,6 +19,7 @@ plot_cluster_mapping(
   phylo_tree = NULL,
   sigma_t = NULL,
   sigma_x = NULL,
+  sigma_x_nd = NULL,
   clade_node_depth = NULL,
   show_one_arrow_per_cluster = FALSE,
   cluster_legend_order = NULL
@@ -26,52 +27,77 @@ plot_cluster_mapping(
 }
 \arguments{
 \item{df_coords}{Data frame containing:
-- V1, V2, ... Vn: Coordinate columns
-- antigen: Binary indicator for antigen points
-- antiserum: Binary indicator for antiserum points
-- cluster: Factor or integer cluster assignments}
+\itemize{
+\item V1, V2, ... Vn: Coordinate columns
+\item antigen: Binary indicator for antigen points
+\item antiserum: Binary indicator for antiserum points
+\item year: Numeric year values for temporal colouring
+}}
 
 \item{ndim}{Number of dimensions in input coordinates}
 
-\item{dim_config}{Dimension reduction configuration object specifying method and parameters}
+\item{dim_config}{Dimension reduction configuration object.}
 
-\item{aesthetic_config}{Aesthetic configuration object controlling plot appearance}
+\item{aesthetic_config}{Aesthetic configuration object.}
 
-\item{layout_config}{Layout configuration object controlling plot dimensions and style.
-Use x_limits and y_limits in layout_config to set axis limits.}
+\item{layout_config}{Layout configuration object.  Use \code{x_limits} /
+\code{y_limits} to set axis limits.}
 
-\item{annotation_config}{Annotation configuration object for labeling notable points}
+\item{annotation_config}{Annotation configuration object.}
 
-\item{output_dir}{Character. Directory for output files. Required if \code{layout_config$save_plot} is \code{TRUE}.}
+\item{output_dir}{Character. Directory for output files.  Required if
+\code{layout_config$save_plot} is \code{TRUE}.}
 
-\item{show_shape_legend}{Logical. Whether to show the shape legend (default: TRUE)}
+\item{show_shape_legend}{Logical.}
 
-\item{cluster_legend_title}{Character. Custom title for the cluster legend (default: "Cluster")}
+\item{cluster_legend_title}{Character. Custom title for the cluster legend.}
 
-\item{draw_arrows}{logical; if TRUE, compute and draw antigenic drift vectors}
+\item{draw_arrows}{logical; if TRUE, compute velocity (n-D and 2-D) and
+draw the 2-D vectors on the map.}
 
-\item{annotate_arrows}{logical; if TRUE, show names of the points having arrows}
+\item{annotate_arrows}{logical; if TRUE, show names of the points having
+arrows.}
 
-\item{phylo_tree}{Optional; phylo object in Newick format. Does not need to be rooted. If provided, used to compute antigenic velocity arrows.}
+\item{phylo_tree}{Optional; \code{phylo} object.  Does not need to be
+rooted.  If provided, antigens from different clades do not
+contribute to each other's velocity.}
 
-\item{sigma_t}{Optional; numeric; bandwidth for the Gaussian kernel discounting on time in years or the time unit of the data. If NULL, uses Silverman's rule of thumb.}
+\item{sigma_t}{Optional numeric; bandwidth for the Gaussian kernel on time
+(years, or whatever units \code{year} is in).  Used in BOTH the n-D
+and 2-D passes.  Default: Silverman's rule on pairwise time
+differences.}
 
-\item{sigma_x}{Optional; numeric; bandwidth for the Gaussian kernel discounting on antigenic distance in antigenic units. If NULL, uses Silverman's rule of thumb.}
+\item{sigma_x}{Optional numeric; bandwidth for the Gaussian kernel on
+antigenic distance in the 2-D plot space.  Controls the arrows on
+the map.  Default: Silverman's rule on the 2-D coordinates.}
 
-\item{clade_node_depth}{Optional; integer; number of levels of parent nodes to define clades. Antigens from different clades will be excluded from the calculation antigenic velocity arrows. (Default: Automatically calculated mode of leaf-to-backbone distance of the tree)}
+\item{sigma_x_nd}{Optional numeric; bandwidth for the Gaussian kernel on
+antigenic distance in the original n-D space.  Controls the
+velocities returned to the caller in \code{antigenic_velocity}.
+Default: RMS of per-dimension Silverman bandwidths over
+\code{V1..V_ndim}.}
 
-\item{show_one_arrow_per_cluster}{Shows only the largest antigenic velocity arrow in each cluster}
+\item{clade_node_depth}{Optional integer; number of parent levels used to
+define a clade.  Default: median leaf-to-backbone node-distance of
+the tree.}
 
-\item{cluster_legend_order}{in case you prefer a certain order for clusters in the legend,
-provide a list with that order here; e.g., c("cluster 2", "cluster 1")}
+\item{show_one_arrow_per_cluster}{Show only the largest 2-D arrow per
+cluster (filtering is on the 2-D plot magnitude, matching prior
+behaviour).}
+
+\item{cluster_legend_order}{Optional ordering for clusters in the legend.}
 }
 \value{
-A \code{ggplot} object containing the cluster mapping visualization.
+If \code{draw_arrows = FALSE}, a single \code{ggplot} object.
+If \code{draw_arrows = TRUE}, a list with elements \code{plot} and
+\code{antigenic_velocity} (see \code{plot_temporal_mapping}).
 }
 \description{
-Antigenic Mapping and Antigenic Velocity Function. Creates a visualization of points colored by cluster assignment using dimension
-reduction, with optional antigenic velocity arrows. Points are colored by cluster with different shapes for antigens and
-antisera.
+Antigenic Mapping and Antigenic Velocity Function.  See
+\code{plot_temporal_mapping} for the meaning of the new \code{sigma_x_nd}
+parameter and the structure of the returned \code{antigenic_velocity}
+object.  All velocity behaviour is identical between the two functions;
+the on-screen arrows are 2-D plot-space, the returned velocities are n-D.
 }
 \details{
 The function performs these steps:

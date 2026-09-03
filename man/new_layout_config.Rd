@@ -25,6 +25,7 @@ new_layout_config(
   save_format = "png",
   reverse_x = 1,
   reverse_y = 1,
+  swap_axes = FALSE,
   x_limits = NULL,
   y_limits = NULL,
   arrow_plot_threshold = 0.1
@@ -70,6 +71,10 @@ new_layout_config(
 \item{reverse_x}{Numeric multiplier for x-axis direction (1 or -1)}
 
 \item{reverse_y}{Numeric multiplier for y-axis direction (1 or -1)}
+
+\item{swap_axes}{Logical. If TRUE, map the first reduced dimension (dim1) to the
+x-axis and dim2 to the y-axis. Default FALSE keeps dim2 on x and dim1 on y.
+Useful when the dominant axis of variation should read horizontally.}
 
 \item{x_limits}{Numeric vector of length 2 specifying c(min, max) for x-axis. If NULL, limits are set automatically.}
 

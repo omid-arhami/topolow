@@ -22,7 +22,9 @@ new_aesthetic_config(
   show_legend = TRUE,
   legend_position = "right",
   arrow_head_size = 0.2,
-  arrow_alpha = 0.6
+  arrow_alpha = 0.6,
+  antiserum_color = NULL,
+  antiserum_alpha = NULL
 )
 }
 \arguments{
@@ -61,6 +63,14 @@ new_aesthetic_config(
 \item{arrow_head_size}{Size of the arrow head for velocity arrows (in cm)}
 
 \item{arrow_alpha}{Transparency of arrows (0 = invisible, 1 = fully opaque)}
+
+\item{antiserum_color}{Optional character. If supplied, antiserum points are
+drawn in this single fixed color instead of the cluster color scale, and are
+kept off the cluster color legend. If NULL (default), antisera share the
+cluster colors (original behavior).}
+
+\item{antiserum_alpha}{Optional numeric. Transparency for antiserum points when
+\code{antiserum_color} is set. If NULL, \code{point_alpha} is used.}
 }
 \value{
 An S3 object of class \code{aesthetic_config}, which is a list
