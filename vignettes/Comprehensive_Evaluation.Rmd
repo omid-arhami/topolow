@@ -1433,7 +1433,7 @@ sessionInfo()
 #> 
 #> other attached packages:
 #>  [1] RANN_2.6.2       smacof_2.1-7     e1071_1.7-16     colorspace_2.1-1 plotrix_3.8-4    MASS_7.3-60.0.1 
-#>  [7] scales_1.4.0     reshape2_1.4.4   dplyr_1.1.4      ggplot2_3.5.2    topolow_2.0.0    testthat_3.2.3  
+#>  [7] scales_1.4.0     reshape2_1.4.4   dplyr_1.1.4      ggplot2_3.5.2    topolow_2.1.0    testthat_3.2.3
 #> 
 #> loaded via a namespace (and not attached):
 #>   [1] splines_4.3.3      later_1.4.2        filelock_1.0.3     tibble_3.3.0       rpart_4.1.24      

@@ -16,6 +16,8 @@
 - **Superior performance on sparse data**: Effectively processes datasets with >95% missing values
 - **Calculates antigenic velocity vectors (biology)**: Measures the rate and direction of viral evolution, offering early warnings of lineage replacements.
 - **Robust optimization**: Gradient-free algorithm avoids local optima
+- **C++ optimization backend**: The core embedding loop (`euclidean_embedding()`) runs in compiled C++ (Rcpp), substantially speeding up optimization, most visibly on larger matrices
+- **Subsampling for large datasets**: Optional `opt_subsample` parameter lets parameter optimization run on random subsamples while the final embedding still uses the full dataset
 - **Statistical foundation**: Maximum likelihood estimation under Laplace error model
 - **Automatic parameter optimization**: Determines optimal dimensions and parameters through cross-validation
 - **Handles censored data**: Properly incorporates threshold measurements (e.g., "<1", ">64")
@@ -133,6 +135,50 @@ result <- Euclidify(
 - Automatic connectivity validation
 
 See `?Euclidify` and `?initial_parameter_optimization` for details.
+
+Before subsampling or embedding a large or very sparse matrix, `check_matrix_connectivity()`
+confirms the dissimilarity graph has no disconnected components, and `prune_sparse_matrix()`
+can trim a matrix down to a well-connected subset if it does:
+
+```r
+# Verify the dissimilarity graph is fully connected
+connectivity <- check_matrix_connectivity(large_data)
+print(connectivity$is_connected)
+
+# If not, prune to a well-connected subset before proceeding
+if (!connectivity$is_connected) {
+  large_data <- prune_sparse_matrix(large_data)$pruned_matrix
+}
+```
+
+## Diagnostics
+
+`Euclidify()` can optionally record the parameter search trajectory so it can be inspected
+after the fact with `plot_euclidify_diagnostics()` (parameter search, convergence, and
+quality plots) and `create_diagnostic_report()` (a text summary):
+
+```r
+result <- Euclidify(
+  dissimilarity_matrix = dist_mat,
+  output_dir = tempdir(),
+  n_initial_samples = 20,
+  n_adaptive_samples = 50,
+  folds = 4,
+  create_diagnostic_plots = TRUE,
+  verbose = "standard"
+)
+
+# Parameter search, convergence, and quality diagnostic plots
+diag_plots <- plot_euclidify_diagnostics(result, save_plots = FALSE)
+
+# Text summary of the same run
+cat(create_diagnostic_report(result), sep = "\n")
+```
+
+For diagnostics on the adaptive Monte Carlo parameter search itself (as opposed to the
+`Euclidify()` wizard), see `plot_mcmc_diagnostics()`, `plot_ll_improvement()`, and
+`plot_performance_trace()`, which operate on the chain files written by
+`run_adaptive_sampling()`.
 
 ## Applications and Examples
 
@@ -470,6 +516,8 @@ Topolow employs a novel physical model where:
 - **Convergence diagnostics**: Automatic convergence detection and monitoring
 - **Flexible input formats**: Handles matrices, data frames, similarity/dissimilarity data
 - **Comprehensive visualization**: 2D, 3D, temporal, and cluster-based plotting tools, including antigenic velocity vectors to track evolutionary drift.
+- **Subsampling for large datasets**: `opt_subsample`, `subsample_dissimilarity_matrix()`, `check_matrix_connectivity()`, and `prune_sparse_matrix()` speed up parameter optimization on large or sparse matrices while the final embedding still uses the full data
+- **Optimization diagnostics**: `plot_euclidify_diagnostics()` and `create_diagnostic_report()` for `Euclidify()` runs; `plot_mcmc_diagnostics()`, `plot_ll_improvement()`, and `plot_performance_trace()` for adaptive sampling runs
 
 ## Input Data Formats
 
@@ -581,6 +629,8 @@ Full documentation available at:
 ?Euclidify
 ?euclidean_embedding
 ?initial_parameter_optimization
+?plot_euclidify_diagnostics
+?subsample_dissimilarity_matrix
 
 # Package overview
 help(package = "topolow")
