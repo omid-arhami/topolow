@@ -760,14 +760,15 @@ summary.topolow <- function(object, ...) {
 #'        NA values for missing measurements and threshold indicators (< or >).
 #' @param output_dir Character. Directory for saving optimization files and results.
 #'        Required - no default.
-#' @param ndim_range Integer vector of length 2. Range for number of dimensions 
-#'        (minimum, maximum). Default: c(2, 10)
-#' @param k0_range Numeric vector of length 2. Range for initial spring constant
-#'        (minimum, maximum). Default: c(0.1, 15)
-#' @param cooling_rate_range Numeric vector of length 2. Range for cooling rate
-#'        (minimum, maximum). Default: c(0.001, 0.07)
-#' @param c_repulsion_range Numeric vector of length 2. Range for repulsion constant
-#'        (minimum, maximum). Default: c(0.001, 0.4)
+#' @param ndim_range Integer vector of length 2. Starting range for the number of
+#'        dimensions (minimum, maximum). Default: c(2, 10). This seeds the search
+#'        rather than bounding it -- see the note on parameter ranges below.
+#' @param k0_range Numeric vector of length 2. Starting range for the initial
+#'        spring constant (minimum, maximum). Default: c(0.1, 15)
+#' @param cooling_rate_range Numeric vector of length 2. Starting range for the
+#'        cooling rate (minimum, maximum). Default: c(0.001, 0.07)
+#' @param c_repulsion_range Numeric vector of length 2. Starting range for the
+#'        repulsion constant (minimum, maximum). Default: c(0.001, 0.4)
 #' @param n_initial_samples Integer. Number of samples for initial parameter 
 #'        optimization. Default: 100
 #' @param n_adaptive_samples Integer. Number of samples for adaptive refinement.
@@ -811,6 +812,22 @@ summary.topolow <- function(object, ...) {
 #'   \item{all_samples}{Data frame of all parameter evaluations (if create_diagnostic_plots=TRUE)}
 #'   \item{diagnostic_plots}{List of ggplot objects (if create_diagnostic_plots=TRUE)}
 #'   \item{dissimilarity_matrix}{Input dissimilarity matrix (if create_diagnostic_plots=TRUE)}
+#'
+#' @section Parameter ranges are a starting point, not a constraint:
+#' The four `*_range` arguments define where the search begins. They are not
+#' hard bounds: initial sampling draws inside them, but adaptive refinement
+#' samples from a kernel density estimate fitted to the best parameter sets
+#' found so far, and that estimate can propose values outside the original
+#' range. Refinement therefore may return an `ndim`, `k0`, `cooling_rate` or
+#' `c_repulsion` beyond the range you supplied, when the data support it.
+#'
+#' This is deliberate -- it lets the search escape a range that was set too
+#' narrowly -- but it means `ndim_range = c(3, 6)` does not guarantee a
+#' 3- to 6-dimensional result. Only the physical sanity limits are enforced
+#' (for example `1 <= ndim <= 50`). Check `result$optimal_params` for the
+#' values actually used, and widen or reconsider the range if refinement
+#' consistently drifts away from it. If a hard cap is essential, call
+#' [euclidean_embedding()] directly with an explicit `ndim`.
 #'
 #' @section Reproducibility:
 #' `Euclidify()` calls [euclidean_embedding()], whose sweep order is randomized

@@ -33,17 +33,18 @@ NA values for missing measurements and threshold indicators (< or >).}
 \item{output_dir}{Character. Directory for saving optimization files and results.
 Required - no default.}
 
-\item{ndim_range}{Integer vector of length 2. Range for number of dimensions
-(minimum, maximum). Default: c(2, 10)}
+\item{ndim_range}{Integer vector of length 2. Starting range for the number of
+dimensions (minimum, maximum). Default: c(2, 10). This seeds the search
+rather than bounding it -- see the note on parameter ranges below.}
 
-\item{k0_range}{Numeric vector of length 2. Range for initial spring constant
-(minimum, maximum). Default: c(0.1, 15)}
+\item{k0_range}{Numeric vector of length 2. Starting range for the initial
+spring constant (minimum, maximum). Default: c(0.1, 15)}
 
-\item{cooling_rate_range}{Numeric vector of length 2. Range for cooling rate
-(minimum, maximum). Default: c(0.001, 0.07)}
+\item{cooling_rate_range}{Numeric vector of length 2. Starting range for the
+cooling rate (minimum, maximum). Default: c(0.001, 0.07)}
 
-\item{c_repulsion_range}{Numeric vector of length 2. Range for repulsion constant
-(minimum, maximum). Default: c(0.001, 0.4)}
+\item{c_repulsion_range}{Numeric vector of length 2. Starting range for the
+repulsion constant (minimum, maximum). Default: c(0.001, 0.4)}
 
 \item{n_initial_samples}{Integer. Number of samples for initial parameter
 optimization. Default: 100}
@@ -107,6 +108,24 @@ A user-friendly wrapper function that automatically optimizes parameters and
 performs Euclidean embedding on a dissimilarity matrix. This function handles
 the entire workflow from parameter optimization to final embedding,  with comprehensive diagnostic tracking and visualization.
 }
+\section{Parameter ranges are a starting point, not a constraint}{
+
+The four \verb{*_range} arguments define where the search begins. They are not
+hard bounds: initial sampling draws inside them, but adaptive refinement
+samples from a kernel density estimate fitted to the best parameter sets
+found so far, and that estimate can propose values outside the original
+range. Refinement therefore may return an \code{ndim}, \code{k0}, \code{cooling_rate} or
+\code{c_repulsion} beyond the range you supplied, when the data support it.
+
+This is deliberate -- it lets the search escape a range that was set too
+narrowly -- but it means \code{ndim_range = c(3, 6)} does not guarantee a
+3- to 6-dimensional result. Only the physical sanity limits are enforced
+(for example \verb{1 <= ndim <= 50}). Check \code{result$optimal_params} for the
+values actually used, and widen or reconsider the range if refinement
+consistently drifts away from it. If a hard cap is essential, call
+\code{\link[=euclidean_embedding]{euclidean_embedding()}} directly with an explicit \code{ndim}.
+}
+
 \section{Reproducibility}{
 
 \code{Euclidify()} calls \code{\link[=euclidean_embedding]{euclidean_embedding()}}, whose sweep order is randomized

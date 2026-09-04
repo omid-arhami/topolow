@@ -1,5 +1,27 @@
 # Copyright (c) 2024 Omid Arhami omid.arhami@uga.edu
 # R/adaptive_sampling.R
+# Wait until every path in `paths` satisfies `present` (TRUE = must exist,
+# FALSE = must be gone), or until `timeout` seconds have passed.
+#
+# This replaces the fixed Sys.sleep() calls that used to guard these points.
+# The delay exists for networked filesystems (NFS, Lustre), where metadata
+# changes are not immediately visible to other processes. Polling keeps that
+# protection but costs almost nothing on a local filesystem, where the
+# condition already holds on the first check -- the fixed sleeps added ~1.5s
+# to every run_adaptive_sampling() call regardless of filesystem.
+#
+# Returns TRUE if the condition was met, FALSE on timeout. Numerically inert.
+wait_for_files <- function(paths, present = TRUE, timeout = 5, interval = 0.05) {
+  if (length(paths) == 0) return(TRUE)
+  deadline <- Sys.time() + timeout
+  repeat {
+    ok <- if (present) all(file.exists(paths)) else !any(file.exists(paths))
+    if (ok) return(TRUE)
+    if (Sys.time() >= deadline) return(FALSE)
+    Sys.sleep(interval)
+  }
+}
+
 
 #' Parameter Space Sampling and Optimization Functions for topolow
 #'
@@ -1213,7 +1235,8 @@ run_adaptive_sampling <- function(initial_samples_file,
   files_to_remove <- list.files(adaptive_dir, full.names = TRUE, recursive = TRUE)
   if (length(files_to_remove) > 0) {
     file.remove(files_to_remove)
-    Sys.sleep(0.5)  # Allow filesystem to sync after deletion
+    # Wait for the deletions to become visible rather than sleeping a fixed 0.5s.
+    wait_for_files(files_to_remove, present = FALSE, timeout = 5)
   }
   
   # ==========================================================================
@@ -1247,8 +1270,10 @@ run_adaptive_sampling <- function(initial_samples_file,
   # FILESYSTEM SYNC (CRITICAL FOR HPC/NETWORKED FILESYSTEMS)
   # ==========================================================================
   # On networked filesystems (NFS, Lustre, etc.), file operations may not be
-  # immediately visible to forked processes. Add a small delay and verify files.
-  Sys.sleep(1)  # Allow filesystem to sync
+  # immediately visible to forked processes. Wait for them to appear instead of
+  # sleeping a fixed second: on a local filesystem this returns on the first
+  # check, while a networked one still gets up to 5 seconds to catch up.
+  wait_for_files(temps, present = TRUE, timeout = 5)
   
   # Verify all temp files exist and are readable
   missing_files <- temps[!file.exists(temps)]

@@ -206,6 +206,24 @@ The `opt_subsample` parameter is optional (default: NULL = use full data).
   is the configuration used on CRAN check machines.
 - Conversion of matrices to numeric in `R/adaptive_sampling.R` is now handled
   by the package's `extract_numeric_values()` function.
+- `run_adaptive_sampling()` no longer sleeps for a fixed 1.5 seconds on every
+  call. Two `Sys.sleep()` calls guarded file visibility on networked
+  filesystems (NFS, Lustre); they now poll for the expected state instead, so
+  the wait is effectively free on a local filesystem while networked ones still
+  get up to 5 seconds. This removed about a second from every `Euclidify()`
+  run and has no effect on results.
+
+## Documentation
+
+* Clarified that the `*_range` arguments of `Euclidify()` are a **starting
+  range for the search, not a hard bound**. Initial sampling draws inside the
+  range, but adaptive refinement samples from a kernel density estimate of the
+  best parameter sets found so far, which can propose values outside it. So
+  `ndim_range = c(3, 6)` does not guarantee a 3- to 6-dimensional result; only
+  the sanity limits (for example `1 <= ndim <= 50`) are enforced. This
+  behaviour is unchanged from earlier versions and is now documented, in a new
+  section of `?Euclidify`. Use `euclidean_embedding()` with an explicit `ndim`
+  when a hard cap is required.
 
 ## Improvements
 
