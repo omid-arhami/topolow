@@ -464,9 +464,21 @@ test_that("subsample_dissimilarity_matrix consumes the same RNG stream when ungr
   expected <- sample(seq_len(10), 5)
 
   set.seed(42)
-  result <- subsample_dissimilarity_matrix(mat, 5, verbose = FALSE)
+  result <- subsample_dissimilarity_matrix(mat, 5, verbose = FALSE,
+                                           preserve_order = FALSE)
 
   expect_identical(result$selected_indices, expected)
+})
+
+test_that("subsample_dissimilarity_matrix preserves order by default", {
+  mat <- generate_test_data(10, ndim = 2)
+
+  set.seed(42)
+  result <- subsample_dissimilarity_matrix(mat, 5, verbose = FALSE)
+
+  expect_identical(result$selected_indices, sort(result$selected_indices))
+  expect_identical(result$selected_names,
+                   rownames(mat)[result$selected_indices])
 })
 
 test_that("explicitly passing NULL groups changes nothing", {

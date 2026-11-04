@@ -15,7 +15,7 @@ adaptive_MC_sampling(
   scenario_name,
   opt_subsample = NULL,
   verbose = FALSE,
-  preserve_order = FALSE,
+  preserve_order = TRUE,
   opt_subsample_sera = NULL,
   opt_sera = NULL
 )
@@ -43,7 +43,7 @@ reused for all iterations within this job for consistency. Default: NULL.}
 
 \item{verbose}{Logical. If TRUE, prints progress messages. Default: FALSE.}
 
-\item{preserve_order}{Logical. If TRUE, preserves the order of samples in the output. Default: FALSE.}
+\item{preserve_order}{Logical. If TRUE, preserves the order of samples in the output. Default: TRUE.}
 
 \item{opt_subsample_sera}{Numeric or NULL. Keep every antigen and draw this
 many sera for each parameter evaluation. A value strictly between 0 and 1

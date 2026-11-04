@@ -139,6 +139,23 @@ test_that("euclidean_embedding returns correct object structure", {
 })
 
 
+test_that("euclidean_embedding preserves input order by default", {
+  mat <- create_test_matrix(size = 6)
+
+  kept <- euclidean_embedding(mat, ndim = 2, mapping_max_iter = 10,
+                              k0 = 1.0, cooling_rate = 0.01, c_repulsion = 0.01,
+                              write_positions_to_csv = FALSE)
+  expect_identical(rownames(kept$positions), rownames(mat))
+  expect_identical(rownames(kept$est_distances), rownames(mat))
+
+  reordered <- euclidean_embedding(mat, ndim = 2, mapping_max_iter = 10,
+                                   k0 = 1.0, cooling_rate = 0.01,
+                                   c_repulsion = 0.01,
+                                   write_positions_to_csv = FALSE,
+                                   preserve_order = FALSE)
+  expect_setequal(rownames(reordered$positions), rownames(mat))
+})
+
 ###########################################################################
 ################## Testing the wizard function Euclidify ##################
 

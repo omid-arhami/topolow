@@ -437,9 +437,9 @@ identify_antigens_sera <- function(dissimilarity_matrix,
 #'   (0-1). Default: 0.10. Used for warnings, not hard requirement.
 #' @param random_seed Integer or NULL. If provided, sets the random seed for reproducibility.
 #' @param verbose Logical. Print progress messages. Default: FALSE.
-#' @param preserve_order Logical. If TRUE, the selected indices are sorted to maintain the 
-#'        original row/column order of the input matrix. If FALSE (default), indices are 
-#'        returned in random order as sampled. Set to TRUE when downstream analyses depend 
+#' @param preserve_order Logical. If TRUE (default), the selected indices are sorted to maintain the 
+#'        original row/column order of the input matrix. If FALSE, indices are 
+#'        returned in random order as sampled. Set to FALSE when no downstream analysis depends
 #'        on specific point ordering.
 #' @param always_include Character or numeric vector, or NULL. Points that must
 #'        appear in every subsample, given as row names or as row indices of
@@ -512,7 +512,7 @@ subsample_dissimilarity_matrix <- function(dissimilarity_matrix,
                                            min_completeness = 0.1,
                                            random_seed = NULL,
                                            verbose = FALSE,
-                                           preserve_order = FALSE,
+                                           preserve_order = TRUE,
                                            always_include = NULL,
                                            sample_pool = NULL) {
   # ============================================================================

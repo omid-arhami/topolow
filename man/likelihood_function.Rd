@@ -14,7 +14,7 @@ likelihood_function(
   c_repulsion,
   folds = 20,
   num_cores = 1,
-  preserve_order = FALSE
+  preserve_order = TRUE
 )
 }
 \arguments{
@@ -36,7 +36,7 @@ likelihood_function(
 
 \item{num_cores}{The number of cores for parallel processing.}
 
-\item{preserve_order}{Logical indicating whether to preserve the order of folds.}
+\item{preserve_order}{Logical indicating whether to preserve the order of folds. Default: TRUE.}
 }
 \value{
 A list containing the pooled \code{Holdout_MAE} and the \code{NLL}.

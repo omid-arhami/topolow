@@ -11,7 +11,7 @@ subsample_dissimilarity_matrix(
   min_completeness = 0.1,
   random_seed = NULL,
   verbose = FALSE,
-  preserve_order = FALSE,
+  preserve_order = TRUE,
   always_include = NULL,
   sample_pool = NULL
 )
@@ -31,9 +31,9 @@ giving up. Default: 5}
 
 \item{verbose}{Logical. Print progress messages. Default: FALSE.}
 
-\item{preserve_order}{Logical. If TRUE, the selected indices are sorted to maintain the
-original row/column order of the input matrix. If FALSE (default), indices are
-returned in random order as sampled. Set to TRUE when downstream analyses depend
+\item{preserve_order}{Logical. If TRUE (default), the selected indices are sorted to maintain the
+original row/column order of the input matrix. If FALSE, indices are
+returned in random order as sampled. Set to FALSE when no downstream analysis depends
 on specific point ordering.}
 
 \item{always_include}{Character or numeric vector, or NULL. Points that must

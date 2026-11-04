@@ -16,7 +16,7 @@ run_adaptive_sampling(
   opt_subsample = NULL,
   output_dir,
   verbose = FALSE,
-  preserve_order = FALSE,
+  preserve_order = TRUE,
   opt_subsample_sera = NULL,
   opt_sera = NULL
 )
@@ -59,7 +59,7 @@ data forms a connected graph. Default: NULL (use full data).
 
 \item{verbose}{Logical. Whether to print progress messages. Default: FALSE.}
 
-\item{preserve_order}{Logical. Whether to preserve the order of points in the output. Default: FALSE.}
+\item{preserve_order}{Logical. Whether to preserve the order of points in the output. Default: TRUE.}
 
 \item{opt_subsample_sera}{Numeric or NULL. Keep every antigen and draw this
 many sera for each parameter evaluation. A value strictly between 0 and 1

@@ -26,7 +26,7 @@ initial_parameter_optimization(
   verbose = FALSE,
   write_files = FALSE,
   output_dir,
-  preserve_order = FALSE,
+  preserve_order = TRUE,
   opt_subsample_sera = NULL,
   opt_sera = NULL
 )
@@ -83,10 +83,10 @@ that parameter set use the same subsample
 
 \item{preserve_order}{Logical. If TRUE, the original row and column order of the
 dissimilarity matrix is preserved in the output coordinates. If FALSE, the data is
-reordered based on their available distances for a faster convergence. Set to TRUE
-when domain knowledge supports a specific order (e.g., directional evolution) or
-when downstream analyses depend on specific point ordering matching the input matrix.
-Default: FALSE}
+reordered based on their available distances for a faster convergence. Set to FALSE
+when the input order carries no meaning and faster convergence is preferred
+over output coordinates matching the input matrix.
+Default: TRUE}
 
 \item{opt_subsample_sera}{Numeric or NULL. Keep every antigen and draw this
 many sera for each parameter evaluation. A value strictly between 0 and 1

@@ -157,12 +157,12 @@ vectorized_process_distance_matrix <- function(distances_numeric, threshold_mask
 #' @param verbose Logical. Whether to print progress messages. Default is FALSE.
 #' @param convergence_check_freq Integer. How often to check for convergence (every N iterations).
 #'        Lower values give more precise stopping but add overhead. Default is 3
-#' @param preserve_order Logical. If TRUE, the original row and column order of the 
-#'        dissimilarity matrix is strictly preserved. If FALSE (default), the matrix is
+#' @param preserve_order Logical. If TRUE (default), the original row and column order of the 
+#'        dissimilarity matrix is strictly preserved. If FALSE, the matrix is
 #'        reordered internally for optimized convergence (spectral pattern with largest
-#'        values in corners). Set to TRUE when domain knowledge supports a specific order (e.g., 
-#'        directional evolution) or when downstream analyses depend on specific
-#'        point ordering matching the input matrix.
+#'        values in corners). Set to FALSE when the input order
+#'        carries no meaning and faster convergence is preferred over output
+#'        coordinates matching the input matrix.
 #'
 #' @return A `list` object of class `topolow`. This list contains the results of the
 #'   optimization and includes the following components:
@@ -223,7 +223,7 @@ euclidean_embedding <- function(dissimilarity_matrix,
                                 output_dir,
                                 verbose = FALSE,
                                 convergence_check_freq = 3,
-                                preserve_order = FALSE) {
+                                preserve_order = TRUE) {
 
   # ===========================================================================
   # INPUT VALIDATION
@@ -803,10 +803,10 @@ summary.topolow <- function(object, ...) {
 #'        Only used together with `opt_subsample_sera`. Default: NULL.
 #' @param preserve_order Logical. If TRUE, the original row and column order of the 
 #'        dissimilarity matrix is preserved in the output coordinates. If FALSE, the data is 
-#'        reordered based on their available distances for a faster convergence. Set to TRUE 
-#'        when domain knowledge supports a specific order (e.g., directional evolution) or 
-#'        when downstream analyses depend on specific point ordering matching the input matrix.
-#'        Default: FALSE
+#'        reordered based on their available distances for a faster convergence. Set to FALSE
+#'        when the input order carries no meaning and faster convergence is preferred
+#'        over output coordinates matching the input matrix.
+#'        Default: TRUE
 #' 
 #' @return A list containing:
 #'   \item{positions}{Matrix of optimized coordinates}
@@ -906,7 +906,7 @@ Euclidify <- function(dissimilarity_matrix,
                       save_results = FALSE,
                       create_diagnostic_plots = FALSE,
                       diagnostic_plot_types = "all",
-                      preserve_order = FALSE,
+                      preserve_order = TRUE,
                       opt_subsample_sera = NULL,
                       opt_sera = NULL) {
   

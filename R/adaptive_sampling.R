@@ -97,10 +97,10 @@ wait_for_files <- function(paths, present = TRUE, timeout = 5, interval = 0.05) 
 #' @param output_dir Character. Directory for output files. Required if `write_files` is TRUE.
 #' @param preserve_order Logical. If TRUE, the original row and column order of the
 #'        dissimilarity matrix is preserved in the output coordinates. If FALSE, the data is
-#'        reordered based on their available distances for a faster convergence. Set to TRUE
-#'        when domain knowledge supports a specific order (e.g., directional evolution) or
-#'        when downstream analyses depend on specific point ordering matching the input matrix.
-#'        Default: FALSE
+#'        reordered based on their available distances for a faster convergence. Set to FALSE
+#'        when the input order carries no meaning and faster convergence is preferred
+#'        over output coordinates matching the input matrix.
+#'        Default: TRUE
 #'
 #' @param opt_subsample_sera Numeric or NULL. Keep every antigen and draw this
 #'   many sera for each parameter evaluation. A value strictly between 0 and 1
@@ -197,7 +197,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
                                            verbose = FALSE,
                                            write_files = FALSE,
                                            output_dir,
-                                           preserve_order = FALSE,
+                                           preserve_order = TRUE,
                                            opt_subsample_sera = NULL,
                                            opt_sera = NULL) {
   # ==========================================================================
@@ -1058,7 +1058,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
 #'   }
 #' @param output_dir Character. Required directory for output files.
 #' @param verbose Logical. Whether to print progress messages. Default: FALSE.
-#' @param preserve_order Logical. Whether to preserve the order of points in the output. Default: FALSE.
+#' @param preserve_order Logical. Whether to preserve the order of points in the output. Default: TRUE.
 #'
 #' @param opt_subsample_sera Numeric or NULL. Keep every antigen and draw this
 #'   many sera for each parameter evaluation. A value strictly between 0 and 1
@@ -1146,7 +1146,7 @@ run_adaptive_sampling <- function(initial_samples_file,
                                   opt_subsample = NULL,
                                   output_dir,
                                   verbose = FALSE,
-                                  preserve_order = FALSE,
+                                  preserve_order = TRUE,
                                   opt_subsample_sera = NULL,
                                   opt_sera = NULL) {
   # ==========================================================================
@@ -1580,7 +1580,7 @@ run_adaptive_sampling <- function(initial_samples_file,
 #'   this adaptive sampling job. A single subsample is created at the start and
 #'   reused for all iterations within this job for consistency. Default: NULL.
 #' @param verbose Logical. If TRUE, prints progress messages. Default: FALSE.
-#' @param preserve_order Logical. If TRUE, preserves the order of samples in the output. Default: FALSE.
+#' @param preserve_order Logical. If TRUE, preserves the order of samples in the output. Default: TRUE.
 #'
 #' @param opt_subsample_sera Numeric or NULL. Keep every antigen and draw this
 #'   many sera for each parameter evaluation. A value strictly between 0 and 1
@@ -1628,7 +1628,7 @@ adaptive_MC_sampling <- function(samples_file,
                                  scenario_name,
                                  opt_subsample = NULL,
                                  verbose = FALSE,
-                                 preserve_order = FALSE,
+                                 preserve_order = TRUE,
                                  opt_subsample_sera = NULL,
                                  opt_sera = NULL) {
   # ==========================================================================
@@ -2701,7 +2701,7 @@ calculate_weighted_marginals <- function(samples) {
 #' @param c_repulsion The repulsion constant.
 #' @param folds The number of cross-validation folds.
 #' @param num_cores The number of cores for parallel processing.
-#' @param preserve_order Logical indicating whether to preserve the order of folds.
+#' @param preserve_order Logical indicating whether to preserve the order of folds. Default: TRUE.
 #'
 #' @return A list containing the pooled `Holdout_MAE` and the `NLL`.
 #'
@@ -2710,7 +2710,7 @@ calculate_weighted_marginals <- function(samples) {
 likelihood_function <- function(dissimilarity_matrix, mapping_max_iter,
                                 relative_epsilon, N, k0, cooling_rate,
                                 c_repulsion, folds = 20, num_cores = 1,
-                                preserve_order = FALSE) {
+                                preserve_order = TRUE) {
   # --- Manual k-Fold Creation ---
   # This approach creates k folds by iteratively removing a random subset of
   # non-NA values from the full matrix for each fold's training set.

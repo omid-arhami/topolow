@@ -300,6 +300,27 @@ The `opt_subsample` parameter is optional (default: NULL = use full data).
 
 # topolow 2.2.0
 
+## Breaking Changes
+
+* `preserve_order` now defaults to `TRUE` throughout the package. The affected
+  functions are `euclidean_embedding()`, `Euclidify()`,
+  `initial_parameter_optimization()`, `run_adaptive_sampling()`,
+  `adaptive_MC_sampling()`, `likelihood_function()` and
+  `subsample_dissimilarity_matrix()`. `bootstrap_embedding()` already defaulted
+  to `TRUE` and is unchanged.
+* In practice, `euclidean_embedding()` no longer reorders the dissimilarity
+  matrix internally by default, so the rows of `positions` and `est_distances`
+  come back in the order they were supplied in, and
+  `subsample_dissimilarity_matrix()` returns its `selected_indices` sorted
+  rather than in draw order. The spectral reordering was a convergence-speed
+  optimisation rather than part of the objective, but it does change which
+  random initialisation each point receives, so coordinates, `mae` and `iter`
+  from a seeded run will not reproduce those of the same call under 2.1.0.
+  Matrices whose input order carries no meaning may also need more iterations
+  to converge than before.
+  - **Migration**: pass `preserve_order = FALSE` explicitly to restore the
+    previous behaviour.
+
 ## New Features
 
 ### Bootstrapping over sera
