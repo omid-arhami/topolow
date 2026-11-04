@@ -13,12 +13,17 @@ make_vs_matrix <- function(n_v = 4, n_s = 3, ndim = 2, seed = 1) {
 
 run_small_bootstrap <- function(m, ...) {
   args <- list(
-    dissimilarity_matrix = m, ndim = 2, k0 = 1, cooling_rate = 0.01,
+    ndim = 2, k0 = 1, cooling_rate = 0.01,
     c_repulsion = 0.01, mapping_max_iter = 30, n_replicates = 5,
     n_sera = 2, max_cores = 1, random_seed = 42
   )
   args <- utils::modifyList(args, list(...))
-  suppressWarnings(do.call(bootstrap_embedding, args))
+  # Pass the matrix as a symbol rather than by value. do.call() inlines its
+  # arguments into the call object, and any condition raised downstream that
+  # deparses the call then has to deparse the whole matrix with it, which can
+  # blow past R's 10000-byte limit on generated names.
+  args$dissimilarity_matrix <- quote(m)
+  suppressWarnings(do.call("bootstrap_embedding", args, envir = environment()))
 }
 
 # =============================================================================
