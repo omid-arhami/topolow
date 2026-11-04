@@ -1,78 +1,77 @@
-# cran-comments.md — topolow 2.1.0
+# cran-comments.md — topolow 2.2.0
 
-This is an update of the CRAN package `topolow` (currently 2.0.1).
+This is an update of the CRAN package `topolow` (currently 2.1.0, published
+2026-09-14).
 
 ## Test environments
 
 * Local: Windows 11, R 4.5.3 — `R CMD check --as-cran`
-* win-builder: R-devel and R-release
-* macOS builder (R-release)
-* R-hub: linux, macos, windows, clang-asan
+* win-builder: R-devel and R-release — PENDING, run before submitting
+* macOS builder (R-release) — PENDING, run before submitting
+* R-hub: linux, macos, windows — PENDING, run before submitting
+
+(Delete the PENDING markers once those checks have come back clean. Do not
+submit with them still in the file.)
 
 ## R CMD check results
 
 0 ERRORs | 0 WARNINGs | 0 NOTEs
 
+## What is in this release
+
+The release is additive. It adds one feature — resampling a subset of the points
+during parameter optimization and during map building — together with three new
+exported functions, two new S3 methods, and new optional arguments on five
+existing functions. Every new argument defaults to `NULL` or `FALSE`, no
+argument was renamed or removed, and no default value was changed. Code written
+against 2.1.0 runs unchanged.
+
+No dependency was added. The new code uses only packages already in `Imports`,
+plus `MASS` from `Suggests` behind a `requireNamespace()` guard for one optional
+plotting method.
+
 ## Notes for the reviewer
 
-### This is the first release of this package that contains compiled code
+### A documented behaviour change in `Euclidify()`
 
-Versions up to and including 2.0.1 were `NeedsCompilation: no`. In 2.1.0 the
-core optimization loop has been moved from R to C++ via Rcpp, so this release is
-`NeedsCompilation: yes`.
+`Euclidify()` accepted an `opt_subsample` argument but did not pass it on to its
+adaptive refinement stage, which therefore embedded the full matrix even when
+subsampling had been requested. The help page said subsampling applied to "both
+initial and adaptive", so the documentation was right and the code was wrong.
+The argument is now forwarded. Existing calls that set `opt_subsample` will find
+the adaptive stage faster, and its likelihood estimates correspondingly noisier,
+than in 2.1.0. This is called out under `## Bug Fixes` in `NEWS.md`.
 
-The backend is Rcpp-only. It calls no BLAS or LAPACK routine and links no
-external library, so there is no `src/Makevars` or `src/Makevars.win` on any
-platform. Native routines are registered with `R_registerRoutines()` and symbol
-search is disabled with `R_useDynamicSymbols(dll, FALSE)`. All sources are ASCII
-and compile without warnings under `-Wall -pedantic`.
+### The C++ sweep-order RNG is unchanged from 2.1.0
 
-### The C++ code uses a random number generator that `set.seed()` does not control
+The note in the 2.1.0 submission still applies and nothing about it has changed:
+the C++ backend re-permutes the order in which point pairs are visited on every
+iteration using `std::mt19937` seeded from `std::random_device`, so repeated runs
+give similar but not identical coordinates. `set.seed()` governs the starting
+configuration, which is drawn in R, but not the sweep order.
 
-Writing R Extensions asks packages to use R's RNG so that `set.seed()` governs
-results. This package does that for everything that determines the answer, but
-one narrow use of randomness is intentionally kept outside R's stream, and we
-would rather flag it than have it found.
-
-The algorithm updates point positions in place (Gauss-Seidel) while sweeping
-over all N(N-1)/2 point pairs. On every iteration the C++ code re-permutes the
-*order* in which those pairs are visited, using `std::mt19937` seeded from
-`std::random_device`.
-
-The shuffle changes only the visiting order. It does not change which pairs are
-considered, their observed dissimilarities, their weights, the spring and
-repulsion physics, the cooling schedule, or the convergence test — all of which
-are deterministic. Because updates are applied in place, a fixed sweep order
-would systematically favour points early in that order, which are always moved
-against stale neighbour positions; reshuffling each iteration removes that bias
-and supplies the perturbation that lets the configuration escape local optima.
-This is the layer at which the stochasticity is the method, and it is the same
-behaviour the pure-R implementation in 2.0.1 had.
-
-`set.seed()` does control the starting configuration, which is drawn with
-`stats::runif()` in R before the C++ call. Run-to-run variation in the final
-coordinates is expected and documented: `?euclidean_embedding` has a new
-`Reproducibility` section stating exactly what is and is not seeded, and
-describing how to obtain a single canonical map (run several times, compare with
-the package's own diagnostics, keep the lowest holdout error). `NEWS.md` says
-the same. We are happy to change this if you would prefer R's RNG here, but it
-would alter published results, so we did not make the change unilaterally.
-
-### `\dontrun{}` has been removed
-
-CRAN asked us to remove `\dontrun{}` wrappers at the 1.0.0 review. Nine had crept
-back in by 2.1.0. All nine are gone: the examples that were slow are now
-`\donttest{}` and actually run, and the ones that referenced files or objects
-that did not exist have been rewritten so they execute. `grep -rn "dontrun" man/`
-returns nothing. The `Euclidify()` help page previously had six near-duplicate
-example blocks; these are consolidated to three, each with small
-`n_initial_samples` and `n_adaptive_samples`, to keep the page inside the
-per-example time budget.
+This release makes that property more visible rather than less. The new
+`bootstrap_embedding()` has a `Reproducibility` section stating that its
+`random_seed` argument fixes which points each replicate draws, and therefore the
+replicate counts, but does not fix the embeddings. Its documentation also tells
+users that the standard deviations it reports mix the sampling variability they
+asked about with this optimizer variability, and how to measure the second
+component on their own data. We would still rather flag this than have it found.
 
 ### Writing to the file system
 
-No function writes outside `tempdir()` unless the user supplies `output_dir`
-explicitly. Every example and test that writes a file writes to `tempdir()`.
+Unchanged and still the case: no function writes outside `tempdir()` unless the
+user supplies `output_dir` explicitly. The new `bootstrap_embedding()` writes
+nothing by default; `write_files = TRUE` requires `output_dir` and errors without
+it. Every example and test that writes a file writes to `tempdir()`.
+
+### Examples
+
+All examples run; none is wrapped in `\dontrun{}`. `grep -rn "dontrun" man/`
+returns nothing. The new functions' examples use a 9-point matrix and a handful
+of replicates and complete in well under a second each; the one longer example,
+on `bootstrap_blobs()`, is wrapped in `\donttest{}`. `--run-donttest` completes
+in 18 seconds for the whole package.
 
 ## Downstream dependencies
 
