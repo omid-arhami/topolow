@@ -306,3 +306,11 @@ test_that("resolve_point_indices handles names, indices and NULL", {
   expect_error(resolve_point_indices(character(0), m, "x"),
                "x must not be empty")
 })
+
+test_that(".onUnload releases the compiled shared library", {
+  hook <- topolow:::.onUnload
+  expect_true(is.function(hook))
+  expect_identical(names(formals(hook)), "libpath")
+  expect_true(any(grepl("library.dynam.unload", deparse(body(hook)),
+                        fixed = TRUE)))
+})

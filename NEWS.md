@@ -387,3 +387,11 @@ fitted parameters nor the final map depend on one particular serum panel.
   `scale_factor` of its principal-component reduction to the returned data
   frame, so that further points can be projected into the same plane. Callers
   that ignore the attributes are unaffected.
+* The package now defines an `.onUnload` hook that calls
+  `library.dynam.unload()`, so `unloadNamespace("topolow")` releases the
+  compiled shared library instead of leaving it mapped in the session. On
+  Windows this is what allows the package to be reinstalled over itself from an
+  R session that has already loaded it; previously the open `topolow.dll` kept
+  a lock on the file and the install aborted with
+  `cannot remove earlier installation, is it in use?` and rolled back to the
+  previously installed version. The compiled routines themselves are unchanged.

@@ -102,6 +102,11 @@
     )
   }
 }
+
+.onUnload <- function(libpath) {
+  library.dynam.unload("topolow", libpath)
+}
+
 #' @importFrom stats qchisq setNames
 #' @importFrom rlang .data
 #' @importFrom parallelly availableCores
