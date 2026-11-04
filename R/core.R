@@ -950,7 +950,7 @@ Euclidify <- function(dissimilarity_matrix,
   
   # Determine cores
   if (is.null(max_cores)) {
-    available_cores <- future::availableCores()
+    available_cores <- parallelly::availableCores()
     max_cores <- max(1, available_cores - 1)
   }
   

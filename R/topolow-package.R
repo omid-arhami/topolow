@@ -104,7 +104,7 @@
 }
 #' @importFrom stats qchisq setNames
 #' @importFrom rlang .data
-#' @importFrom future availableCores
+#' @importFrom parallelly availableCores
 #' @importFrom reshape2 melt
 #' @importFrom dplyr %>% select filter mutate group_by summarise ungroup
 #' @importFrom filelock lock unlock

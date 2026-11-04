@@ -268,7 +268,7 @@ calibration_table <- function(boot, full, antigens, sera) {
 #'        coordinates, which [bootstrap_blobs()] and the uncertainty overlays of
 #'        [plot_temporal_mapping()] need. Default: TRUE.
 #' @param max_cores Integer or NULL. Maximum cores. Default: NULL, meaning
-#'        `future::availableCores() - 1`.
+#'        `parallelly::availableCores() - 1`.
 #' @param random_seed Integer or NULL. Seeds the point draws. Default: NULL.
 #' @param write_files Logical. Whether to write the aggregates and the replicate
 #'        table as CSV. Default: FALSE.
@@ -326,7 +326,7 @@ calibration_table <- function(boot, full, antigens, sera) {
 #' [bootstrap_blobs()] for turning the replicates into uncertainty regions.
 #'
 #' @importFrom stats lm median coef setNames
-#' @importFrom future availableCores
+#' @importFrom parallelly availableCores
 #' @importFrom parallel makeCluster stopCluster clusterExport clusterEvalQ parLapply mclapply
 #' @importFrom utils write.csv
 #' @export
@@ -523,7 +523,7 @@ bootstrap_embedding <- function(dissimilarity_matrix,
   # ---------------------------------------------------------------------------
   # Core sizing and cluster setup (one cluster for the whole run)
   # ---------------------------------------------------------------------------
-  available_cores <- future::availableCores()
+  available_cores <- parallelly::availableCores()
   cores_to_use <- if (is.null(max_cores)) {
     max(1L, as.integer(available_cores) - 1L)
   } else {

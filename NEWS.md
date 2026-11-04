@@ -369,6 +369,20 @@ fitted parameters nor the final map depend on one particular serum panel.
 
 ## Improvements
 
+* The package now calls `parallelly::availableCores()` where it previously
+  called `future::availableCores()`, and `Imports` lists `parallelly` instead of
+  `future`. This is a one-for-one swap rather than a new dependency:
+  `availableCores()` was the only thing the package used from `future`, and
+  `future` re-exported it from `parallelly`, so the function being called is
+  unchanged (`identical(future::availableCores, parallelly::availableCores)` is
+  `TRUE`). Core detection, including the scheduler-aware behaviour on HPC
+  systems, is therefore unaffected. `future` 1.82.0 deprecated the re-export, so
+  this also removes a deprecation warning from every call that sizes a cluster.
+  Parallel execution itself has always used the `parallel` package and is
+  untouched.
+  - **Migration**: none, unless your own scripts relied on `topolow` pulling in
+    `future` as a dependency. If you call `future::plan()` yourself, install
+    `future` explicitly.
 * `reduce_dimensions()` now attaches the fitted `center`, `rotation` and
   `scale_factor` of its principal-component reduction to the returned data
   frame, so that further points can be projected into the same plane. Callers

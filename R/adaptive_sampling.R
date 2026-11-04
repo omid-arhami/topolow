@@ -174,7 +174,7 @@ wait_for_files <- function(paths, present = TRUE, timeout = 5, interval = 0.05) 
 #' @importFrom lhs maximinLHS
 #' @importFrom stats qunif complete.cases aggregate
 #' @importFrom parallel detectCores makeCluster stopCluster clusterExport clusterEvalQ parLapply mclapply
-#' @importFrom future availableCores
+#' @importFrom parallelly availableCores
 #' @export
 initial_parameter_optimization <- function(dissimilarity_matrix,
                                            mapping_max_iter = 1000,
@@ -411,7 +411,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
   # ==========================================================================
   # PARALLEL PROCESSING SETUP
   # ==========================================================================
-  available_cores <- future::availableCores()
+  available_cores <- parallelly::availableCores()
   if (is.null(max_cores)) {
     max_cores <- max(1, available_cores - 1, na.rm = TRUE)
   } else {
@@ -1132,7 +1132,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
 #' \code{\link{initial_parameter_optimization}} for generating initial samples.
 #'
 #' @importFrom utils read.csv write.csv write.table
-#' @importFrom future availableCores
+#' @importFrom parallelly availableCores
 #' @importFrom parallel detectCores makeCluster stopCluster clusterExport clusterEvalQ parLapply mclapply
 #' @export
 run_adaptive_sampling <- function(initial_samples_file,
@@ -1251,11 +1251,11 @@ run_adaptive_sampling <- function(initial_samples_file,
   }
   
   # ==========================================================================
-  # PARALLEL PROCESSING SETUP (using future package)
+  # PARALLEL PROCESSING SETUP
   # ==========================================================================
   
   # FIX: Safer core calculation logic
-  total_system_cores <- future::availableCores()
+  total_system_cores <- parallelly::availableCores()
   
   if (is.null(max_cores)) {
     # Auto-mode: Try to leave 4 cores free, but ensure at least 1 is used
@@ -2078,7 +2078,7 @@ weighted_kde <- function(x, weights, n = 512, from = NULL, to = NULL) {
   num_cores <- if (!interactive()) {
     2L
   } else {
-    getOption("mc.cores", max(1L, future::availableCores() - 1L))
+    getOption("mc.cores", max(1L, parallelly::availableCores() - 1L))
   }
 
   # Use mclapply on non-Windows; fall back to sequential sapply on Windows

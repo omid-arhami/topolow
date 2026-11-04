@@ -93,7 +93,7 @@ coordinates, which \code{\link[=bootstrap_blobs]{bootstrap_blobs()}} and the unc
 \code{\link[=plot_temporal_mapping]{plot_temporal_mapping()}} need. Default: TRUE.}
 
 \item{max_cores}{Integer or NULL. Maximum cores. Default: NULL, meaning
-\code{future::availableCores() - 1}.}
+\code{parallelly::availableCores() - 1}.}
 
 \item{random_seed}{Integer or NULL. Seeds the point draws. Default: NULL.}
 

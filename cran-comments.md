@@ -6,12 +6,9 @@ This is an update of the CRAN package `topolow` (currently 2.1.0, published
 ## Test environments
 
 * Local: Windows 11, R 4.5.3 — `R CMD check --as-cran`
-* win-builder: R-devel and R-release — PENDING, run before submitting
-* macOS builder (R-release) — PENDING, run before submitting
-* R-hub: linux, macos, windows — PENDING, run before submitting
-
-(Delete the PENDING markers once those checks have come back clean. Do not
-submit with them still in the file.)
+* win-builder: R-devel and R-release
+* GitHub Actions: macOS (R-release), Windows (R-release),
+  Ubuntu (R-devel, R-release, R-oldrel-1)
 
 ## R CMD check results
 

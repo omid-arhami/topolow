@@ -18,7 +18,7 @@ License: BSD_3_clause + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Imports:
-    future,
+    parallelly,
     lifecycle,
     ggplot2 (>= 3.4.0),
     dplyr (>= 1.1.0),
