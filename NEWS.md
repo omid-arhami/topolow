@@ -354,22 +354,11 @@ fitted parameters nor the final map depend on one particular serum panel.
   `on_disconnect = "prune"`, and `replicates$n_points` shows when that happened.
   - **Migration**: none. All new arguments default to `NULL`.
 
-### Notes on interpretation
-
-The standard deviation reported by `bootstrap_embedding()` mixes serum-panel
-variability with the optimizer's own run-to-run variability, which is not zero
-because the C++ backend reshuffles its sweep order from a generator independent
-of R's RNG. Running with `frac_sera = 1` isolates that second component. The raw
-standard deviation is also not the sampling standard deviation of the full-data
-estimate; `settings$jackknife_factor` reports the `sqrt(f / (1 - f))` scaling
-for that interpretation but it is never applied.
-
 ## Bug Fixes
 
 * `Euclidify()` did not pass `opt_subsample` to `run_adaptive_sampling()`, so
   the adaptive refinement stage silently embedded the full matrix even when
-  subsampling was requested, contradicting the documented behaviour of
-  "both initial and adaptive". The argument is now forwarded. Existing calls
+  subsampling was requested. The argument is now forwarded. Existing calls
   that set `opt_subsample` will find the adaptive stage faster, and its
   likelihood estimates correspondingly noisier, than before.
 * `subsample_dissimilarity_matrix()` raised

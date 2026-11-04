@@ -42,22 +42,6 @@ The argument is now forwarded. Existing calls that set `opt_subsample` will find
 the adaptive stage faster, and its likelihood estimates correspondingly noisier,
 than in 2.1.0. This is called out under `## Bug Fixes` in `NEWS.md`.
 
-### The C++ sweep-order RNG is unchanged from 2.1.0
-
-The note in the 2.1.0 submission still applies and nothing about it has changed:
-the C++ backend re-permutes the order in which point pairs are visited on every
-iteration using `std::mt19937` seeded from `std::random_device`, so repeated runs
-give similar but not identical coordinates. `set.seed()` governs the starting
-configuration, which is drawn in R, but not the sweep order.
-
-This release makes that property more visible rather than less. The new
-`bootstrap_embedding()` has a `Reproducibility` section stating that its
-`random_seed` argument fixes which points each replicate draws, and therefore the
-replicate counts, but does not fix the embeddings. Its documentation also tells
-users that the standard deviations it reports mix the sampling variability they
-asked about with this optimizer variability, and how to measure the second
-component on their own data. We would still rather flag this than have it found.
-
 ### Writing to the file system
 
 Unchanged and still the case: no function writes outside `tempdir()` unless the
