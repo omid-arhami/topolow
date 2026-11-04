@@ -9,6 +9,7 @@ This is an update of the CRAN package `topolow` (currently 2.1.0, published
 * win-builder: R-devel and R-release
 * GitHub Actions: macOS (R-release), Windows (R-release),
   Ubuntu (R-devel, R-release, R-oldrel-1)
+* R-hub: linux, windows, macos (all R-devel)
 
 ## R CMD check results
 
