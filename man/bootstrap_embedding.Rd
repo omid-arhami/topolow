@@ -144,6 +144,25 @@ a random subset of the sera, which quantifies how much of a map's geometry
 depends on which sera happened to be in the panel.
 }
 \details{
+\strong{Why only one side of the panel is drawn.} In the antigenic case the sera
+are drawn and every antigen is held fixed. The objection to this is that a
+scheme which never drops an antigen cannot show how much the antigens
+influence one another's positions. The reason it is still the informative
+half of the design is that no pair of antigens is ever measured against each
+other: the assay titrates antigens against sera, so the antigen-antigen
+block of the input matrix is empty, and every antigen-antigen relation in
+the map is reconstructed through the sera that both antigens were titrated
+against. Their influence on each other travels through the references, so
+changing which references are present changes the entire set of
+measurements through which one antigen can constrain another, and the
+antigens move accordingly. Resampling both sides would be the more complete
+design, and the scheme implemented here does leave out the variability
+contributed by the choice of antigen panel. The reasoning behind the default
+is that varying the references while preserving all the antigens covers the
+majority of the uncertainty in positions that the choice of sample induces,
+and it has the practical consequence that every antigen is present in every
+replicate, so its replicate cloud is built from all of them.
+
 \strong{The scheme is subsampling, not resampling with replacement.} Drawing sera
 with replacement would place duplicated rows in the submatrix, giving a pair
 of points a measured dissimilarity of zero, which the force model treats as a

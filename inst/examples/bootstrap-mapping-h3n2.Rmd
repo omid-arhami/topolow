@@ -32,6 +32,20 @@ virus**:
    averaged cell by cell, with a standard deviation and a replicate count
    (`bootstrap_embedding()`).
 
+**Why only the sera are drawn.** One can object that a scheme which never drops
+a virus says nothing about how much the viruses influence one another's
+positions. But no pair of viruses is ever measured against each other: the
+assay titrates viruses against sera, so the virus-virus block of the matrix is
+empty, and every virus-virus relation in the map is reconstructed through the
+sera that both viruses were titrated against. Their influence on each other
+travels through the references, so varying which references are present varies
+the whole set of measurements through which one virus can constrain another.
+Resampling both sides would be the more complete design, and this one does
+leave out the variability contributed by the choice of virus panel; in
+practice, varying the subset of references while preserving all the viruses
+covers the majority of the uncertainty in positions that the choice of sample
+induces.
+
 Drawing is **without replacement**. Resampling sera *with* replacement would put
 two identical rows in the submatrix, which the force model reads as a pair of
 points with a measured dissimilarity of zero, and would inflate the degree of

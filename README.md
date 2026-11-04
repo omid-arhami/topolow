@@ -164,6 +164,20 @@ while holding another fixed. In antigenic cartography that means keeping every
 antigen and drawing a random subset of the sera, so that neither the fitted
 parameters nor the final map depends on one particular serum panel.
 
+**Why only the sera are drawn.** One can object that a scheme which never drops
+an antigen says nothing about how much the antigens influence one another's
+positions. But no pair of antigens is ever measured against each other: the
+assay titrates antigens against sera, so the antigen-antigen block of the
+matrix is empty, and every antigen-antigen relation in the map is reconstructed
+through the sera that both antigens were titrated against. Their influence on
+each other travels through the references, so varying which references are
+present varies the whole set of measurements through which one antigen can
+constrain another. Resampling both sides would be the more complete design, and
+this one does leave out the variability contributed by the choice of antigen
+panel; in practice, varying the subset of references while preserving all the
+antigens covers the majority of the uncertainty in positions that the choice of
+sample induces.
+
 ```r
 results <- process_antigenic_data(
   data = antigen_data, antigen_col = "virus", serum_col = "serum",

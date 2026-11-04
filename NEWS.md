@@ -308,6 +308,13 @@ Parameter optimization and map building can now resample one group of points
 while holding another fixed. The motivating case is antigenic cartography:
 keep every antigen and draw a random subset of the sera, so that neither the
 fitted parameters nor the final map depend on one particular serum panel.
+Only the sera are drawn because no pair of antigens is ever measured against
+each other: the antigen-antigen block of the matrix is empty, and antigens
+constrain one another only through the sera they were both titrated against.
+Varying the subset of references while preserving all the antigens therefore
+covers the majority of the uncertainty in positions due to the sample, though
+not the variability contributed by the choice of antigen panel. See
+`?bootstrap_embedding` for the full argument.
 
 * **New function `bootstrap_embedding()`**: runs `euclidean_embedding()` over
   many replicate submatrices and aggregates the estimated distances cell by
