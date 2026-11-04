@@ -193,3 +193,116 @@ test_that("color palette c25 is properly defined", {
   # Test that colors are valid (basic check)
   expect_true(all(c25 %in% colors() | grepl("^#", c25)))
 })
+
+# =============================================================================
+# identify_antigens_sera
+# =============================================================================
+
+make_vs_mat <- function(nms) {
+  m <- as.matrix(dist(matrix(rnorm(length(nms) * 2), ncol = 2)))
+  dimnames(m) <- list(nms, nms)
+  m
+}
+
+test_that("identify_antigens_sera splits on the V/ and S/ convention", {
+  set.seed(1)
+  nms <- c("V/ag1", "V/ag2", "V/ag3", "V/ag4", "S/sr1", "S/sr2", "S/sr3")
+  m <- make_vs_mat(nms)
+
+  g <- identify_antigens_sera(m)
+
+  expect_equal(g$antigens, nms[1:4])
+  expect_equal(g$sera, nms[5:7])
+  expect_equal(g$antigen_indices, 1:4)
+  expect_equal(g$serum_indices, 5:7)
+  expect_length(g$unassigned, 0)
+  expect_equal(rownames(m)[g$antigen_indices], g$antigens)
+})
+
+test_that("identify_antigens_sera infers the other group from an explicit one", {
+  set.seed(2)
+  nms <- c("a1", "a2", "a3", "s1", "s2")
+  m <- make_vs_mat(nms)
+
+  g <- identify_antigens_sera(m, sera = c("s1", "s2"))
+  expect_equal(g$sera, c("s1", "s2"))
+  expect_equal(g$antigens, c("a1", "a2", "a3"))
+
+  g2 <- identify_antigens_sera(m, antigens = c("a1", "a2", "a3"))
+  expect_equal(g2$sera, c("s1", "s2"))
+})
+
+test_that("identify_antigens_sera accepts custom patterns", {
+  set.seed(3)
+  nms <- c("ag1", "ag2", "ag3", "sr1", "sr2")
+  m <- make_vs_mat(nms)
+
+  g <- identify_antigens_sera(m, antigen_pattern = "^ag", serum_pattern = "^sr")
+  expect_equal(g$antigens, c("ag1", "ag2", "ag3"))
+  expect_equal(g$sera, c("sr1", "sr2"))
+})
+
+test_that("identify_antigens_sera reports unassigned points", {
+  set.seed(4)
+  nms <- c("V/ag1", "V/ag2", "S/sr1", "X/other")
+  m <- make_vs_mat(nms)
+
+  g <- identify_antigens_sera(m)
+  expect_equal(g$unassigned, "X/other")
+})
+
+test_that("identify_antigens_sera errors when nothing matches", {
+  set.seed(5)
+  nms <- paste0("Point", 1:5)
+  m <- make_vs_mat(nms)
+
+  expect_error(
+    identify_antigens_sera(m),
+    "antigen_pattern or serum_pattern must match some row names"
+  )
+})
+
+test_that("identify_antigens_sera rejects overlapping groups and bad input", {
+  set.seed(6)
+  nms <- c("a1", "a2", "s1", "s2")
+  m <- make_vs_mat(nms)
+
+  expect_error(
+    identify_antigens_sera(m, antigens = c("a1", "s1"), sera = c("s1", "s2")),
+    "must not share any point"
+  )
+  expect_error(identify_antigens_sera("not a matrix"),
+               "dissimilarity_matrix must be a matrix")
+
+  unnamed <- m
+  dimnames(unnamed) <- NULL
+  expect_error(identify_antigens_sera(unnamed),
+               "must have row names")
+
+  dup <- m
+  rownames(dup)[2] <- rownames(dup)[1]
+  colnames(dup) <- rownames(dup)
+  expect_error(identify_antigens_sera(dup), "unique row names")
+})
+
+# =============================================================================
+# resolve_point_indices
+# =============================================================================
+
+test_that("resolve_point_indices handles names, indices and NULL", {
+  set.seed(7)
+  nms <- c("p1", "p2", "p3", "p4")
+  m <- make_vs_mat(nms)
+
+  expect_null(resolve_point_indices(NULL, m, "x"))
+  expect_equal(resolve_point_indices(c("p2", "p4"), m, "x"), c(2L, 4L))
+  expect_equal(resolve_point_indices(c(2, 4), m, "x"), c(2L, 4L))
+  expect_equal(resolve_point_indices(c(2, 2, 3), m, "x"), c(2L, 3L))
+
+  expect_error(resolve_point_indices("nope", m, "x"),
+               "x must name points that exist")
+  expect_error(resolve_point_indices(c(0, 1), m, "x"),
+               "x must be row indices between 1 and")
+  expect_error(resolve_point_indices(character(0), m, "x"),
+               "x must not be empty")
+})

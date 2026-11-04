@@ -136,6 +136,12 @@ result <- Euclidify(
 
 See `?Euclidify` and `?initial_parameter_optimization` for details.
 
+To subsample the sera specifically rather than points uniformly, use
+`opt_subsample_sera` instead of `opt_subsample`; see **Bootstrapping over Sera**
+below. On a panel with many antigens and few sera this saves little time, since
+dropping 20% of the sera removes only a small share of the points, but it does
+change which serum panel the parameters are fitted to.
+
 Before subsampling or embedding a large or very sparse matrix, `check_matrix_connectivity()`
 confirms the dissimilarity graph has no disconnected components, and `prune_sparse_matrix()`
 can trim a matrix down to a well-connected subset if it does:
@@ -150,6 +156,88 @@ if (!connectivity$is_connected) {
   large_data <- prune_sparse_matrix(large_data)$pruned_matrix
 }
 ```
+
+## Bootstrapping over Sera
+
+Both parameter optimization and map building can resample one group of points
+while holding another fixed. In antigenic cartography that means keeping every
+antigen and drawing a random subset of the sera, so that neither the fitted
+parameters nor the final map depends on one particular serum panel.
+
+```r
+results <- process_antigenic_data(
+  data = antigen_data, antigen_col = "virus", serum_col = "serum",
+  value_col = "titer", is_similarity = TRUE
+)
+dist_mat <- results$matrix
+
+# Who is an antigen and who is a serum (the "V/" and "S/" prefixes)
+groups <- identify_antigens_sera(dist_mat)
+
+# 1. Parameter optimization: every antigen kept, 80% of sera drawn per evaluation
+params <- initial_parameter_optimization(
+  dissimilarity_matrix = dist_mat,
+  scenario_name = "h3n2",
+  N_min = 2, N_max = 10, k0_min = 1, k0_max = 20,
+  cooling_rate_min = 1e-4, cooling_rate_max = 0.05,
+  c_repulsion_min = 1e-4, c_repulsion_max = 0.02,
+  num_samples = 50, folds = 20,
+  opt_subsample_sera = 0.8
+)
+
+# 2. Map building: many maps on serum subsets, averaged cell by cell
+boot <- bootstrap_embedding(
+  dissimilarity_matrix = dist_mat,
+  ndim = 5, k0 = 5, cooling_rate = 0.01, c_repulsion = 0.005,
+  n_replicates = 500, frac_sera = 0.8
+)
+
+boot$est_distances   # mean distance matrix over the replicates
+boot$sd_distances    # per-cell standard deviation
+boot$n_obs           # how many replicates contributed to each cell
+summary(boot)        # per-block spread and calibration against the full-data map
+```
+
+A cell of the output is averaged over the replicates in which both of its
+endpoints were present, so coverage differs by block: antigen-antigen cells
+appear in every replicate, antigen-serum cells in about `frac_sera` of them and
+serum-serum cells in about `frac_sera^2`. A useful rule is
+`n_replicates >= 30 / frac_sera^2`. Cells seen fewer than `min_replicates`
+times are `NA` in both the mean and the standard deviation.
+
+### Drawing the uncertainty on a map
+
+Uncertainty regions cannot be derived from `sd_distances`: a distance matrix is
+invariant to rotation, so it carries no directional information and could only
+give a circle. `bootstrap_embedding()` therefore also keeps each replicate's
+coordinates, rigidly aligned to the full-data map, and those give properly
+elongated regions.
+
+```r
+coords <- data.frame(boot$positions, name = rownames(boot$positions))
+coords$antigen   <- startsWith(coords$name, "V/")
+coords$antiserum <- startsWith(coords$name, "S/")
+coords$year      <- as.numeric(sub(".*/([0-9]{4}).*", "\1", coords$name))
+
+plot_temporal_mapping(coords, ndim = 5, uncertainty = boot)
+
+# Regions on every point make a dense map hard to read, so antisera are left
+# out by default. Pass "all" or "antisera" to change that.
+plot_temporal_mapping(coords, ndim = 5, uncertainty = boot,
+                      uncertainty_points = "all")
+```
+
+`bootstrap_blobs()` returns the same polygons as a data frame if you would
+rather draw them yourself, and supports a kernel-density contour in place of
+the default covariance ellipse.
+
+**Two things the standard deviation does not tell you.** It mixes serum-panel
+variability with the optimizer's own run-to-run variability, which is not zero
+because the C++ backend reshuffles its sweep order from a generator independent
+of R's RNG; running with `frac_sera = 1` isolates that component. And it is the
+spread at the subsample size, not the sampling standard deviation of the
+full-data estimate: `boot$settings$jackknife_factor` reports the
+`sqrt(f / (1 - f))` scaling for that interpretation, but it is never applied.
 
 ## Diagnostics
 

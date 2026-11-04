@@ -19,7 +19,10 @@ plot_temporal_mapping(
   sigma_t = NULL,
   sigma_x = NULL,
   sigma_x_nd = NULL,
-  clade_node_depth = NULL
+  clade_node_depth = NULL,
+  uncertainty = NULL,
+  uncertainty_conf_level = 0.68,
+  uncertainty_points = c("antigens", "antisera", "all")
 )
 }
 \arguments{
@@ -75,6 +78,20 @@ Default: RMS of per-dimension Silverman bandwidths over
 \item{clade_node_depth}{Optional integer; number of parent levels used to
 define a clade.  Default: median leaf-to-backbone node-distance of
 the tree.}
+
+\item{uncertainty}{Optional. A \code{topolow_bootstrap} object from
+\code{\link[=bootstrap_embedding]{bootstrap_embedding()}}, or a blob data frame from
+\code{\link[=bootstrap_blobs]{bootstrap_blobs()}}. When supplied, a shaded uncertainty region is
+drawn beneath each point. The bootstrap must have been run on the same
+embedding that produced \code{df_coords}. Default: NULL.}
+
+\item{uncertainty_conf_level}{Numeric. Proportion of each point's replicate
+spread the shaded region should cover. Default: 0.68.}
+
+\item{uncertainty_points}{Character. Which points get a shaded region:
+\code{"antigens"} (the default), \code{"antisera"}, or \code{"all"}. Drawing a region
+for every point at once makes a dense map hard to read, so antisera
+are left out unless asked for.}
 }
 \value{
 If \code{draw_arrows = FALSE}, a single \code{ggplot} object.

@@ -253,6 +253,176 @@ check_matrix_connectivity <- function(dissimilarity_matrix,
 }
 
 
+#' Resolve Point Names or Indices to Row Indices
+#'
+#' @description
+#' Internal helper that turns a user-supplied vector of row names or row
+#' indices into a vector of unique integer row indices.
+#'
+#' @param x Character vector of row names, numeric vector of row indices, or NULL.
+#' @param dissimilarity_matrix Square dissimilarity matrix the indices refer to.
+#' @param arg_name Character. Name of the user-facing argument, used in messages.
+#'
+#' @return An integer vector of unique row indices, or NULL when `x` is NULL.
+#' @keywords internal
+resolve_point_indices <- function(x, dissimilarity_matrix, arg_name) {
+  if (is.null(x)) {
+    return(NULL)
+  }
+  n <- nrow(dissimilarity_matrix)
+  if (is.character(x)) {
+    nms <- rownames(dissimilarity_matrix)
+    if (is.null(nms)) {
+      stop(sprintf("dissimilarity_matrix must have row names when %s is a character vector",
+                   arg_name))
+    }
+    idx <- match(x, nms)
+    if (anyNA(idx)) {
+      stop(sprintf("%s must name points that exist in dissimilarity_matrix", arg_name))
+    }
+  } else if (is.numeric(x)) {
+    idx <- as.integer(x)
+    if (anyNA(idx) || any(idx < 1) || any(idx > n)) {
+      stop(sprintf("%s must be row indices between 1 and nrow(dissimilarity_matrix)",
+                   arg_name))
+    }
+  } else {
+    stop(sprintf("%s must be a character vector of row names or a numeric vector of row indices",
+                 arg_name))
+  }
+  if (length(idx) == 0) {
+    stop(sprintf("%s must not be empty", arg_name))
+  }
+  unique(idx)
+}
+
+
+#' Identify Antigen and Serum Points in a Dissimilarity Matrix
+#'
+#' @description
+#' `r lifecycle::badge("experimental")`
+#'
+#' Splits the points of a dissimilarity matrix into antigens (viruses) and sera
+#' (antisera). By default the split follows the naming convention produced by
+#' [titers_list_to_matrix()] and [process_antigenic_data()] with `rc = FALSE`,
+#' where antigen names carry the prefix `"V/"` and serum names the prefix
+#' `"S/"`. Explicit name vectors or custom regular expressions override the
+#' convention, so matrices that use another naming scheme can be split the same
+#' way.
+#'
+#' @param dissimilarity_matrix Square symmetric dissimilarity matrix with row
+#'        names. Row names are required: the split is defined on names.
+#' @param antigen_pattern Character. Regular expression matched against the row
+#'        names to find antigens. Default: `"^V/"`. Ignored when `antigens` is
+#'        supplied.
+#' @param serum_pattern Character. Regular expression matched against the row
+#'        names to find sera. Default: `"^S/"`. Ignored when `sera` is supplied.
+#' @param antigens Character or numeric vector, or NULL. Explicit antigen names
+#'        or row indices. Default: NULL (use `antigen_pattern`).
+#' @param sera Character or numeric vector, or NULL. Explicit serum names or row
+#'        indices. Default: NULL (use `serum_pattern`).
+#'
+#' @return A `list` containing:
+#' \itemize{
+#'   \item `antigens`: Character vector. Row names classified as antigens.
+#'   \item `sera`: Character vector. Row names classified as sera.
+#'   \item `antigen_indices`: Integer vector. Row indices of the antigens.
+#'   \item `serum_indices`: Integer vector. Row indices of the sera.
+#'   \item `unassigned`: Character vector. Row names matched by neither group;
+#'     empty when every point was classified.
+#' }
+#'
+#' @details
+#' When only one group is supplied explicitly, every remaining point is assigned
+#' to the other group. When both are supplied, points in neither are returned in
+#' `unassigned` rather than silently dropped. A point listed in both groups is an
+#' error.
+#'
+#' The result feeds the `always_include` and `sample_pool` arguments of
+#' [subsample_dissimilarity_matrix()] and [bootstrap_embedding()]. That is how
+#' "keep every antigen, draw a random subset of the sera" is expressed.
+#'
+#' @examples
+#' nms <- c("V/ag1", "V/ag2", "V/ag3", "S/sr1", "S/sr2")
+#' m <- as.matrix(dist(matrix(rnorm(10), nrow = 5)))
+#' dimnames(m) <- list(nms, nms)
+#'
+#' groups <- identify_antigens_sera(m)
+#' groups$antigens
+#' groups$sera
+#'
+#' # A different naming scheme
+#' nms2 <- c("ag1", "ag2", "ag3", "sr1", "sr2")
+#' dimnames(m) <- list(nms2, nms2)
+#' identify_antigens_sera(m, antigen_pattern = "^ag", serum_pattern = "^sr")
+#'
+#' # Explicit sera; everything else is treated as an antigen
+#' identify_antigens_sera(m, sera = c("sr1", "sr2"))
+#'
+#' @seealso
+#' [subsample_dissimilarity_matrix()] for the subsampling this feeds,
+#' [process_antigenic_data()] for the function that creates the `"V/"` and
+#' `"S/"` prefixes.
+#'
+#' @export
+identify_antigens_sera <- function(dissimilarity_matrix,
+                                   antigen_pattern = "^V/",
+                                   serum_pattern = "^S/",
+                                   antigens = NULL,
+                                   sera = NULL) {
+  if (!is.matrix(dissimilarity_matrix)) {
+    stop("dissimilarity_matrix must be a matrix")
+  }
+  if (nrow(dissimilarity_matrix) != ncol(dissimilarity_matrix)) {
+    stop("dissimilarity_matrix must be square")
+  }
+  nms <- rownames(dissimilarity_matrix)
+  if (is.null(nms)) {
+    stop("dissimilarity_matrix must have row names")
+  }
+  if (anyDuplicated(nms)) {
+    stop("dissimilarity_matrix must have unique row names")
+  }
+  if (!is.character(antigen_pattern) || length(antigen_pattern) != 1) {
+    stop("antigen_pattern must be a single character string")
+  }
+  if (!is.character(serum_pattern) || length(serum_pattern) != 1) {
+    stop("serum_pattern must be a single character string")
+  }
+
+  all_idx <- seq_along(nms)
+  ag_idx <- resolve_point_indices(antigens, dissimilarity_matrix, "antigens")
+  sr_idx <- resolve_point_indices(sera, dissimilarity_matrix, "sera")
+
+  if (is.null(ag_idx) && is.null(sr_idx)) {
+    ag_idx <- grep(antigen_pattern, nms)
+    sr_idx <- grep(serum_pattern, nms)
+    if (length(ag_idx) == 0 && length(sr_idx) == 0) {
+      stop("antigen_pattern or serum_pattern must match some row names, or antigens or sera must be given")
+    }
+  } else if (is.null(ag_idx)) {
+    ag_idx <- setdiff(all_idx, sr_idx)
+  } else if (is.null(sr_idx)) {
+    sr_idx <- setdiff(all_idx, ag_idx)
+  }
+
+  if (length(intersect(ag_idx, sr_idx)) > 0) {
+    stop("antigens and sera must not share any point")
+  }
+
+  ag_idx <- sort(ag_idx)
+  sr_idx <- sort(sr_idx)
+
+  list(
+    antigens = nms[ag_idx],
+    sera = nms[sr_idx],
+    antigen_indices = ag_idx,
+    serum_indices = sr_idx,
+    unassigned = nms[setdiff(all_idx, c(ag_idx, sr_idx))]
+  )
+}
+
+
 #' Subsample Dissimilarity Matrix with Connectivity Guarantee
 #'
 #' @description
@@ -271,6 +441,15 @@ check_matrix_connectivity <- function(dissimilarity_matrix,
 #'        original row/column order of the input matrix. If FALSE (default), indices are 
 #'        returned in random order as sampled. Set to TRUE when downstream analyses depend 
 #'        on specific point ordering.
+#' @param always_include Character or numeric vector, or NULL. Points that must
+#'        appear in every subsample, given as row names or as row indices of
+#'        \code{dissimilarity_matrix}. These points are never drawn at random;
+#'        the remaining \code{sample_size - length(always_include)} points are
+#'        drawn from \code{sample_pool}. Default: NULL (no point is fixed).
+#' @param sample_pool Character or numeric vector, or NULL. The points the random
+#'        draw is taken from, given as row names or as row indices. Any point
+#'        also listed in \code{always_include} is removed from the pool.
+#'        Default: NULL (every point not in \code{always_include}).
 #'
 #' @return A list containing:
 #'   \item{subsampled_matrix}{Matrix. The subsampled dissimilarity matrix.}
@@ -291,6 +470,14 @@ check_matrix_connectivity <- function(dissimilarity_matrix,
 #'    \code{\link{check_matrix_connectivity}}
 #' 4. If not connected, retries
 #' 5. Returns the connected subsample or stops with an error if unsuccessful
+#'
+#' **Keeping one group and drawing another**: with \code{always_include} and
+#' \code{sample_pool} the subsample has a fixed part and a random part. In
+#' antigenic cartography this expresses "keep every antigen, draw a random
+#' subset of the sera"; see \code{\link{identify_antigens_sera}}.
+#' \code{sample_size} always means the total number of points in the returned
+#' submatrix, so to draw \code{m} sera alongside all antigens set
+#' \code{sample_size = length(antigens) + m}.
 #'
 #' **Why connectivity matters**: A disconnected graph has isolated groups of
 #' points with no observed dissimilarities between groups. The algorithm
@@ -316,6 +503,7 @@ check_matrix_connectivity <- function(dissimilarity_matrix,
 #'
 #' @seealso
 #' \code{\link{check_matrix_connectivity}} for connectivity checking,
+#' \code{\link{identify_antigens_sera}} for naming the two groups.
 #'
 #' @export
 subsample_dissimilarity_matrix <- function(dissimilarity_matrix,
@@ -324,7 +512,9 @@ subsample_dissimilarity_matrix <- function(dissimilarity_matrix,
                                            min_completeness = 0.1,
                                            random_seed = NULL,
                                            verbose = FALSE,
-                                           preserve_order = FALSE) {
+                                           preserve_order = FALSE,
+                                           always_include = NULL,
+                                           sample_pool = NULL) {
   # ============================================================================
   # Input Validation
   # ============================================================================
@@ -343,19 +533,56 @@ subsample_dissimilarity_matrix <- function(dissimilarity_matrix,
   }
   
   sample_size <- as.integer(floor(sample_size))
-  
-  if (sample_size >= matrix_size) {
-    if (verbose) {
-      cat(sprintf("Requested sample_size (%d) >= matrix size (%d). ",
-                  "Using full matrix.\n", sample_size, matrix_size))
+
+  # Resolve the fixed and the drawable point sets
+  always_idx <- resolve_point_indices(always_include, dissimilarity_matrix,
+                                      "always_include")
+  pool_idx <- resolve_point_indices(sample_pool, dissimilarity_matrix,
+                                    "sample_pool")
+  use_groups <- !is.null(always_idx) || !is.null(pool_idx)
+
+  if (is.null(always_idx)) always_idx <- integer(0)
+  if (is.null(pool_idx)) {
+    pool_idx <- setdiff(seq_len(matrix_size), always_idx)
+  } else {
+    pool_idx <- setdiff(pool_idx, always_idx)
+  }
+
+  if (use_groups) {
+    if (sample_size <= length(always_idx)) {
+      stop("sample_size must be greater than the number of always_include points")
     }
-    # Return full matrix with appropriate metadata
-    connectivity <- check_matrix_connectivity(dissimilarity_matrix,
+    if (sample_size > length(always_idx) + length(pool_idx)) {
+      stop("sample_size must not exceed the number of always_include and sample_pool points")
+    }
+  }
+  n_draw <- sample_size - length(always_idx)
+  universe_size <- if (use_groups) {
+    length(always_idx) + length(pool_idx)
+  } else {
+    matrix_size
+  }
+
+  if (sample_size >= universe_size) {
+    if (verbose) {
+      cat(sprintf("Requested sample_size (%d) >= available points (%d). Using full set.\n",
+                  sample_size, universe_size))
+    }
+    universe_idx <- if (use_groups) {
+      idx <- c(always_idx, pool_idx)
+      if (preserve_order) sort(idx) else idx
+    } else {
+      seq_len(matrix_size)
+    }
+    universe_matrix <- dissimilarity_matrix[universe_idx, universe_idx,
+                                            drop = FALSE]
+    # Return the full available set with appropriate metadata
+    connectivity <- check_matrix_connectivity(universe_matrix,
                                               min_completeness)
     return(list(
-      subsampled_matrix = dissimilarity_matrix,
-      selected_indices = seq_len(matrix_size),
-      selected_names = rownames(dissimilarity_matrix),
+      subsampled_matrix = universe_matrix,
+      selected_indices = universe_idx,
+      selected_names = rownames(universe_matrix),
       is_connected = connectivity$is_connected,
       n_components = connectivity$n_components,
       completeness = connectivity$completeness,
@@ -379,9 +606,15 @@ subsample_dissimilarity_matrix <- function(dissimilarity_matrix,
     }
     
     # Sample indices
-    selected_indices <- sample(seq_len(matrix_size),
-                               size = current_sample_size,
-                               replace = FALSE)
+    if (use_groups) {
+      # sample.int() avoids sample()'s "length-1 x means 1:x" trap
+      drawn_indices <- pool_idx[sample.int(length(pool_idx), size = n_draw)]
+      selected_indices <- c(always_idx, drawn_indices)
+    } else {
+      selected_indices <- sample(seq_len(matrix_size),
+                                 size = current_sample_size,
+                                 replace = FALSE)
+    }
     
     # Sort indices to preserve original order if requested
     if (preserve_order) {
@@ -649,3 +882,64 @@ c25 <- c(
   "khaki2", "palegreen2", "dodgerblue2", "brown", "orchid1",
   "navyblue", "olivedrab", "salmon", "mediumpurple", "cyan3"
 )
+
+
+#' Resolve a Serum-wise Subsample Specification
+#'
+#' @description
+#' Internal helper shared by the parameter-optimization functions. Turns the
+#' user-facing `opt_subsample_sera` / `opt_sera` pair into the generic
+#' `sample_size` / `always_include` / `sample_pool` triple that
+#' [subsample_dissimilarity_matrix()] consumes.
+#'
+#' @param dissimilarity_matrix Square dissimilarity matrix.
+#' @param opt_subsample Integer or NULL. The existing uniform subsample size.
+#' @param opt_subsample_sera Numeric or NULL. A count of sera, or a fraction of
+#'   them when strictly between 0 and 1.
+#' @param opt_sera Character or numeric vector, or NULL. The sera.
+#'
+#' @return A list with `opt_subsample` (total points per evaluation),
+#'   `n_sera` (how many sera that includes), `always_include` and `sample_pool`.
+#' @keywords internal
+resolve_sera_subsample <- function(dissimilarity_matrix, opt_subsample,
+                                   opt_subsample_sera, opt_sera) {
+  if (is.null(opt_subsample_sera)) {
+    if (!is.null(opt_sera)) {
+      stop("opt_sera has no effect unless opt_subsample_sera is also supplied")
+    }
+    return(list(opt_subsample = opt_subsample,
+                n_sera = NA_integer_,
+                always_include = NULL,
+                sample_pool = NULL))
+  }
+  if (!is.null(opt_subsample)) {
+    stop("opt_subsample and opt_subsample_sera must not both be supplied")
+  }
+  if (!is.numeric(opt_subsample_sera) || length(opt_subsample_sera) != 1 ||
+      opt_subsample_sera <= 0) {
+    stop("opt_subsample_sera must be a positive count of sera or a fraction between 0 and 1")
+  }
+
+  groups <- identify_antigens_sera(dissimilarity_matrix, sera = opt_sera)
+  n_sera <- length(groups$sera)
+  if (n_sera < 3) {
+    stop("opt_subsample_sera requires at least 3 sera")
+  }
+
+  n_draw <- if (opt_subsample_sera < 1) {
+    max(1L, as.integer(round(opt_subsample_sera * n_sera)))
+  } else {
+    as.integer(floor(opt_subsample_sera))
+  }
+  if (n_draw < 2) {
+    stop("opt_subsample_sera must select at least 2 sera")
+  }
+  if (n_draw >= n_sera) {
+    stop("opt_subsample_sera must be smaller than the number of sera")
+  }
+
+  list(opt_subsample = length(groups$antigens) + n_draw,
+       n_sera = n_draw,
+       always_include = groups$antigens,
+       sample_pool = groups$sera)
+}

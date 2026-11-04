@@ -102,9 +102,18 @@ wait_for_files <- function(paths, present = TRUE, timeout = 5, interval = 0.05) 
 #'        when downstream analyses depend on specific point ordering matching the input matrix.
 #'        Default: FALSE
 #'
+#' @param opt_subsample_sera Numeric or NULL. Keep every antigen and draw this
+#'   many sera for each parameter evaluation. A value strictly between 0 and 1
+#'   is read as a fraction of the sera. Mutually exclusive with
+#'   \code{opt_subsample}. Default: NULL.
+#' @param opt_sera Character or numeric vector, or NULL. The sera, as row names
+#'   or row indices. NULL detects them with \code{\link{identify_antigens_sera}}.
+#'   Only used together with \code{opt_subsample_sera}. Default: NULL.
 #' @return A `data.frame` containing the log-transformed parameter sets and their performance metrics
 #'   from the **final epoch**. Columns include: `log_N`, `log_k0`, `log_cooling_rate`, `log_c_repulsion`,
-#'   `Holdout_MAE`, `NLL`, and if \code{opt_subsample} was used: `opt_subsample`,`original_n_points`.
+#'   `Holdout_MAE`, `NLL`, and if subsampling was used: `opt_subsample` (the
+#'   constant number of points per evaluation), `opt_n_sera` (how many of those
+#'   were sera, or NA when the draw was uniform) and `original_n_points`.
 #'
 #' @note
 #' \strong{Breaking Change in v2.0.0:} This function now returns log-transformed parameters directly.
@@ -188,7 +197,9 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
                                            verbose = FALSE,
                                            write_files = FALSE,
                                            output_dir,
-                                           preserve_order = FALSE) {
+                                           preserve_order = FALSE,
+                                           opt_subsample_sera = NULL,
+                                           opt_sera = NULL) {
   # ==========================================================================
   # INPUT VALIDATION
   # ==========================================================================
@@ -266,6 +277,26 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
     stop("An 'output_dir' must be provided when 'write_files' is TRUE.", call. = FALSE)
   }
   
+  # Resolve a serum-wise subsample into the generic grouping arguments
+  .sera_spec <- resolve_sera_subsample(dissimilarity_matrix, opt_subsample,
+                                       opt_subsample_sera, opt_sera)
+  opt_subsample <- .sera_spec$opt_subsample
+  opt_always_include <- .sera_spec$always_include
+  opt_sample_pool <- .sera_spec$sample_pool
+  opt_n_sera <- .sera_spec$n_sera
+  # With a restricted pool the "too big" test is against the points actually
+  # available to the draw, not the whole matrix.
+  universe_size <- if (is.null(opt_always_include) && is.null(opt_sample_pool)) {
+    matrix_size
+  } else {
+    length(unique(c(
+      resolve_point_indices(opt_always_include, dissimilarity_matrix,
+                            "opt_always_include"),
+      resolve_point_indices(opt_sample_pool, dissimilarity_matrix,
+                            "opt_sample_pool")
+    )))
+  }
+
   # Validate opt_subsample
   use_subsampling <- FALSE
   if (!is.null(opt_subsample)) {
@@ -275,12 +306,15 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
     }
     opt_subsample <- as.integer(floor(opt_subsample))
     
-    if (opt_subsample >= matrix_size) {
+    if (opt_subsample >= universe_size) {
       if (verbose) {
-        cat(sprintf("opt_subsample (%d) >= matrix size (%d). Using full matrix.\n",
-                    opt_subsample, matrix_size))
+        cat(sprintf("opt_subsample (%d) >= available points (%d). Using full matrix.\n",
+                    opt_subsample, universe_size))
       }
       opt_subsample <- NULL
+      opt_always_include <- NULL
+      opt_sample_pool <- NULL
+      opt_n_sera <- NA_integer_
     } else {
       use_subsampling <- TRUE
       
@@ -344,6 +378,8 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
             subsample_dissimilarity_matrix(
               dissimilarity_matrix = dissimilarity_matrix,
               sample_size = opt_subsample,
+              always_include = opt_always_include,
+              sample_pool = opt_sample_pool,
               max_attempts = 2,
               verbose = FALSE,
               preserve_order = preserve_order
@@ -483,6 +519,8 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
             subsample_dissimilarity_matrix(
               dissimilarity_matrix = full_dissimilarity_matrix,
               sample_size = opt_subsample,
+              always_include = opt_always_include,
+              sample_pool = opt_sample_pool,
               max_attempts = 5,
               verbose = verbose,
               preserve_order = preserve_order
@@ -608,6 +646,7 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
         # Add subsampling metadata if used
         if (use_subsampling) {
           result_row$opt_subsample <- opt_subsample
+          result_row$opt_n_sera <- opt_n_sera
           result_row$original_n_points <- matrix_size
         }
         
@@ -684,7 +723,8 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
             # IMPORTANT: We export the current 'lhs_params' which changes per epoch
             parallel::clusterExport(cl,
                               c("lhs_params", "full_dissimilarity_matrix", "mapping_max_iter", "relative_epsilon",
-                                "use_subsampling", "opt_subsample", "verbose", "epoch", "num_samples",
+                                "use_subsampling", "opt_subsample", "opt_n_sera", "opt_always_include",
+                                "opt_sample_pool", "verbose", "epoch", "num_samples",
                                 "likelihood_function", "euclidean_embedding",
                                 "subsample_dissimilarity_matrix", "sanity_check_subsample",
                                 "error_calculator_comparison", "folds", "preserve_order"),
@@ -1020,6 +1060,13 @@ initial_parameter_optimization <- function(dissimilarity_matrix,
 #' @param verbose Logical. Whether to print progress messages. Default: FALSE.
 #' @param preserve_order Logical. Whether to preserve the order of points in the output. Default: FALSE.
 #'
+#' @param opt_subsample_sera Numeric or NULL. Keep every antigen and draw this
+#'   many sera for each parameter evaluation. A value strictly between 0 and 1
+#'   is read as a fraction of the sera. Mutually exclusive with
+#'   \code{opt_subsample}. Default: NULL.
+#' @param opt_sera Character or numeric vector, or NULL. The sera, as row names
+#'   or row indices. NULL detects them with \code{\link{identify_antigens_sera}}.
+#'   Only used together with \code{opt_subsample_sera}. Default: NULL.
 #' @return No return value. Called for its side effect of writing results to a CSV file
 #'   in \code{output_dir}.
 #'
@@ -1099,7 +1146,9 @@ run_adaptive_sampling <- function(initial_samples_file,
                                   opt_subsample = NULL,
                                   output_dir,
                                   verbose = FALSE,
-                                  preserve_order = FALSE) {
+                                  preserve_order = FALSE,
+                                  opt_subsample_sera = NULL,
+                                  opt_sera = NULL) {
   # ==========================================================================
   # CAPTURE ORIGINAL COLUMN ORDER (CRITICAL FOR CRAN)
   # ==========================================================================
@@ -1150,6 +1199,26 @@ run_adaptive_sampling <- function(initial_samples_file,
   
   # Validate opt_subsample
   use_subsampling <- FALSE
+  # Resolve a serum-wise subsample into the generic grouping arguments
+  .sera_spec <- resolve_sera_subsample(dissimilarity_matrix, opt_subsample,
+                                       opt_subsample_sera, opt_sera)
+  opt_subsample <- .sera_spec$opt_subsample
+  opt_always_include <- .sera_spec$always_include
+  opt_sample_pool <- .sera_spec$sample_pool
+  opt_n_sera <- .sera_spec$n_sera
+  # With a restricted pool the "too big" test is against the points actually
+  # available to the draw, not the whole matrix.
+  universe_size <- if (is.null(opt_always_include) && is.null(opt_sample_pool)) {
+    matrix_size
+  } else {
+    length(unique(c(
+      resolve_point_indices(opt_always_include, dissimilarity_matrix,
+                            "opt_always_include"),
+      resolve_point_indices(opt_sample_pool, dissimilarity_matrix,
+                            "opt_sample_pool")
+    )))
+  }
+
   if (!is.null(opt_subsample)) {
     if (!is.numeric(opt_subsample) || length(opt_subsample) != 1 ||
         opt_subsample < 10) {
@@ -1157,12 +1226,15 @@ run_adaptive_sampling <- function(initial_samples_file,
     }
     opt_subsample <- as.integer(floor(opt_subsample))
     
-    if (opt_subsample >= matrix_size) {
+    if (opt_subsample >= universe_size) {
       if (verbose) {
-        cat(sprintf("opt_subsample (%d) >= matrix size (%d). Using full matrix.\n",
-                    opt_subsample, matrix_size))
+        cat(sprintf("opt_subsample (%d) >= available points (%d). Using full matrix.\n",
+                    opt_subsample, universe_size))
       }
       opt_subsample <- NULL
+      opt_always_include <- NULL
+      opt_sample_pool <- NULL
+      opt_n_sera <- NA_integer_
     } else {
       use_subsampling <- TRUE
       
@@ -1284,6 +1356,13 @@ run_adaptive_sampling <- function(initial_samples_file,
   # ==========================================================================
   # RUN PARALLEL ADAPTIVE SAMPLING JOBS
   # ==========================================================================
+
+  # Each job resolves the serum grouping itself, so it receives the
+  # user-facing arguments rather than the size already resolved above. When the
+  # guard above disabled subsampling, nothing is forwarded.
+  job_opt_subsample <- if (is.null(opt_subsample_sera)) opt_subsample else NULL
+  job_opt_subsample_sera <- if (is.null(opt_subsample)) NULL else opt_subsample_sera
+  job_opt_sera <- if (is.null(job_opt_subsample_sera)) NULL else opt_sera
   
   if (verbose) cat("\nStarting parallel adaptive sampling jobs...\n")
   
@@ -1304,6 +1383,9 @@ run_adaptive_sampling <- function(initial_samples_file,
                               "mapping_max_iter", "relative_epsilon", "folds",
                               "output_dir", "scenario_name", "iterations",
                               "opt_subsample", "preserve_order",
+                              "job_opt_subsample", "job_opt_subsample_sera",
+                              "job_opt_sera", "resolve_sera_subsample",
+                              "identify_antigens_sera", "resolve_point_indices",
                               "subsample_dissimilarity_matrix",
                           "check_matrix_connectivity",
                           "analyze_network_structure",
@@ -1321,9 +1403,11 @@ run_adaptive_sampling <- function(initial_samples_file,
         folds = folds,
         num_cores = 1,
         scenario_name = scenario_name,
-        opt_subsample = opt_subsample,  # Pass subsampling parameter
+        opt_subsample = job_opt_subsample,  # Pass subsampling parameter
         verbose = FALSE,  # Keep individual jobs quiet
-        preserve_order = preserve_order
+        preserve_order = preserve_order,
+        opt_subsample_sera = job_opt_subsample_sera,
+        opt_sera = job_opt_sera
       )
     })
     
@@ -1346,9 +1430,11 @@ run_adaptive_sampling <- function(initial_samples_file,
           folds = folds,
           num_cores = 1,
           scenario_name = scenario_name,
-          opt_subsample = opt_subsample,  # Pass subsampling parameter
+          opt_subsample = job_opt_subsample,  # Pass subsampling parameter
           verbose = FALSE,  # Keep individual jobs quiet
-          preserve_order = preserve_order
+          preserve_order = preserve_order,
+          opt_subsample_sera = job_opt_subsample_sera,
+          opt_sera = job_opt_sera
         )
         return(list(success = TRUE, job = i))
       }, error = function(e) {
@@ -1496,6 +1582,13 @@ run_adaptive_sampling <- function(initial_samples_file,
 #' @param verbose Logical. If TRUE, prints progress messages. Default: FALSE.
 #' @param preserve_order Logical. If TRUE, preserves the order of samples in the output. Default: FALSE.
 #'
+#' @param opt_subsample_sera Numeric or NULL. Keep every antigen and draw this
+#'   many sera for each parameter evaluation. A value strictly between 0 and 1
+#'   is read as a fraction of the sera. Mutually exclusive with
+#'   \code{opt_subsample}. Default: NULL.
+#' @param opt_sera Character or numeric vector, or NULL. The sera, as row names
+#'   or row indices. NULL detects them with \code{\link{identify_antigens_sera}}.
+#'   Only used together with \code{opt_subsample_sera}. Default: NULL.
 #' @return A \code{data.frame} containing all samples (initial and newly generated)
 #' with their parameters and evaluated performance metrics. The data frame includes
 #' columns for the log-transformed parameters, \code{Holdout_MAE}, and \code{NLL}.
@@ -1535,7 +1628,9 @@ adaptive_MC_sampling <- function(samples_file,
                                  scenario_name,
                                  opt_subsample = NULL,
                                  verbose = FALSE,
-                                 preserve_order = FALSE) {
+                                 preserve_order = FALSE,
+                                 opt_subsample_sera = NULL,
+                                 opt_sera = NULL) {
   # ==========================================================================
   # INPUT VALIDATION AND SETUP
   # ==========================================================================
@@ -1556,6 +1651,26 @@ adaptive_MC_sampling <- function(samples_file,
   # Validate opt_subsample
   use_subsampling <- FALSE
   
+  # Resolve a serum-wise subsample into the generic grouping arguments
+  .sera_spec <- resolve_sera_subsample(dissimilarity_matrix, opt_subsample,
+                                       opt_subsample_sera, opt_sera)
+  opt_subsample <- .sera_spec$opt_subsample
+  opt_always_include <- .sera_spec$always_include
+  opt_sample_pool <- .sera_spec$sample_pool
+  opt_n_sera <- .sera_spec$n_sera
+  # With a restricted pool the "too big" test is against the points actually
+  # available to the draw, not the whole matrix.
+  universe_size <- if (is.null(opt_always_include) && is.null(opt_sample_pool)) {
+    matrix_size
+  } else {
+    length(unique(c(
+      resolve_point_indices(opt_always_include, dissimilarity_matrix,
+                            "opt_always_include"),
+      resolve_point_indices(opt_sample_pool, dissimilarity_matrix,
+                            "opt_sample_pool")
+    )))
+  }
+
   if (!is.null(opt_subsample)) {
     if (!is.numeric(opt_subsample) || length(opt_subsample) != 1 ||
         opt_subsample < 10) {
@@ -1563,12 +1678,15 @@ adaptive_MC_sampling <- function(samples_file,
     }
     opt_subsample <- as.integer(floor(opt_subsample))
     
-    if (opt_subsample >= matrix_size) {
+    if (opt_subsample >= universe_size) {
       if (verbose) {
-        cat(sprintf("opt_subsample (%d) >= matrix size (%d). Using full matrix.\n",
-                    opt_subsample, matrix_size))
+        cat(sprintf("opt_subsample (%d) >= available points (%d). Using full matrix.\n",
+                    opt_subsample, universe_size))
       }
       opt_subsample <- NULL
+      opt_always_include <- NULL
+      opt_sample_pool <- NULL
+      opt_n_sera <- NA_integer_
     } else {
       use_subsampling <- TRUE
     }
@@ -1587,6 +1705,8 @@ adaptive_MC_sampling <- function(samples_file,
     subsample_result <- subsample_dissimilarity_matrix(
       dissimilarity_matrix = full_dissimilarity_matrix,
       sample_size = opt_subsample,
+      always_include = opt_always_include,
+      sample_pool = opt_sample_pool,
       max_attempts = 5,
       verbose = verbose,
       preserve_order = preserve_order
@@ -1762,6 +1882,7 @@ adaptive_MC_sampling <- function(samples_file,
     # Add subsampling metadata if used
     if (use_subsampling) {
       new_row$opt_subsample <- opt_subsample
+      new_row$opt_n_sera <- opt_n_sera
       new_row$original_n_points <- matrix_size
     }
     

@@ -279,3 +279,45 @@ test_that("S3 method error handling works", {
     "'output_dir' must be provided when save_plot is TRUE"
   )
 })
+
+# =============================================================================
+# topolow_bootstrap methods
+# =============================================================================
+
+make_small_bootstrap <- function() {
+  set.seed(41)
+  nms <- c("V/a1", "V/a2", "V/a3", "V/a4", "S/s1", "S/s2", "S/s3")
+  m <- as.matrix(dist(matrix(rnorm(14), nrow = 7)))
+  dimnames(m) <- list(nms, nms)
+  suppressWarnings(bootstrap_embedding(
+    m, ndim = 2, k0 = 1, cooling_rate = 0.01, c_repulsion = 0.01,
+    mapping_max_iter = 30, n_replicates = 6, n_sera = 2,
+    max_cores = 1, random_seed = 9
+  ))
+}
+
+test_that("print.topolow_bootstrap reports the design", {
+  res <- make_small_bootstrap()
+
+  expect_output(print(res), "topolow bootstrap result")
+  expect_output(print(res), "Replicates")
+  expect_output(print(res), "Drawn per replicate")
+  expect_invisible(print(res))
+})
+
+test_that("summary.topolow_bootstrap reports parameters and blocks", {
+  res <- make_small_bootstrap()
+
+  expect_output(summary(res), "Parameters")
+  expect_output(summary(res), "Standard deviations by block")
+  expect_output(summary(res), "jackknife factor")
+  expect_invisible(summary(res))
+})
+
+test_that("the bootstrap methods are registered for S3 dispatch", {
+  res <- make_small_bootstrap()
+  expect_true(inherits(res, "topolow_bootstrap"))
+  # dispatch, not the default list print
+  out <- utils::capture.output(print(res))
+  expect_false(any(grepl("^\\$est_distances", out)))
+})

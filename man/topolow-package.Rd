@@ -39,6 +39,7 @@ Laplace error model.
 \item \code{\link{euclidean_embedding}}: Core embedding algorithm
 \item \code{\link{initial_parameter_optimization}}: Find optimal parameters using Latin Hypercube Sampling.
 \item \code{\link{run_adaptive_sampling}}: Refine parameter estimates with adaptive Monte Carlo sampling.
+\item \code{\link{bootstrap_embedding}}: Bootstrap a map over resampled subsets of points, with per-cell means and standard deviations.
 }
 }
 

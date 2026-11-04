@@ -555,6 +555,12 @@ reduce_dimensions <- function(df, config) {
     set.seed(config$random_state)
   }
   
+  # The fitted transform, kept so that other points can be projected the same
+  # way later (uncertainty regions need this). Only PCA is invertible this way.
+  fit_center <- NULL
+  fit_rotation <- NULL
+  fit_scale <- 1
+
   # Apply dimension reduction
   result <- switch(config$method,
                    "pca" = {
@@ -563,7 +569,9 @@ reduce_dimensions <- function(df, config) {
                                                   scale. = FALSE,
                                                   center = TRUE),
                                              config$pca_params))
-                     
+                     fit_center <- pca_result$center
+                     fit_rotation <- pca_result$rotation
+
                      # Scale components if requested
                      if (config$scale) {
                        # Calculate original distances
@@ -572,6 +580,8 @@ reduce_dimensions <- function(df, config) {
                        comps <- pca_result$x[, 1:config$n_components]
                        # Scale to match original distances
                        scaled_comps <- scale_to_original_distances(comps, orig_dist)
+                       fit_scale <- attr(scaled_comps, "scale_factor")
+                       attr(scaled_comps, "scale_factor") <- NULL
                        data.frame(scaled_comps)
                      } else {
                        data.frame(pca_result$x[, 1:config$n_components])
@@ -606,7 +616,14 @@ reduce_dimensions <- function(df, config) {
   # Add original metadata columns
   metadata_cols <- setdiff(names(df), coord_cols)
   result[metadata_cols] <- df[metadata_cols]
-  
+
+  # Attach the fitted transform. These attributes are invisible to callers that
+  # ignore them, and let `bootstrap_blobs()` project replicate clouds into the
+  # same plane as the plotted coordinates.
+  attr(result, "center") <- fit_center
+  attr(result, "rotation") <- fit_rotation
+  attr(result, "scale_factor") <- fit_scale
+
   return(result)
 }
 
@@ -618,7 +635,8 @@ reduce_dimensions <- function(df, config) {
 #'
 #' @param reduced_coords Matrix of reduced coordinates
 #' @param orig_dist Original distance matrix
-#' @return Scaled coordinate matrix
+#' @return Scaled coordinate matrix, carrying the fitted scalar in its
+#'   `scale_factor` attribute
 #' @importFrom stats dist optimize
 #' @keywords internal
 scale_to_original_distances <- function(reduced_coords, orig_dist) {
@@ -635,8 +653,10 @@ scale_to_original_distances <- function(reduced_coords, orig_dist) {
   optimal_scale <- optimize(sum_squared_diff, 
                             interval = c(0.01, 40))$minimum
   
-  # Return scaled coordinates
-  reduced_coords * optimal_scale
+  # Return scaled coordinates, carrying the scalar so callers can reuse it
+  out <- reduced_coords * optimal_scale
+  attr(out, "scale_factor") <- optimal_scale
+  out
 }
 
 
@@ -881,6 +901,17 @@ compute_kernel_velocity <- function(positions, coord_cols, time_col,
 #' @param clade_node_depth Optional integer; number of parent levels used to
 #'        define a clade.  Default: median leaf-to-backbone node-distance of
 #'        the tree.
+#' @param uncertainty Optional. A `topolow_bootstrap` object from
+#'        [bootstrap_embedding()], or a blob data frame from
+#'        [bootstrap_blobs()]. When supplied, a shaded uncertainty region is
+#'        drawn beneath each point. The bootstrap must have been run on the same
+#'        embedding that produced `df_coords`. Default: NULL.
+#' @param uncertainty_conf_level Numeric. Proportion of each point's replicate
+#'        spread the shaded region should cover. Default: 0.68.
+#' @param uncertainty_points Character. Which points get a shaded region:
+#'        `"antigens"` (the default), `"antisera"`, or `"all"`. Drawing a region
+#'        for every point at once makes a dense map hard to read, so antisera
+#'        are left out unless asked for.
 #' @param dim_config Dimension reduction configuration object.
 #' @param aesthetic_config Aesthetic configuration object.
 #' @param layout_config Layout configuration object.  Use \code{x_limits} /
@@ -985,7 +1016,10 @@ plot_temporal_mapping <- function(df_coords, ndim,
                                   sigma_t           = NULL,
                                   sigma_x           = NULL,
                                   sigma_x_nd        = NULL,   # NEW
-                                  clade_node_depth  = NULL) {
+                                  clade_node_depth  = NULL,
+                                  uncertainty       = NULL,
+                                  uncertainty_conf_level = 0.68,
+                                  uncertainty_points = c("antigens", "antisera", "all")) {
 
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
     warning("The ggrepel package is required for optimal label placement. ",
@@ -1302,6 +1336,29 @@ plot_temporal_mapping <- function(df_coords, ndim,
   if (layout_config$coord_type == "fixed")
     p <- p + ggplot2::coord_fixed(ratio = layout_config$aspect_ratio)
 
+  # ---- Uncertainty regions -------------------------------------------------
+  # Prepended so the shaded regions are drawn beneath every point layer.
+  uncertainty_points <- match.arg(uncertainty_points)
+  if (!is.null(uncertainty)) {
+    blob_df <- prepare_uncertainty_blobs(uncertainty, reduced_df,
+                                         uncertainty_conf_level,
+                                         points = uncertainty_points)
+    if (nrow(blob_df) > 0) {
+      blob_df$plot_x <- blob_df$dim2 * layout_config$reverse_x
+      blob_df$plot_y <- blob_df$dim1 * layout_config$reverse_y
+      p$layers <- c(
+        list(ggplot2::geom_polygon(
+          data = blob_df,
+          aes(x = .data$plot_x, y = .data$plot_y, group = .data$blob_id),
+          inherit.aes = FALSE,
+          fill = "grey40", colour = NA,
+          alpha = aesthetic_config$point_alpha * 0.25
+        )),
+        p$layers
+      )
+    }
+  }
+
   if (layout_config$save_plot) {
     if (draw_arrows) {
       filename <- if (!is.null(phylo_tree)) {
@@ -1431,7 +1488,10 @@ plot_cluster_mapping <- function(df_coords, ndim,
                                  sigma_x_nd                 = NULL,   # NEW
                                  clade_node_depth           = NULL,
                                  show_one_arrow_per_cluster = FALSE,
-                                 cluster_legend_order       = NULL) {
+                                 cluster_legend_order       = NULL,
+                                 uncertainty                = NULL,
+                                 uncertainty_conf_level     = 0.68,
+                                 uncertainty_points         = c("antigens", "antisera", "all")) {
 
   # Ensure ggrepel is available
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
@@ -1883,6 +1943,34 @@ plot_cluster_mapping <- function(df_coords, ndim,
     p <- p + scale_y_continuous(limits = layout_config$y_limits)
   if (layout_config$coord_type == "fixed")
     p <- p + coord_fixed(ratio = layout_config$aspect_ratio)
+
+  # ---- Uncertainty regions -------------------------------------------------
+  # Prepended so the shaded regions are drawn beneath every point layer.
+  uncertainty_points <- match.arg(uncertainty_points)
+  if (!is.null(uncertainty)) {
+    blob_df <- prepare_uncertainty_blobs(uncertainty, reduced_df,
+                                         uncertainty_conf_level,
+                                         points = uncertainty_points)
+    if (nrow(blob_df) > 0) {
+      if (isTRUE(layout_config$swap_axes)) {
+        blob_df$plot_x <- blob_df$dim1 * layout_config$reverse_x
+        blob_df$plot_y <- blob_df$dim2 * layout_config$reverse_y
+      } else {
+        blob_df$plot_x <- blob_df$dim2 * layout_config$reverse_x
+        blob_df$plot_y <- blob_df$dim1 * layout_config$reverse_y
+      }
+      p$layers <- c(
+        list(ggplot2::geom_polygon(
+          data = blob_df,
+          aes(x = .data$plot_x, y = .data$plot_y, group = .data$blob_id),
+          inherit.aes = FALSE,
+          fill = "grey40", colour = NA,
+          alpha = aesthetic_config$point_alpha * 0.25
+        )),
+        p$layers
+      )
+    }
+  }
 
   if (layout_config$save_plot) {
     if (draw_arrows) {

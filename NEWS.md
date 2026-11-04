@@ -296,3 +296,91 @@ The `opt_subsample` parameter is optional (default: NULL = use full data).
 - All existing code using `euclidean_embedding()` will work without modification
 - Default parameter values preserve the original algorithm's behavior
 - Output structure remains compatible with downstream functions (`Euclidify()`, parameter optimization, etc.)
+
+
+# topolow 2.2.0
+
+## New Features
+
+### Bootstrapping over sera
+
+Parameter optimization and map building can now resample one group of points
+while holding another fixed. The motivating case is antigenic cartography:
+keep every antigen and draw a random subset of the sera, so that neither the
+fitted parameters nor the final map depend on one particular serum panel.
+
+* **New function `bootstrap_embedding()`**: runs `euclidean_embedding()` over
+  many replicate submatrices and aggregates the estimated distances cell by
+  cell into a mean (`est_distances`), a standard deviation (`sd_distances`) and
+  a replicate count (`n_obs`). It also returns a consensus embedding of the
+  mean matrix, a per-block calibration table against the full-data map, and the
+  per-replicate coordinates rigidly aligned to that map.
+* **New function `identify_antigens_sera()`**: splits a dissimilarity matrix
+  into antigens and sera, by default on the `"V/"` and `"S/"` prefixes written
+  by `process_antigenic_data()`, with explicit vectors or custom regular
+  expressions as overrides.
+* **New function `bootstrap_blobs()`**: turns the aligned replicate coordinates
+  into per-point polygons. Regions cannot be derived from `sd_distances`,
+  because a distance matrix is invariant to rotation and so carries no
+  directional information; the coordinates are needed for that.
+* **`plot_temporal_mapping()` and `plot_cluster_mapping()`** gained
+  `uncertainty`, `uncertainty_conf_level` and `uncertainty_points`. Passing a
+  `bootstrap_embedding()` result draws a shaded region beneath each point.
+  `uncertainty_points` chooses which points get one and defaults to
+  `"antigens"`, because a region on every point at once makes a dense map hard
+  to read; pass `"all"` or `"antisera"` for the others.
+* **New S3 methods** `print()` and `summary()` for `topolow_bootstrap` objects.
+
+### Subsampling a restricted set of points
+
+* `subsample_dissimilarity_matrix()` gained `always_include` and `sample_pool`,
+  which split a subsample into a fixed part and a randomly drawn part.
+  `sample_size` keeps its meaning: the total number of points returned. With
+  both arguments at their `NULL` default the function draws exactly the indices
+  it drew before, from the same random number stream, and returns an identical
+  object.
+* `initial_parameter_optimization()`, `run_adaptive_sampling()`,
+  `adaptive_MC_sampling()` and `Euclidify()` gained `opt_subsample_sera` and
+  `opt_sera`. `opt_subsample_sera` is a count of sera, or a fraction of them
+  when strictly between 0 and 1; every antigen is kept. It is mutually
+  exclusive with `opt_subsample`.
+* The subset size is a **fixed count**, resolved once per call and used for
+  every evaluation and every replicate, so likelihoods stay comparable. The
+  parameter-search output records it in two new columns, `opt_subsample` (total
+  points) and `opt_n_sera` (how many of those were sera), so the same count can
+  be read back and handed to `bootstrap_embedding(n_sera = )`. A fraction is
+  only a convenience: it is converted to a count immediately and the count is
+  what gets reported. The one thing that can shrink an individual replicate is
+  `on_disconnect = "prune"`, and `replicates$n_points` shows when that happened.
+  - **Migration**: none. All new arguments default to `NULL`.
+
+### Notes on interpretation
+
+The standard deviation reported by `bootstrap_embedding()` mixes serum-panel
+variability with the optimizer's own run-to-run variability, which is not zero
+because the C++ backend reshuffles its sweep order from a generator independent
+of R's RNG. Running with `frac_sera = 1` isolates that second component. The raw
+standard deviation is also not the sampling standard deviation of the full-data
+estimate; `settings$jackknife_factor` reports the `sqrt(f / (1 - f))` scaling
+for that interpretation but it is never applied.
+
+## Bug Fixes
+
+* `Euclidify()` did not pass `opt_subsample` to `run_adaptive_sampling()`, so
+  the adaptive refinement stage silently embedded the full matrix even when
+  subsampling was requested, contradicting the documented behaviour of
+  "both initial and adaptive". The argument is now forwarded. Existing calls
+  that set `opt_subsample` will find the adaptive stage faster, and its
+  likelihood estimates correspondingly noisier, than before.
+* `subsample_dissimilarity_matrix()` raised
+  `invalid format '%d'; use format %s for character objects` whenever
+  `sample_size >= nrow(dissimilarity_matrix)` and `verbose = TRUE`, because a
+  literal was passed as an argument to `sprintf()` rather than as part of the
+  format string.
+
+## Improvements
+
+* `reduce_dimensions()` now attaches the fitted `center`, `rotation` and
+  `scale_factor` of its principal-component reduction to the returned data
+  frame, so that further points can be projected into the same plane. Callers
+  that ignore the attributes are unaffected.

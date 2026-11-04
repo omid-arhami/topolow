@@ -794,6 +794,13 @@ summary.topolow <- function(object, ...) {
 #' @param diagnostic_plot_types Character vector. Which plot types to create.
 #'        Options: "all", "parameter_search", "convergence", "quality", "cv_errors".
 #'        Default: "all"
+#' @param opt_subsample_sera Numeric or NULL. Keep every antigen and draw this
+#'        many sera for each parameter evaluation. A value strictly between 0
+#'        and 1 is read as a fraction of the sera. Mutually exclusive with
+#'        `opt_subsample`. Default: NULL.
+#' @param opt_sera Character or numeric vector, or NULL. The sera, as row names
+#'        or row indices. NULL detects them with [identify_antigens_sera()].
+#'        Only used together with `opt_subsample_sera`. Default: NULL.
 #' @param preserve_order Logical. If TRUE, the original row and column order of the 
 #'        dissimilarity matrix is preserved in the output coordinates. If FALSE, the data is 
 #'        reordered based on their available distances for a faster convergence. Set to TRUE 
@@ -899,7 +906,9 @@ Euclidify <- function(dissimilarity_matrix,
                       save_results = FALSE,
                       create_diagnostic_plots = FALSE,
                       diagnostic_plot_types = "all",
-                      preserve_order = FALSE) {
+                      preserve_order = FALSE,
+                      opt_subsample_sera = NULL,
+                      opt_sera = NULL) {
   
   # Start timing
   start_time <- Sys.time()
@@ -1048,6 +1057,8 @@ Euclidify <- function(dissimilarity_matrix,
       max_cores = max_cores,
       folds = folds,
       opt_subsample = opt_subsample,
+      opt_subsample_sera = opt_subsample_sera,
+      opt_sera = opt_sera,
       verbose = verbose_internal,
       write_files = TRUE,
       output_dir = optimization_dir,
@@ -1080,6 +1091,9 @@ Euclidify <- function(dissimilarity_matrix,
             mapping_max_iter = mapping_max_iter,
             relative_epsilon = 1e-5,
             folds = folds,
+            opt_subsample = opt_subsample,
+            opt_subsample_sera = opt_subsample_sera,
+            opt_sera = opt_sera,
             output_dir = optimization_dir,
             verbose = verbose_internal,
             preserve_order = preserve_order

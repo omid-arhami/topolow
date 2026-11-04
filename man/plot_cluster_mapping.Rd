@@ -22,7 +22,10 @@ plot_cluster_mapping(
   sigma_x_nd = NULL,
   clade_node_depth = NULL,
   show_one_arrow_per_cluster = FALSE,
-  cluster_legend_order = NULL
+  cluster_legend_order = NULL,
+  uncertainty = NULL,
+  uncertainty_conf_level = 0.68,
+  uncertainty_points = c("antigens", "antisera", "all")
 )
 }
 \arguments{
@@ -86,6 +89,20 @@ cluster (filtering is on the 2-D plot magnitude, matching prior
 behaviour).}
 
 \item{cluster_legend_order}{Optional ordering for clusters in the legend.}
+
+\item{uncertainty}{Optional. A \code{topolow_bootstrap} object from
+\code{\link[=bootstrap_embedding]{bootstrap_embedding()}}, or a blob data frame from
+\code{\link[=bootstrap_blobs]{bootstrap_blobs()}}. When supplied, a shaded uncertainty region is
+drawn beneath each point. The bootstrap must have been run on the same
+embedding that produced \code{df_coords}. Default: NULL.}
+
+\item{uncertainty_conf_level}{Numeric. Proportion of each point's replicate
+spread the shaded region should cover. Default: 0.68.}
+
+\item{uncertainty_points}{Character. Which points get a shaded region:
+\code{"antigens"} (the default), \code{"antisera"}, or \code{"all"}. Drawing a region
+for every point at once makes a dense map hard to read, so antisera
+are left out unless asked for.}
 }
 \value{
 If \code{draw_arrows = FALSE}, a single \code{ggplot} object.

@@ -15,7 +15,9 @@ adaptive_MC_sampling(
   scenario_name,
   opt_subsample = NULL,
   verbose = FALSE,
-  preserve_order = FALSE
+  preserve_order = FALSE,
+  opt_subsample_sera = NULL,
+  opt_sera = NULL
 )
 }
 \arguments{
@@ -42,6 +44,15 @@ reused for all iterations within this job for consistency. Default: NULL.}
 \item{verbose}{Logical. If TRUE, prints progress messages. Default: FALSE.}
 
 \item{preserve_order}{Logical. If TRUE, preserves the order of samples in the output. Default: FALSE.}
+
+\item{opt_subsample_sera}{Numeric or NULL. Keep every antigen and draw this
+many sera for each parameter evaluation. A value strictly between 0 and 1
+is read as a fraction of the sera. Mutually exclusive with
+\code{opt_subsample}. Default: NULL.}
+
+\item{opt_sera}{Character or numeric vector, or NULL. The sera, as row names
+or row indices. NULL detects them with \code{\link{identify_antigens_sera}}.
+Only used together with \code{opt_subsample_sera}. Default: NULL.}
 }
 \value{
 A \code{data.frame} containing all samples (initial and newly generated)

@@ -16,7 +16,9 @@ run_adaptive_sampling(
   opt_subsample = NULL,
   output_dir,
   verbose = FALSE,
-  preserve_order = FALSE
+  preserve_order = FALSE,
+  opt_subsample_sera = NULL,
+  opt_sera = NULL
 )
 }
 \arguments{
@@ -58,6 +60,15 @@ data forms a connected graph. Default: NULL (use full data).
 \item{verbose}{Logical. Whether to print progress messages. Default: FALSE.}
 
 \item{preserve_order}{Logical. Whether to preserve the order of points in the output. Default: FALSE.}
+
+\item{opt_subsample_sera}{Numeric or NULL. Keep every antigen and draw this
+many sera for each parameter evaluation. A value strictly between 0 and 1
+is read as a fraction of the sera. Mutually exclusive with
+\code{opt_subsample}. Default: NULL.}
+
+\item{opt_sera}{Character or numeric vector, or NULL. The sera, as row names
+or row indices. NULL detects them with \code{\link{identify_antigens_sera}}.
+Only used together with \code{opt_subsample_sera}. Default: NULL.}
 }
 \value{
 No return value. Called for its side effect of writing results to a CSV file

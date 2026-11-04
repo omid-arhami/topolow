@@ -11,7 +11,9 @@ subsample_dissimilarity_matrix(
   min_completeness = 0.1,
   random_seed = NULL,
   verbose = FALSE,
-  preserve_order = FALSE
+  preserve_order = FALSE,
+  always_include = NULL,
+  sample_pool = NULL
 )
 }
 \arguments{
@@ -33,6 +35,17 @@ giving up. Default: 5}
 original row/column order of the input matrix. If FALSE (default), indices are
 returned in random order as sampled. Set to TRUE when downstream analyses depend
 on specific point ordering.}
+
+\item{always_include}{Character or numeric vector, or NULL. Points that must
+appear in every subsample, given as row names or as row indices of
+\code{dissimilarity_matrix}. These points are never drawn at random;
+the remaining \code{sample_size - length(always_include)} points are
+drawn from \code{sample_pool}. Default: NULL (no point is fixed).}
+
+\item{sample_pool}{Character or numeric vector, or NULL. The points the random
+draw is taken from, given as row names or as row indices. Any point
+also listed in \code{always_include} is removed from the pool.
+Default: NULL (every point not in \code{always_include}).}
 }
 \value{
 A list containing:
@@ -61,6 +74,14 @@ The function performs the following steps:
 \item Returns the connected subsample or stops with an error if unsuccessful
 }
 
+\strong{Keeping one group and drawing another}: with \code{always_include} and
+\code{sample_pool} the subsample has a fixed part and a random part. In
+antigenic cartography this expresses "keep every antigen, draw a random
+subset of the sera"; see \code{\link{identify_antigens_sera}}.
+\code{sample_size} always means the total number of points in the returned
+submatrix, so to draw \code{m} sera alongside all antigens set
+\code{sample_size = length(antigens) + m}.
+
 \strong{Why connectivity matters}: A disconnected graph has isolated groups of
 points with no observed dissimilarities between groups. The algorithm
 cannot determine the relative positions of disconnected components,
@@ -86,4 +107,5 @@ print(dim(result$subsampled_matrix))
 }
 \seealso{
 \code{\link{check_matrix_connectivity}} for connectivity checking,
+\code{\link{identify_antigens_sera}} for naming the two groups.
 }

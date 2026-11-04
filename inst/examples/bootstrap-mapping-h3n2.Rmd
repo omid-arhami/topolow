@@ -1,0 +1,326 @@
+---
+title: "Bootstrapping over sera: an H3N2 antigenic map with uncertainty"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r libs}
+library(topolow)
+library(ggplot2)
+
+output_dir <- file.path(tempdir(), "h3n2_bootstrap")
+dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+```
+
+## What this does
+
+The usual topolow workflow fits parameters once and builds one map. Both steps
+then depend on the particular panel of sera that happened to be in the assay.
+
+This script does both steps over **random subsets of the sera, keeping every
+virus**:
+
+1. parameter optimization draws a fresh subset of sera for each evaluation
+   (`opt_subsample_sera`), and
+2. the map is built many times on serum subsets, and the estimated distances are
+   averaged cell by cell, with a standard deviation and a replicate count
+   (`bootstrap_embedding()`).
+
+Drawing is **without replacement**. Resampling sera *with* replacement would put
+two identical rows in the submatrix, which the force model reads as a pair of
+points with a measured dissimilarity of zero, and would inflate the degree of
+every virus titrated against that serum. The scheme implemented here is
+*m*-out-of-*n* subsampling, equivalently a delete-*d* jackknife.
+
+## 1. Data
+
+```{r data}
+data(h3n2_data, package = "topolow")
+
+processed <- process_antigenic_data(
+  data        = h3n2_data,
+  antigen_col = "virusStrain",
+  serum_col   = "serumStrain",
+  value_col   = "titer",
+  is_similarity = TRUE,
+  metadata_cols = c("cluster", "color", "virusYear", "serumYear")
+)
+dist_mat <- processed$matrix
+
+groups <- identify_antigens_sera(dist_mat)
+c(points = nrow(dist_mat),
+  antigens = length(groups$antigens),
+  sera = length(groups$sera))
+```
+
+The matrix is 285 x 285 over 216 viruses and 69 sera, and it is of **character**
+mode because thresholded titres are carried as strings such as `"<10"`.
+
+A note on cost: keeping all 216 viruses and dropping 20% of 69 sera removes only
+14 of 285 points, so serum subsampling buys very little speed here. What it
+removes is about a fifth of the *measurements*, and what it changes is which
+serum panel the parameters are fitted to. The speed argument for `opt_subsample`
+does not transfer; the robustness argument does.
+
+## 2. Parameter optimization over serum subsets
+
+This stage is the expensive one: every likelihood evaluation runs `folds`
+embeddings. Run it once and keep the result.
+
+```{r optimisation, eval=FALSE}
+param_ranges <- list(
+  N_min = 2, N_max = 10,
+  k0_min = 1, k0_max = 20,
+  cooling_rate_min = 1e-4, cooling_rate_max = 0.05,
+  c_repulsion_min = 1e-4, c_repulsion_max = 0.02
+)
+
+scenario_name <- "h3n2_sera_bootstrap"
+
+initial <- initial_parameter_optimization(
+  dissimilarity_matrix = dist_mat,
+  mapping_max_iter = 500,
+  relative_epsilon = 1e-4,
+  convergence_counter = 2,
+  scenario_name = scenario_name,
+  N_min = param_ranges$N_min, N_max = param_ranges$N_max,
+  k0_min = param_ranges$k0_min, k0_max = param_ranges$k0_max,
+  c_repulsion_min = param_ranges$c_repulsion_min,
+  c_repulsion_max = param_ranges$c_repulsion_max,
+  cooling_rate_min = param_ranges$cooling_rate_min,
+  cooling_rate_max = param_ranges$cooling_rate_max,
+  num_samples = 50,
+  folds = 20,
+  opt_subsample_sera = 0.8,   # every virus kept, 80% of sera drawn
+  write_files = TRUE,
+  output_dir = output_dir,
+  verbose = TRUE
+)
+
+samples_file <- file.path(output_dir, "model_parameters",
+                          paste0(scenario_name, "_model_parameters.csv"))
+
+run_adaptive_sampling(
+  initial_samples_file = samples_file,
+  scenario_name = scenario_name,
+  dissimilarity_matrix = dist_mat,
+  num_samples = 150,
+  mapping_max_iter = 500,
+  relative_epsilon = 1e-4,
+  folds = 20,
+  opt_subsample_sera = 0.8,
+  output_dir = output_dir,
+  verbose = TRUE
+)
+```
+
+Each evaluation now sees a different serum panel of the same size, so the
+likelihoods stay comparable while the chosen parameters stop depending on any
+one serum.
+
+### Picking the optimum
+
+```{r pick, eval=FALSE}
+samples <- read.csv(samples_file)
+samples <- samples[is.finite(samples$NLL) & is.finite(samples$Holdout_MAE), ]
+samples <- as.data.frame(lapply(samples, clean_data, k = 3))
+samples <- na.omit(samples)
+
+best <- samples[which.min(samples$Holdout_MAE), ]
+optimal_params <- list(
+  N            = round(exp(as.numeric(best$log_N))),
+  k0           = exp(as.numeric(best$log_k0)),
+  cooling_rate = exp(as.numeric(best$log_cooling_rate)),
+  c_repulsion  = exp(as.numeric(best$log_c_repulsion))
+)
+print(optimal_params)
+
+# The subset size is a fixed count, recorded with every evaluation. Read it
+# back so the bootstrap in section 3 draws subsets of exactly the same size.
+n_sera_used <- unique(na.omit(samples$opt_n_sera))
+stopifnot(length(n_sera_used) == 1)
+n_sera_used
+
+# Convergence of the search itself
+plot_mcmc_diagnostics(chain_files = samples_file, mutual_size = 500,
+                      save_plot = FALSE)
+```
+
+## 3. The bootstrapped map
+
+The parameters below are the ones already fitted for this dataset in
+`inst/examples/parameter-fitting-h3n2.Rmd`. Replace them with the output of
+section 2 when you have run it.
+
+```{r params}
+optimal_params <- list(
+  N            = 5,
+  k0           = 6.862815,
+  cooling_rate = 0.02549249,
+  c_repulsion  = 0.01039692
+)
+
+# Section 2 would give this as n_sera_used. 0.8 x 69 sera = 55.
+n_sera_used <- 55
+```
+
+```{r bootstrap}
+set.seed(2026)
+
+boot <- bootstrap_embedding(
+  dissimilarity_matrix = dist_mat,
+  ndim         = optimal_params$N,
+  k0           = optimal_params$k0,
+  cooling_rate = optimal_params$cooling_rate,
+  c_repulsion  = optimal_params$c_repulsion,
+  mapping_max_iter = 1000,
+  relative_epsilon = 1e-6,
+  n_replicates = 500,
+  n_sera       = n_sera_used,   # the same fixed count the search used
+  random_seed  = 2026,
+  verbose      = TRUE
+)
+
+# Every replicate drew the same number of points
+table(boot$replicates$n_points)
+
+summary(boot)
+```
+
+### The three matrices
+
+`est_distances` is the deliverable: the full virus-and-serum distance matrix,
+each cell averaged over the replicates in which both of its endpoints were
+present.
+
+```{r matrices}
+boot$est_distances[1:5, 1:5]   # mean
+boot$sd_distances[1:5, 1:5]    # standard deviation
+boot$n_obs[1:5, 1:5]           # replicates behind each cell
+```
+
+Coverage differs by block, so summarise the blocks separately rather than
+putting them on one scale: virus-virus cells appear in every replicate,
+virus-serum cells in about `frac_sera` of them, and serum-serum cells in about
+`frac_sera^2`. A useful rule is `n_replicates >= 30 / frac_sera^2`.
+
+```{r write, eval=FALSE}
+write.csv(boot$est_distances, file.path(output_dir, "h3n2_mean_distances.csv"))
+write.csv(boot$sd_distances,  file.path(output_dir, "h3n2_sd_distances.csv"))
+write.csv(boot$n_obs,         file.path(output_dir, "h3n2_counts.csv"))
+```
+
+### Did dropping sera distort the geometry?
+
+Dropping sera removes springs while leaving the virus-virus repulsion count
+unchanged, so the configuration can expand slightly. The calibration table
+regresses the bootstrap means on a single full-data embedding, per block. A
+`slope0` near 1 means the two agree.
+
+```{r calibration}
+boot$calibration
+```
+
+## 4. Drawing the uncertainty
+
+Uncertainty regions cannot come from `sd_distances`. A distance matrix is
+invariant to rotation, so it carries no directional information and could only
+give a circle. `bootstrap_embedding()` therefore also keeps each replicate's
+coordinates, rigidly aligned to the full-data map, and those give properly
+elongated regions.
+
+```{r coords}
+coords <- data.frame(boot$positions)
+names(coords) <- paste0("V", seq_len(ncol(boot$positions)))
+coords$name      <- rownames(boot$positions)
+coords$antigen   <- startsWith(coords$name, "V/")
+coords$antiserum <- startsWith(coords$name, "S/")
+coords$year      <- as.numeric(sub(".*/([0-9]{4}).*", "\\1", coords$name))
+
+# Cluster metadata travels with h3n2_data
+meta <- unique(h3n2_data[, c("virusStrain", "cluster", "color")])
+meta$name <- paste0("V/", meta$virusStrain)
+coords <- merge(coords, meta[, c("name", "cluster", "color")],
+                by = "name", all.x = TRUE)
+coords$cluster[is.na(coords$cluster)] <- "serum"
+coords$cluster <- factor(coords$cluster)
+```
+
+```{r plots, fig.width=10, fig.height=8}
+# Regions are drawn for the antigens only by default: a region on all 285
+# points at once buries the map. Pass uncertainty_points = "all" to see them.
+p_time <- plot_temporal_mapping(
+  coords, ndim = optimal_params$N,
+  uncertainty = boot,
+  uncertainty_conf_level = 0.68,
+  uncertainty_points = "antigens"
+)
+p_time
+
+p_clust <- plot_cluster_mapping(
+  coords, ndim = optimal_params$N,
+  uncertainty = boot,
+  uncertainty_conf_level = 0.68,
+  uncertainty_points = "antigens"
+)
+p_clust
+```
+
+`bootstrap_blobs()` returns the same polygons as a data frame if you would
+rather draw them yourself, and offers a kernel-density contour in place of the
+default covariance ellipse:
+
+```{r blobs}
+blobs <- bootstrap_blobs(boot, conf_level = 0.68, method = "ellipse")
+head(blobs)
+```
+
+## 5. What the standard deviations do and do not mean
+
+**They mix two sources.** One is the serum-panel variability we are after. The
+other is topolow's own run-to-run variability: the C++ backend reshuffles its
+sweep order using a generator independent of R's RNG, so repeated runs on an
+identical matrix do not give identical coordinates. On this dataset the second
+component is not negligible. Measure it directly by rerunning with every serum
+kept, which leaves only the optimizer randomness:
+
+```{r nullarm, eval=FALSE}
+null_arm <- bootstrap_embedding(
+  dissimilarity_matrix = dist_mat,
+  ndim = optimal_params$N, k0 = optimal_params$k0,
+  cooling_rate = optimal_params$cooling_rate,
+  c_repulsion = optimal_params$c_repulsion,
+  mapping_max_iter = 1000, relative_epsilon = 1e-6,
+  n_replicates = 100, frac_sera = 1, random_seed = 7
+)
+
+ut <- upper.tri(boot$sd_distances)
+data.frame(
+  source = c("serum subsampling + optimizer", "optimizer only"),
+  median_sd = c(median(boot$sd_distances[ut], na.rm = TRUE),
+                median(null_arm$sd_distances[ut], na.rm = TRUE))
+)
+```
+
+**They are the spread at the subsample size**, not the sampling standard
+deviation of the full-data estimate. For that reading, multiply by the
+finite-population factor, which the object reports but never applies:
+
+```{r jackknife}
+boot$settings$jackknife_factor   # sqrt(f / (1 - f)); exactly 1 at frac_sera = 0.5
+```
+
+**They cover one source of uncertainty only.** The virus panel is held fixed in
+every replicate, and measurement error in the titres themselves is not
+represented at all. Sera are also treated as exchangeable; if they cluster by
+eliciting strain, pass a hand-built `sample_pool` to draw whole groups instead.
+
+```{r cleanup, include=FALSE}
+unlink(output_dir, recursive = TRUE)
+```

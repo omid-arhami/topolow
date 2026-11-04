@@ -26,7 +26,9 @@ initial_parameter_optimization(
   verbose = FALSE,
   write_files = FALSE,
   output_dir,
-  preserve_order = FALSE
+  preserve_order = FALSE,
+  opt_subsample_sera = NULL,
+  opt_sera = NULL
 )
 }
 \arguments{
@@ -85,11 +87,22 @@ reordered based on their available distances for a faster convergence. Set to TR
 when domain knowledge supports a specific order (e.g., directional evolution) or
 when downstream analyses depend on specific point ordering matching the input matrix.
 Default: FALSE}
+
+\item{opt_subsample_sera}{Numeric or NULL. Keep every antigen and draw this
+many sera for each parameter evaluation. A value strictly between 0 and 1
+is read as a fraction of the sera. Mutually exclusive with
+\code{opt_subsample}. Default: NULL.}
+
+\item{opt_sera}{Character or numeric vector, or NULL. The sera, as row names
+or row indices. NULL detects them with \code{\link{identify_antigens_sera}}.
+Only used together with \code{opt_subsample_sera}. Default: NULL.}
 }
 \value{
 A \code{data.frame} containing the log-transformed parameter sets and their performance metrics
 from the \strong{final epoch}. Columns include: \code{log_N}, \code{log_k0}, \code{log_cooling_rate}, \code{log_c_repulsion},
-\code{Holdout_MAE}, \code{NLL}, and if \code{opt_subsample} was used: \code{opt_subsample},\code{original_n_points}.
+\code{Holdout_MAE}, \code{NLL}, and if subsampling was used: \code{opt_subsample} (the
+constant number of points per evaluation), \code{opt_n_sera} (how many of those
+were sera, or NA when the draw was uniform) and \code{original_n_points}.
 }
 \description{
 Performs parameter optimization using Latin Hypercube Sampling (LHS) combined with

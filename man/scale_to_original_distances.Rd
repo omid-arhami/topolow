@@ -12,7 +12,8 @@ scale_to_original_distances(reduced_coords, orig_dist)
 \item{orig_dist}{Original distance matrix}
 }
 \value{
-Scaled coordinate matrix
+Scaled coordinate matrix, carrying the fitted scalar in its
+\code{scale_factor} attribute
 }
 \description{
 Helper function to scale reduced dimensions to better match original distances.
