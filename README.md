@@ -1,5 +1,9 @@
 # Topolow: Force-Directed Euclidean Embedding of Dissimilarity Data (Version 2)
 
+![Antigenic map of influenza A/H3N2 made with topolow](man/figures/h3n2-antigenic-map.png)
+
+*Antigenic map of influenza A/H3N2 built by `topolow` from the hemagglutination inhibition titers of Smith et al. (2004): 215 antigens (filled circles) and 56 antisera (open diamonds) isolated between 1968 and 2003, colored by antigenic cluster. The embedding is five-dimensional; the panel shows its first two principal components, with antigenic drift running left to right from HK68 to FU02. Reproduce it with [`inst/examples/make-readme-figure.R`](https://github.com/omid-arhami/topolow/blob/main/inst/examples/make-readme-figure.R).*
+
 ## Overview
 
 [Changes from version 1 and migration: https://github.com/omid-arhami/topolow/blob/main/NEWS.md]
