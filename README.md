@@ -188,10 +188,20 @@ results <- process_antigenic_data(
   value_col = "titer", is_similarity = TRUE
 )
 dist_mat <- results$matrix
+```
 
-# Who is an antigen and who is a serum (the "V/" and "S/" prefixes)
+The split into antigens and sera is made by the two functions below, from the
+`"V/"` and `"S/"` prefixes that `process_antigenic_data()` writes onto the row
+names; nothing here has to declare it. `identify_antigens_sera()` reports that
+split if you want to see it before committing to a long run, and its `antigens`
+/ `sera` arguments supply it directly when the names follow some other scheme:
+
+```r
 groups <- identify_antigens_sera(dist_mat)
+c(antigens = length(groups$antigens), sera = length(groups$sera))
+```
 
+```r
 # 1. Parameter optimization: every antigen kept, 80% of sera drawn per evaluation
 params <- initial_parameter_optimization(
   dissimilarity_matrix = dist_mat,

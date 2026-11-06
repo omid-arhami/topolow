@@ -342,6 +342,15 @@ resolve_point_indices <- function(x, dissimilarity_matrix, arg_name) {
 #' [subsample_dissimilarity_matrix()] and [bootstrap_embedding()]. That is how
 #' "keep every antigen, draw a random subset of the sera" is expressed.
 #'
+#' Calling this function is not a required step in the workflow.
+#' [bootstrap_embedding()] makes the same split internally when its `sera`
+#' argument is NULL, and [Euclidify()], [initial_parameter_optimization()] and
+#' [run_adaptive_sampling()] do so when `opt_subsample_sera` is given without
+#' `opt_sera`. A matrix that follows the `"V/"` and `"S/"` convention therefore
+#' needs no explicit call. Use this function to inspect the split before
+#' committing to a long run, or to obtain the vectors to pass to those
+#' arguments when the row names follow some other scheme.
+#'
 #' @examples
 #' nms <- c("V/ag1", "V/ag2", "V/ag3", "S/sr1", "S/sr2")
 #' m <- as.matrix(dist(matrix(rnorm(10), nrow = 5)))

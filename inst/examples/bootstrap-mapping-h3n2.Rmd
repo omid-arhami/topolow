@@ -67,6 +67,8 @@ processed <- process_antigenic_data(
 )
 dist_mat <- processed$matrix
 
+# The steps below split the points themselves, on the "V/" and "S/" prefixes
+# that process_antigenic_data() writes; this call only reports that split.
 groups <- identify_antigens_sera(dist_mat)
 c(points = nrow(dist_mat),
   antigens = length(groups$antigens),
